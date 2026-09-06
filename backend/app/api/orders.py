@@ -37,6 +37,17 @@ def list_files(db: Session = Depends(get_db)) -> list[FileOut]:
             "sheets": sheets,
         }
 
+    # Разбивка по листам внутри файла — для дерева в буфере.
+    by_sheet: dict[int, dict[int, int]] = {}
+    for source_id, sheet_index, qty in db.execute(
+        select(
+            Part.source_file_id,
+            Part.source_sheet_index,
+            func.coalesce(func.sum(Part.qty), 0),
+        ).group_by(Part.source_file_id, Part.source_sheet_index)
+    ):
+        by_sheet.setdefault(source_id, {})[int(sheet_index or 0)] = int(qty)
+
     pending: dict[int, int] = {}
     for source_id, count in db.execute(
         select(Part.source_file_id, func.count(Part.id))
@@ -61,6 +72,10 @@ def list_files(db: Session = Depends(get_db)) -> list[FileOut]:
                 sheets=entry.get("sheets", 0),
                 positions=entry.get("positions", 0),
                 parts=entry.get("parts", 0),
+                sheet_parts=[
+                    count
+                    for _, count in sorted((by_sheet.get(record.id) or {}).items())
+                ],
                 needs_clarification=pending.get(record.id, 0),
                 error=record.error,
             )

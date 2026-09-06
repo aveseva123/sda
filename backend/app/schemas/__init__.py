@@ -65,6 +65,9 @@ class FileOut(BaseModel):
     sheets: int
     positions: int
     parts: int
+    # Сколько деталей на каждом листе ВНУТРИ файла: буфер показывает файл
+    # деревом «файл → листы», и цифры в нём должны быть настоящими.
+    sheet_parts: list[int] = Field(default_factory=list)
     needs_clarification: int
     error: str | None = None
 

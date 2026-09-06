@@ -32,6 +32,8 @@ export interface Move {
 
 export interface StageHandle {
   fit: () => void
+  /** Показать конкретный лист целиком — клик по листу в буфере. */
+  focusSheet: (index: number) => void
   zoomBy: (factor: number) => void
   getScale: () => number
 }
@@ -127,6 +129,11 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
     return () => observer.disconnect()
   }, [])
 
+  // Подгонка по размеру, пока технолог сам не тронул холст. Ширина колонки
+  // становится известна позже первого кадра, а окно ещё и меняют — без этого
+  // раскладка остаётся подогнанной под старую ширину и уезжает за край.
+  const touched = useRef(false)
+
   const fit = useCallback(() => {
     if (!layout.sheets.length) return
     let maxX = 0
@@ -148,13 +155,42 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
     })
   }, [layout.sheets, size])
 
+  const focusSheet = useCallback(
+    (index: number) => {
+      const sheet = layout.sheets.find((s) => s.index === index)
+      if (!sheet || size.width < 50) return
+      const [ox, oy] = sheetOrigin(layout.sheets, sheet.index)
+      const pad = 60
+      const scale = Math.min(
+        (size.width - pad) / Math.max(sheet.w, 1),
+        (size.height - pad) / Math.max(sheet.h, 1),
+      )
+      setViewport({
+        cx: ox + sheet.w / 2,
+        cy: oy + sheet.h / 2,
+        scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale)),
+      })
+    },
+    [layout.sheets, size],
+  )
+
   useImperativeHandle(ref, () => ({
-    fit,
+    fit: () => {
+      touched.current = false
+      fit()
+    },
+    focusSheet: (index: number) => {
+      touched.current = true
+      focusSheet(index)
+    },
     zoomBy: (factor: number) =>
-      setViewport((v) => ({
-        ...v,
-        scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.scale * factor)),
-      })),
+      setViewport((v) => {
+        touched.current = true
+        return {
+          ...v,
+          scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.scale * factor)),
+        }
+      }),
     getScale: () => viewport.scale,
   }))
 
@@ -162,13 +198,10 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
     onViewportChange?.(viewport.scale)
   }, [viewport.scale, onViewportChange])
 
-  // Первая подгонка, когда стали известны размеры и появились листы.
-  const fitted = useRef(false)
   useEffect(() => {
-    if (fitted.current || !layout.sheets.length || size.width < 50) return
-    fitted.current = true
+    if (touched.current || !layout.sheets.length || size.width < 50) return
     fit()
-  }, [fit, layout.sheets.length, size.width])
+  }, [fit, layout.sheets.length, size.width, size.height])
 
   // ------------------------------------------------------------ отрисовка
 
@@ -388,6 +421,7 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
       const dx = (event.clientX - state.startScreen[0]) / viewport.scale
       const dy = (event.clientY - state.startScreen[1]) / viewport.scale
       state.startScreen = [event.clientX, event.clientY]
+      touched.current = true
       setViewport((v) => ({ ...v, cx: v.cx - dx, cy: v.cy + dy }))
       state.moved = true
       return
@@ -527,6 +561,7 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
   // ------------------------------------------------------------------ зум
 
   const onWheel = (event: React.WheelEvent) => {
+    touched.current = true
     event.preventDefault()
     const rect = canvasRef.current!.getBoundingClientRect()
     const screen: Point = [event.clientX - rect.left, event.clientY - rect.top]

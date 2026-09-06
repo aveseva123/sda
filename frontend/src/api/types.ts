@@ -37,6 +37,8 @@ export interface SourceFile {
   sheets: number
   positions: number
   parts: number
+  /** Сколько деталей на каждом листе внутри файла — дерево буфера. */
+  sheet_parts: number[]
   needs_clarification: number
   error: string | null
 }

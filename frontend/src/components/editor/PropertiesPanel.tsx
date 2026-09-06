@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-import type { Collision, Layout, Selection, ToolpathPreset } from '../../editor/types'
+import type { Collision, Layout, Selection, ToolpathPreset, VectorView } from '../../editor/types'
+import { vectorKey } from '../../editor/types'
 import type { Move } from './CanvasStage'
 
 interface Props {
@@ -9,13 +10,13 @@ interface Props {
   presets: ToolpathPreset[]
   collisions: Collision[]
   onMove: (moves: Move[]) => void
+  onSelectionChange: (selection: Selection) => void
+  onFocusPart: (partId: number | null) => void
   onAssignToolpath: (partId: number, targets: string[], presetId: number) => void
   onToggleVector: (partId: number, targets: string[], enabled: boolean) => void
 }
 
-const ROTATIONS = [0, 90, 180, 270]
-
-/** Итоговая глубина: слой -> насквозь -> фиксированная. Та же логика, что на сервере. */
+/** Итоговая глубина: слой → насквозь → фиксированная. Та же логика, что на сервере. */
 function resolveDepth(
   preset: ToolpathPreset | undefined,
   layerDepth: number | null,
@@ -36,21 +37,94 @@ function resolveDepth(
   return spec.value === undefined ? null : Number(spec.value)
 }
 
+/** Значок операции — по типу, распознанному из геометрии вектора. */
+function OpIcon({ semantic, bright }: { semantic: string; bright: boolean }) {
+  const stroke = bright ? '#E8EAED' : '#9AA3AF'
+  const common = { width: 13, height: 13, viewBox: '0 0 16 16', fill: 'none', stroke, strokeWidth: 1.5 }
+  if (semantic === 'DRILL') {
+    return (
+      <svg {...common} style={{ flex: 'none' }}>
+        <circle cx="4.5" cy="4.5" r="2" />
+        <circle cx="11.5" cy="4.5" r="2" />
+        <circle cx="4.5" cy="11.5" r="2" />
+        <circle cx="11.5" cy="11.5" r="2" />
+      </svg>
+    )
+  }
+  if (semantic === 'GROOVE') {
+    return (
+      <svg {...common} style={{ flex: 'none' }}>
+        <path d="M2.5 8h11" />
+        <path d="M2.5 5.5v5M13.5 5.5v5" />
+      </svg>
+    )
+  }
+  if (semantic === 'POCKET') {
+    return (
+      <svg {...common} style={{ flex: 'none' }}>
+        <rect x="2.5" y="3.5" width="11" height="9" rx="1" />
+        <rect x="5" y="6" width="6" height="4" rx=".8" />
+      </svg>
+    )
+  }
+  if (semantic === 'INNER') {
+    return (
+      <svg {...common} style={{ flex: 'none' }}>
+        <rect x="2.5" y="3.5" width="11" height="9" rx="1" />
+        <path d="M6 6h4v4H6z" />
+      </svg>
+    )
+  }
+  return (
+    <svg {...common} style={{ flex: 'none' }}>
+      <rect x="2.5" y="3.5" width="11" height="9" rx="1" />
+    </svg>
+  )
+}
+
+/** Типы фрез из конфига — по-русски, как их называют в цеху. */
+const TOOL_LABEL: Record<string, string> = {
+  compression: 'компрес.',
+  spiral: 'спиральная',
+  straight: 'прямая',
+  groove: 'пазовая',
+  drill: 'сверло',
+  vbit: 'гравёр',
+  saw: 'пила',
+}
+
+const GRAIN_LABEL: Record<string, string> = {
+  none: '—',
+  along: '↔',
+  across: '↕',
+  any: '—',
+}
+
+/**
+ * Правая панель: положение детали и её траектории.
+ *
+ * Словарь параметров — из ArtCAM, но это не диалог на каждую траекторию:
+ * значения приходят из пресета материала, а панель показывает, что именно
+ * из него получилось, и даёт переназначить вручную.
+ */
 export default function PropertiesPanel({
   layout,
   selection,
   presets,
   collisions,
   onMove,
+  onSelectionChange,
+  onFocusPart,
   onAssignToolpath,
   onToggleVector,
 }: Props) {
-  const [presetChoice, setPresetChoice] = useState<string>('')
-
   const instances = useMemo(
     () => layout.instances.filter((i) => selection.instances.includes(i.id)),
     [layout.instances, selection.instances],
   )
+
+  const single = instances.length === 1 ? instances[0] : null
+  const part = single ? layout.parts[String(single.part_id)] : null
 
   // Выделенные векторы, сгруппированные по детали: назначение идёт на деталь.
   const vectorsByPart = useMemo(() => {
@@ -65,6 +139,32 @@ export default function PropertiesPanel({
     return map
   }, [selection.vectors])
 
+  const [activeTarget, setActiveTarget] = useState<string | null>(null)
+  useEffect(() => {
+    setActiveTarget(selection.vectors.length ? selection.vectors[0].split(':').slice(1).join(':') : null)
+  }, [selection.vectors])
+
+  const [presetChoice, setPresetChoice] = useState<string>('')
+
+  // Одинаковые операции показываются одной строкой со счётчиком: двенадцать
+  // строк «Присадка ⌀4» — это не список, а стена, и стратегию к ним всё
+  // равно применяют разом.
+  const groups = useMemo(() => {
+    const map = new Map<string, { title: string; semantic: string; targets: string[]; sample: VectorView }>()
+    for (const vector of part?.vectors ?? []) {
+      const key = `${vector.title}|${vector.preset_id ?? '—'}|${vector.enabled}`
+      const row = map.get(key) ?? {
+        title: vector.title,
+        semantic: vector.semantic,
+        targets: [],
+        sample: vector,
+      }
+      row.targets.push(vector.target)
+      map.set(key, row)
+    }
+    return [...map.values()]
+  }, [part])
+
   const problems = collisions.filter((c) =>
     c.instance_ids.some((id) => selection.instances.includes(id)),
   )
@@ -72,222 +172,268 @@ export default function PropertiesPanel({
   if (!instances.length && !vectorsByPart.size) {
     return (
       <div className="panel-scroll">
-        <div className="panel-title">Свойства</div>
+        <div className="panel-title">Объект</div>
         <div className="empty small">
           Ничего не выделено.
           <br />
-          Кликните по детали, чтобы её выбрать. Двойной клик — вход внутрь детали:
-          там выделяются отдельные векторы, и к ним применяются траектории.
+          Клик — выбрать деталь. Двойной клик — войти внутрь: там выделяются
+          отдельные векторы, и к ним применяются траектории.
         </div>
       </div>
     )
   }
 
-  const rotate = (angle: number) =>
-    onMove(instances.map((i) => ({ instance_id: i.id, rotation: angle, pinned: true })))
-
-  const rotateBy = (delta: number) =>
-    onMove(
-      instances.map((i) => ({
-        instance_id: i.id,
-        rotation: ((i.rotation ?? 0) + delta + 360) % 360,
-        pinned: true,
-      })),
+  if (!part) {
+    return (
+      <div className="panel-scroll">
+        <div className="sec">
+          <div className="sec-head">
+            <span style={{ fontSize: 14, fontWeight: 600 }}>
+              Выделено деталей: {instances.length}
+            </span>
+          </div>
+          <div className="small muted">
+            Общие действия — на нижней панели: выравнивание, распределение, поворот.
+          </div>
+        </div>
+        <div className="sec">
+          <div className="row tight">
+            <button
+              type="button"
+              onClick={() =>
+                onMove(instances.map((i) => ({ instance_id: i.id, pinned: true })))
+              }
+            >
+              Закрепить
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onMove(instances.map((i) => ({ instance_id: i.id, pinned: false })))
+              }
+            >
+              Открепить
+            </button>
+          </div>
+        </div>
+      </div>
     )
+  }
 
-  const setPinned = (pinned: boolean) =>
-    onMove(instances.map((i) => ({ instance_id: i.id, pinned })))
+  const rotation = single?.rotation ?? 0
+  const width = Math.abs(rotation % 180) === 90 ? part.width : part.length
+  const height = Math.abs(rotation % 180) === 90 ? part.length : part.width
 
-  const single = instances.length === 1 ? instances[0] : null
-  const singlePart = single ? layout.parts[String(single.part_id)] : null
+  const vectors: VectorView[] = part.vectors
+  const active = vectors.find((v) => v.target === activeTarget) ?? null
+  const activeGroup = groups.find((g) => g.targets.includes(activeTarget ?? '')) ?? null
+  const activePreset = active?.preset_id
+    ? presets.find((p) => p.id === active.preset_id)
+    : undefined
+  const activeDepth = resolveDepth(activePreset, active?.depth ?? null, part.thickness)
+  const snapshot = layout.job.preset_snapshot
+  const strategy = (snapshot?.strategy ?? {}) as Record<string, unknown>
+  const depthSpec = (snapshot?.depth ?? {}) as Record<string, number>
+  const lead = (strategy.lead ?? {}) as Record<string, unknown>
+  const order = snapshot?.order ?? []
+
+  const setField = (field: 'x' | 'y' | 'rotation', value: number) => {
+    if (!single) return
+    onMove([{ instance_id: single.id, [field]: value, pinned: true } as Move])
+  }
+
+  const pickGroup = (targets: string[]) => {
+    setActiveTarget(targets[0])
+    onFocusPart(part.id)
+    onSelectionChange({
+      instances: selection.instances,
+      vectors: targets.map((target) => vectorKey(part.id, target)),
+    })
+  }
 
   return (
     <div className="panel-scroll">
-      <div className="panel-title">Свойства</div>
+      <div className="sec">
+        <div className="sec-head" style={{ marginBottom: 3 }}>
+          <span className="swatch" style={{ background: part.style?.fill ?? '#9AA3AF' }} />
+          <span className="ellipsis grow" style={{ fontSize: 14, fontWeight: 600 }} title={part.name}>
+            {part.name}
+          </span>
+          <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>
+            {vectors.length} вект.
+          </span>
+        </div>
+        <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+          {part.source_file ?? 'без файла'}
+          {part.source_sheet_index > 0 && ` · лист ${part.source_sheet_index + 1} в файле`}
+          {part.order_name ? ` · ${part.order_name}` : ''}
+        </div>
+      </div>
 
       {!!problems.length && (
-        <div className="notice error small">
-          {problems.map((p, index) => (
-            <div key={index}>{p.message}</div>
+        <div className="sec">
+          {problems.map((problem, index) => (
+            <div className="notice error small" key={index} style={{ marginBottom: 0 }}>
+              {problem.message}
+            </div>
           ))}
         </div>
       )}
 
-      {!!instances.length && (
-        <>
-          <div className="prop-block">
-            <div className="prop-head">
-              {instances.length === 1
-                ? singlePart?.name ?? 'Деталь'
-                : `Выделено деталей: ${instances.length}`}
-            </div>
-            {singlePart && (
-              <div className="small muted">
-                {singlePart.order_name ?? 'без заказа'} · {singlePart.source_file}
-                {singlePart.source_sheet_index > 0 &&
-                  ` · лист ${singlePart.source_sheet_index + 1} в файле`}
-                <br />
-                {singlePart.length?.toFixed(1)} × {singlePart.width?.toFixed(1)} ×{' '}
-                {singlePart.thickness ?? '—'} мм
-                {singlePart.grain !== 'none' && ' · с текстурой'}
-              </div>
-            )}
+      <div className="sec">
+        <div className="lbl" style={{ marginBottom: 9 }}>
+          Положение
+        </div>
+        <div className="fld-grid">
+          <label className="fld">
+            <span>X</span>
+            <input
+              type="number"
+              step={0.1}
+              value={single?.x ?? 0}
+              onChange={(event) => setField('x', Number(event.target.value))}
+            />
+          </label>
+          <label className="fld">
+            <span>Y</span>
+            <input
+              type="number"
+              step={0.1}
+              value={single?.y ?? 0}
+              onChange={(event) => setField('y', Number(event.target.value))}
+            />
+          </label>
+          <div className="fld">
+            <span>Ш</span>
+            {width?.toFixed(0) ?? '—'}
           </div>
-
-          {single && (
-            <div className="prop-block">
-              <div className="row tight">
-                <label className="field">
-                  X, мм
-                  <input
-                    type="number"
-                    step={0.1}
-                    value={single.x ?? 0}
-                    onChange={(event) =>
-                      onMove([
-                        { instance_id: single.id, x: Number(event.target.value), pinned: true },
-                      ])
-                    }
-                  />
-                </label>
-                <label className="field">
-                  Y, мм
-                  <input
-                    type="number"
-                    step={0.1}
-                    value={single.y ?? 0}
-                    onChange={(event) =>
-                      onMove([
-                        { instance_id: single.id, y: Number(event.target.value), pinned: true },
-                      ])
-                    }
-                  />
-                </label>
-              </div>
-              <label className="field" style={{ marginTop: 8 }}>
-                Лист
-                <select
-                  value={single.sheet_index ?? ''}
-                  onChange={(event) =>
-                    onMove([
-                      {
-                        instance_id: single.id,
-                        sheet_index: Number(event.target.value),
-                        pinned: true,
-                      },
-                    ])
-                  }
-                >
-                  {layout.sheets.map((sheet) => (
-                    <option key={sheet.index} value={sheet.index}>
-                      Лист {sheet.index + 1}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-
-          <div className="prop-block">
-            <div className="prop-label">Поворот</div>
-            <div className="row tight">
-              {ROTATIONS.map((angle) => (
-                <button
-                  key={angle}
-                  type="button"
-                  className={single && (single.rotation ?? 0) === angle ? 'primary' : ''}
-                  onClick={() => rotate(angle)}
-                >
+          <div className="fld">
+            <span>В</span>
+            {height?.toFixed(0) ?? '—'}
+          </div>
+          <label className="fld">
+            <span>Угол</span>
+            <select
+              value={rotation}
+              style={{ border: 'none', background: 'transparent', padding: 0, width: '100%' }}
+              onChange={(event) => setField('rotation', Number(event.target.value))}
+            >
+              {[0, 90, 180, 270].map((angle) => (
+                <option key={angle} value={angle}>
                   {angle}°
-                </button>
+                </option>
               ))}
-            </div>
-            <div className="row tight" style={{ marginTop: 6 }}>
-              <button type="button" onClick={() => rotateBy(-90)}>
-                ⟲ −90°
-              </button>
-              <button type="button" onClick={() => rotateBy(90)}>
-                ⟳ +90°
-              </button>
-            </div>
-            {layout.job.has_grain && (
-              <div className="small muted" style={{ marginTop: 6 }}>
-                Материал с текстурой: поперёк волокна деталь класть нельзя, поэтому
-                автораскладка использует только 0° и 180°.
-              </div>
-            )}
+            </select>
+          </label>
+          <div className="fld" title={layout.job.has_grain ? 'Материал с текстурой' : 'Материал без текстуры'}>
+            <span>Волокно</span>
+            {GRAIN_LABEL[part.grain] ?? part.grain}
           </div>
-
-          <div className="prop-block">
-            <div className="row tight">
-              <button type="button" onClick={() => setPinned(true)}>
-                Закрепить
-              </button>
-              <button type="button" onClick={() => setPinned(false)}>
-                Открепить
-              </button>
-            </div>
-            <div className="small muted" style={{ marginTop: 6 }}>
-              Закреплённые детали автораскладка не двигает.
-            </div>
+        </div>
+        {layout.job.has_grain && part.grain !== 'none' && (
+          <div className="small muted" style={{ marginTop: 8 }}>
+            Поперёк волокна деталь класть нельзя: автораскладка использует только
+            0° и 180°.
           </div>
-        </>
-      )}
+        )}
+      </div>
 
-      {!!vectorsByPart.size && (
-        <div className="prop-block">
-          <div className="prop-head">Траектория</div>
-          <div className="small muted" style={{ marginBottom: 8 }}>
-            Выделено векторов: {selection.vectors.length}. Выберите стратегию — она
-            применится ко всем выделенным.
-          </div>
-
-          {[...vectorsByPart.entries()].map(([partId, targets]) => {
-            const part = layout.parts[String(partId)]
-            if (!part) return null
+      <div className="sec">
+        <div className="sec-head">
+          <span className="lbl">Траектории</span>
+          {order.length > 0 && (
+            <span
+              className="mono"
+              style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--ink-3)' }}
+              title={`Порядок обработки из пресета: ${order.join(' → ')}`}
+            >
+              контур последним
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {groups.map((group) => {
+            const vector = group.sample
+            const preset = presets.find((p) => p.id === vector.preset_id)
+            const isActive = group.targets.includes(activeTarget ?? '')
+            const depth = resolveDepth(preset, vector.depth, part.thickness)
             return (
-              <div key={partId} style={{ marginBottom: 10 }}>
-                {targets.map((target) => {
-                  const vector = part.vectors.find((v) => v.target === target)
-                  if (!vector) return null
-                  const preset = presets.find((p) => p.id === vector.preset_id)
-                  const depth = resolveDepth(preset, vector.depth, part.thickness)
-                  return (
-                    <div className="vector-row" key={target}>
-                      <span
-                        className="swatch"
-                        style={{ background: preset?.color ?? '#9ca3af' }}
-                      />
-                      <span className="grow">
-                        <b>{vector.title}</b>
-                        <div className="small muted">
-                          {preset ? preset.name : 'без траектории'}
-                          {depth !== null && ` · глубина ${depth} мм`}
-                          {preset?.tool_diameter ? ` · фреза ⌀${preset.tool_diameter}` : ''}
-                        </div>
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={vector.enabled}
-                        title="Обрабатывать этот вектор"
-                        onChange={(event) =>
-                          onToggleVector(partId, [target], event.target.checked)
-                        }
-                      />
-                    </div>
-                  )
-                })}
-              </div>
+              <button
+                type="button"
+                key={group.title + group.targets[0]}
+                className={`op${isActive ? ' on' : ''}${vector.enabled ? '' : ' off'}`}
+                onClick={() => pickGroup(group.targets)}
+              >
+                <OpIcon semantic={group.semantic} bright={isActive} />
+                <span className="grow ellipsis" style={{ textAlign: 'left' }}>
+                  {group.title}
+                </span>
+                {group.targets.length > 1 && (
+                  <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 11 }}>
+                    ×{group.targets.length}
+                  </span>
+                )}
+                {preset && !vector.assigned_manually && <span className="badge auto">АВТО</span>}
+                {!preset && <span className="badge warn">нет</span>}
+                <span className="mono" style={{ color: 'var(--ink-2)', fontSize: 11 }}>
+                  {vector.diameter
+                    ? `⌀${vector.diameter}`
+                    : depth !== null
+                      ? `${String(depth).replace('.', ',')} мм`
+                      : '—'}
+                </span>
+              </button>
             )
           })}
+        </div>
+      </div>
 
-          <label className="field">
-            Применить стратегию
+      {active && (
+        <div className="sec">
+          <div className="lbl" style={{ marginBottom: 9 }}>
+            {active.title}
+            {activeGroup && activeGroup.targets.length > 1 && ` · ${activeGroup.targets.length} шт.`}
+          </div>
+          <div className="params">
+            <span>Инструмент</span>
+            <span>
+              {activePreset?.tool_diameter
+                ? `${
+                    TOOL_LABEL[activePreset.tool_type ?? ''] ?? activePreset.tool_type ?? 'фреза'
+                  } ⌀${activePreset.tool_diameter}`
+                : 'из пресета материала'}
+            </span>
+            <span>Глубина</span>
+            <span>{activeDepth === null ? '—' : `${String(activeDepth).replace('.', ',')} мм`}</span>
+            <span>Проходы</span>
+            <span>
+              {activeDepth && depthSpec.step_z
+                ? `${Math.ceil(activeDepth / depthSpec.step_z)} × ${String(depthSpec.step_z).replace('.', ',')} мм`
+                : '—'}
+            </span>
+            <span>Подрез</span>
+            <span>
+              {depthSpec.end_extra
+                ? `${String(depthSpec.end_extra).replace('.', ',')} мм в стол`
+                : 'нет'}
+            </span>
+            <span>Заход</span>
+            <span>
+              {lead.type === 'arc' ? `дуга R${lead.radius ?? '—'}` : 'по нормали'}
+            </span>
+            <span>Обход</span>
+            <span>{strategy.direction === 'conventional' ? 'встречный' : 'попутный'}</span>
+            <span>Коррекция</span>
+            <span>{strategy.compensation === 'g41g42' ? 'стойкой G41/G42' : 'в CAM'}</span>
+          </div>
+
+          <div className="row tight" style={{ marginTop: 10 }}>
             <select
+              className="grow"
               value={presetChoice}
               onChange={(event) => setPresetChoice(event.target.value)}
             >
-              <option value="">— выберите —</option>
+              <option value="">— сменить стратегию —</option>
               {presets.map((preset) => (
                 <option key={preset.id} value={preset.id}>
                   {preset.name}
@@ -295,22 +441,52 @@ export default function PropertiesPanel({
                 </option>
               ))}
             </select>
-          </label>
-          <button
-            type="button"
-            className="primary"
-            style={{ marginTop: 8, width: '100%' }}
-            disabled={!presetChoice}
-            onClick={() => {
-              for (const [partId, targets] of vectorsByPart.entries()) {
-                onAssignToolpath(partId, targets, Number(presetChoice))
+            <button
+              type="button"
+              disabled={!presetChoice}
+              onClick={() => {
+                const targets = selection.vectors.length
+                  ? [...vectorsByPart.entries()]
+                  : ([[part.id, activeGroup?.targets ?? [active.target]]] as Array<[number, string[]]>)
+                for (const [partId, list] of targets) {
+                  onAssignToolpath(partId, list, Number(presetChoice))
+                }
+              }}
+            >
+              Применить
+            </button>
+          </div>
+          <label className="row tight small muted" style={{ marginTop: 8 }}>
+            <input
+              type="checkbox"
+              checked={active.enabled}
+              onChange={(event) =>
+                onToggleVector(part.id, activeGroup?.targets ?? [active.target], event.target.checked)
               }
-            }}
-          >
-            Применить к выделенным векторам
-          </button>
+            />
+            Обрабатывать этот вектор
+          </label>
         </div>
       )}
+
+      <div style={{ padding: '12px 14px', marginTop: 'auto' }}>
+        <div className="row tight">
+          <button
+            type="button"
+            className="grow"
+            onClick={() => single && onMove([{ instance_id: single.id, pinned: !single.pinned }])}
+          >
+            {single?.pinned ? 'Открепить' : 'Закрепить'}
+          </button>
+          <button type="button" className="grow" disabled title="Появится вместе с печатью стикеров">
+            Стикер
+          </button>
+        </div>
+        <div className="small muted" style={{ marginTop: 10, lineHeight: 1.5 }}>
+          Тип операции определён по геометрии вектора, а не по слою. Любую можно
+          переназначить вручную.
+        </div>
+      </div>
     </div>
   )
 }

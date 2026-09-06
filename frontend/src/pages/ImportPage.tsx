@@ -52,7 +52,7 @@ export default function ImportPage() {
   const [error, setError] = useState<string | null>(null)
   const [batch, setBatch] = useState<ImportBatch | null>(null)
   const [summary, setSummary] = useState<LayerSummary | null>(null)
-  const [defaults, setDefaults] = useState({ project_name: '', material_id: '' })
+  const [defaults, setDefaults] = useState({ order_name: '', material_id: '' })
   const [sheets, setSheets] = useState<DetectedSheet[]>([])
   const [sheetNotice, setSheetNotice] = useState<string | null>(null)
 
@@ -93,7 +93,7 @@ export default function ImportPage() {
     try {
       const done = await api.processBatch(batch.id, {
         layer_overrides: overrides,
-        project_name: defaults.project_name || null,
+        order_name: defaults.order_name || null,
         material_id: defaults.material_id ? Number(defaults.material_id) : null,
       })
       setBatch(done)
@@ -167,12 +167,12 @@ export default function ImportPage() {
 
         <div className="row" style={{ marginTop: 14 }}>
           <label className="field">
-            Проект по умолчанию
+            Заказ по умолчанию
             <input
               placeholder="если не удастся определить из файлов"
-              value={defaults.project_name}
+              value={defaults.order_name}
               onChange={(event) =>
-                setDefaults((prev) => ({ ...prev, project_name: event.target.value }))
+                setDefaults((prev) => ({ ...prev, order_name: event.target.value }))
               }
             />
           </label>
@@ -241,8 +241,8 @@ export default function ImportPage() {
 
           {batch.status === 'done' && (
             <div className="row" style={{ marginTop: 14 }}>
-              <button type="button" className="primary" onClick={() => navigate('/projects')}>
-                К дереву проектов
+              <button type="button" className="primary" onClick={() => navigate('/editor')}>
+                В раскрой
               </button>
               {(stats.needs_clarification ?? 0) > 0 && (
                 <button type="button" onClick={() => navigate('/pending')}>

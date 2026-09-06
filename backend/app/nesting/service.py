@@ -324,6 +324,11 @@ def layout_payload(db: Session, job: NestingJob) -> dict:
                     "enabled": assigned[vector.target].enabled
                     if vector.target in assigned
                     else False,
+                    # Значок «АВТО» в панели траекторий: назначено по
+                    # геометрии или руками технолога.
+                    "assigned_manually": assigned[vector.target].assigned_manually
+                    if vector.target in assigned
+                    else False,
                 }
                 for vector in vectors_of(part).vectors
             ],

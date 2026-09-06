@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../api/client'
+import AlignBar from '../components/editor/AlignBar'
+import BufferPanel from '../components/editor/BufferPanel'
 import CanvasStage, { type Move, type StageHandle } from '../components/editor/CanvasStage'
-import ObjectsPanel from '../components/editor/ObjectsPanel'
 import PropertiesPanel from '../components/editor/PropertiesPanel'
 import type { Collision, Layout, Selection, ToolpathPreset } from '../editor/types'
 import { emptySelection } from '../editor/types'
-import type { CuttingPreset, Material } from '../api/types'
+import type { CuttingPreset, Material, SourceFile } from '../api/types'
 import { useLoader } from '../lib/hooks'
 
 interface JobRow {
@@ -19,6 +20,7 @@ interface JobRow {
 
 export default function EditorPage() {
   const stage = useRef<StageHandle>(null)
+  const filePicker = useRef<HTMLInputElement>(null)
 
   const { data: materials } = useLoader<Material[]>(() => api.materials(), [])
   const [jobs, setJobs] = useState<JobRow[]>([])
@@ -27,6 +29,7 @@ export default function EditorPage() {
   const [collisions, setCollisions] = useState<Collision[]>([])
   const [presets, setPresets] = useState<ToolpathPreset[]>([])
   const [cuttingPresets, setCuttingPresets] = useState<CuttingPreset[]>([])
+  const [files, setFiles] = useState<SourceFile[]>([])
   const [selection, setSelection] = useState<Selection>(emptySelection)
   const [focusedPartId, setFocusedPartId] = useState<number | null>(null)
   const [showToolpaths, setShowToolpaths] = useState(true)
@@ -55,11 +58,13 @@ export default function EditorPage() {
     const [data, issues] = await Promise.all([api.layout(id), api.collisions(id)])
     setLayout(data)
     setCollisions(issues)
+    api.files().then(setFiles).catch(() => undefined)
   }, [])
 
   useEffect(() => {
     api.toolpathPresets().then(setPresets).catch(() => undefined)
     api.cuttingPresets().then(setCuttingPresets).catch(() => undefined)
+    api.files().then(setFiles).catch(() => undefined)
     loadJobs().catch((err: Error) => setError(err.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -276,10 +281,33 @@ export default function EditorPage() {
     }
   }, [thicknesses])
 
+  // Легенда: какие файлы лежат на листах этого задания и сколько от каждого.
+  const legend = useMemo(() => {
+    if (!layout) return []
+    const counts = new Map<number, { color: string; name: string; count: number }>()
+    for (const instance of layout.instances) {
+      if (instance.sheet_index === null) continue
+      const part = layout.parts[String(instance.part_id)]
+      if (!part?.source_file_id) continue
+      const row = counts.get(part.source_file_id) ?? {
+        color: part.style?.fill ?? '#9AA3AF',
+        name: part.source_file ?? `Файл ${part.source_file_id}`,
+        count: 0,
+      }
+      row.count += 1
+      counts.set(part.source_file_id, row)
+    }
+    return [...counts.values()].sort((a, b) => b.count - a.count)
+  }, [layout])
+
+  const job = layout?.job
+
   return (
     <div className="editor">
-      <div className="editor-toolbar">
+      {/* Верхняя строка: где мы, каким пресетом считаем и что делаем дальше. */}
+      <div className="editor-topbar">
         <select
+          className="chip-select"
           value={jobId ?? ''}
           onChange={(event) => {
             setJobId(Number(event.target.value))
@@ -288,16 +316,25 @@ export default function EditorPage() {
           }}
         >
           {jobs.length === 0 && <option value="">— заданий нет —</option>}
-          {jobs.map((job) => (
-            <option key={job.id} value={job.id}>
-              {job.name ?? `Задание ${job.id}`}
-              {job.utilization ? ` · КПД ${(job.utilization * 100).toFixed(0)}%` : ''}
+          {jobs.map((row) => (
+            <option key={row.id} value={row.id}>
+              {row.name ?? `Задание ${row.id}`}
             </option>
           ))}
         </select>
 
+        {job && (
+          <>
+            <span className="sep">/</span>
+            <span className="what">
+              {job.thickness} мм · {job.material_name}
+            </span>
+          </>
+        )}
+
         <select
-          value={layout?.job.preset?.id ?? ''}
+          className="chip-select"
+          value={job?.preset?.id ?? ''}
           disabled={busy || jobId === null}
           title="Пресет раскроя: фреза, зазор, глубины, порядок обработки"
           onChange={(event) => changePreset(event.target.value)}
@@ -305,54 +342,36 @@ export default function EditorPage() {
           <option value="">— пресет не выбран —</option>
           {cuttingPresets.map((preset) => (
             <option key={preset.id} value={preset.id}>
-              {preset.name}
+              Пресет · {preset.name}
             </option>
           ))}
         </select>
 
-        <div className="divider" />
-
-        <button type="button" onClick={() => arrange(true)} disabled={busy || jobId === null}>
-          Разложить
-        </button>
-        <button type="button" onClick={() => arrange(false)} disabled={busy || jobId === null}>
-          Разложить заново
-        </button>
-
-        <div className="divider" />
-
-        <button type="button" onClick={() => stage.current?.zoomBy(1 / 1.25)} title="Отдалить">
-          −
-        </button>
-        <span className="zoom-label">{(scale * 100).toFixed(0)}%</span>
-        <button type="button" onClick={() => stage.current?.zoomBy(1.25)} title="Приблизить">
-          +
-        </button>
-        <button type="button" onClick={() => stage.current?.fit()}>
-          По размеру
-        </button>
-
-        <div className="divider" />
-
-        <label className="toolbar-check">
-          <input
-            type="checkbox"
-            checked={showToolpaths}
-            onChange={(event) => setShowToolpaths(event.target.checked)}
-          />
-          Показывать ширину фрезы
-        </label>
-
-        <div className="grow" />
-
-        {layout && (
-          <span className="muted small">
-            {layout.job.material_name} · {layout.job.thickness} мм · листов{' '}
-            {layout.sheets.length} · КПД{' '}
-            {layout.job.utilization ? (layout.job.utilization * 100).toFixed(1) : '—'}% ·
-            склад {layout.stock.available}/{layout.stock.needed}
+        <div className="spacer">
+          <span className="chip" title="Полезная площадь по всем листам задания">
+            КИМ{' '}
+            <b>
+              {job?.utilization
+                ? `${(job.utilization * 100).toFixed(1).replace('.', ',')} %`
+                : '—'}
+            </b>
           </span>
-        )}
+          <span className="chip" title="Хватает ли листов на складе">
+            Склад{' '}
+            <b>
+              {layout ? `${layout.stock.available} / ${layout.stock.needed}` : '—'}
+            </b>
+          </span>
+          <button type="button" onClick={() => arrange(false)} disabled={busy || jobId === null}>
+            Уплотнить всё
+          </button>
+          <button type="button" disabled title="Появится вместе с печатью стикеров">
+            Стикеры
+          </button>
+          <button type="button" className="primary" disabled title="Появится вместе с постпроцессором">
+            Сгенерировать УП
+          </button>
+        </div>
       </div>
 
       {(error || message) && (
@@ -372,73 +391,140 @@ export default function EditorPage() {
 
       <div className="editor-body">
         <aside className="editor-side left">
-          {layout ? (
-            <ObjectsPanel
+          {layout || files.length ? (
+            <BufferPanel
+              files={files}
               layout={layout}
               selection={selection}
               onSelectionChange={setSelection}
-              focusedPartId={focusedPartId}
               onFocusPart={setFocusedPartId}
+              onFocusSheet={(index) => stage.current?.focusSheet(index)}
+              onPickFiles={() => filePicker.current?.click()}
             />
           ) : (
             <div className="panel-scroll">
-              <div className="panel-title">Задание на раскрой</div>
+              <div className="panel-title">Буфер</div>
               <div className="small muted" style={{ padding: '0 12px 12px' }}>
+                Перетащите DXF в рабочее поле — файлы попадут в буфер.
+              </div>
+            </div>
+          )}
+
+          {!layout && (
+            <div style={{ padding: '10px 12px', borderTop: '1px solid var(--line)' }}>
+              <div className="lbl" style={{ marginBottom: 8 }}>
+                Новое задание
+              </div>
+              <div className="small muted" style={{ marginBottom: 8 }}>
                 Раскрой идёт по паре «материал + толщина»: разные толщины никогда не
                 попадают на один лист.
               </div>
-              <div style={{ padding: '0 12px' }}>
-                <label className="field">
-                  Материал
-                  <select
-                    value={creating.material_id}
-                    onChange={(event) =>
-                      setCreating({ material_id: event.target.value, thickness: '' })
-                    }
-                  >
-                    <option value="">— выберите —</option>
-                    {(materials ?? []).map((material) => (
-                      <option key={material.id} value={material.id}>
-                        {material.name} · {material.thickness} мм
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  className="primary"
-                  style={{ width: '100%', marginTop: 10 }}
-                  disabled={!creating.material_id || !creating.thickness}
-                  onClick={createJob}
+              <label className="field">
+                Материал
+                <select
+                  value={creating.material_id}
+                  onChange={(event) =>
+                    setCreating({ material_id: event.target.value, thickness: '' })
+                  }
                 >
-                  Создать задание
-                </button>
-              </div>
+                  <option value="">— выберите —</option>
+                  {(materials ?? []).map((material) => (
+                    <option key={material.id} value={material.id}>
+                      {material.name} · {material.thickness} мм
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="primary"
+                style={{ width: '100%', marginTop: 10 }}
+                disabled={!creating.material_id || !creating.thickness}
+                onClick={createJob}
+              >
+                Создать задание
+              </button>
             </div>
           )}
         </aside>
 
-        {layout ? (
-          <CanvasStage
-            ref={stage}
-            layout={layout}
-            collisions={collisions}
-            presets={presets}
-            selection={selection}
-            onSelectionChange={setSelection}
-            focusedPartId={focusedPartId}
-            onFocusPart={setFocusedPartId}
-            onMove={applyMoves}
-            onDropFiles={dropFiles}
-            showToolpaths={showToolpaths}
-            gap={gap}
-            onViewportChange={setScale}
-          />
-        ) : (
-          <div className="stage empty">
-            Создайте задание на раскрой — и детали лягут на листы.
+        <div className="stage-wrap">
+          {layout ? (
+            <CanvasStage
+              ref={stage}
+              layout={layout}
+              collisions={collisions}
+              presets={presets}
+              selection={selection}
+              onSelectionChange={setSelection}
+              focusedPartId={focusedPartId}
+              onFocusPart={setFocusedPartId}
+              onMove={applyMoves}
+              onDropFiles={dropFiles}
+              showToolpaths={showToolpaths}
+              gap={gap}
+              onViewportChange={setScale}
+            />
+          ) : (
+            <div className="stage empty">
+              Создайте задание на раскрой — и детали лягут на листы.
+            </div>
+          )}
+
+          <div className="stage-chips">
+            <span className="chip">
+              <button type="button" onClick={() => stage.current?.zoomBy(1 / 1.25)} title="Отдалить">
+                −
+              </button>
+              <b className="mono">{(scale * 100).toFixed(0)} %</b>
+              <button type="button" onClick={() => stage.current?.zoomBy(1.25)} title="Приблизить">
+                +
+              </button>
+              <button type="button" onClick={() => stage.current?.fit()} title="Показать все листы">
+                ▢
+              </button>
+            </span>
+            <span className="chip" title="Диаметр фрезы контура плюс мостик из пресета">
+              Зазор <b className="mono">{gap} мм</b>
+            </span>
+            <label className="chip" style={{ cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={showToolpaths}
+                onChange={(event) => setShowToolpaths(event.target.checked)}
+              />
+              Ширина фрезы
+            </label>
           </div>
-        )}
+
+          {legend.length > 0 && (
+            <div className="legend">
+              <div className="lbl">Файлы на листе</div>
+              {legend.map((row) => (
+                <div className="legend-row" key={row.name}>
+                  <span className="swatch" style={{ background: row.color }} />
+                  <span className="mono ellipsis grow">{row.name}</span>
+                  <span className="mono" style={{ color: 'var(--ink-3)' }}>
+                    {row.count}
+                  </span>
+                </div>
+              ))}
+              <div className="legend-note">
+                штриховка — второй и следующий листы внутри файла
+              </div>
+            </div>
+          )}
+
+          {layout && (
+            <AlignBar
+              layout={layout}
+              selection={selection}
+              onMove={applyMoves}
+              onCompact={() => arrange(true)}
+              busy={busy}
+            />
+          )}
+        </div>
 
         <aside className="editor-side right">
           {layout && (
@@ -448,12 +534,27 @@ export default function EditorPage() {
               presets={presets}
               collisions={collisions}
               onMove={applyMoves}
+              onSelectionChange={setSelection}
+              onFocusPart={setFocusedPartId}
               onAssignToolpath={assignToolpath}
               onToggleVector={toggleVector}
             />
           )}
         </aside>
       </div>
+
+      <input
+        ref={filePicker}
+        type="file"
+        multiple
+        accept=".dxf,.zip,.xlsx,.csv"
+        style={{ display: 'none' }}
+        onChange={(event) => {
+          const picked = Array.from(event.target.files ?? [])
+          event.target.value = ''
+          if (picked.length) dropFiles(picked)
+        }}
+      />
 
       <div className="editor-hints">
         колесо — зум · пробел или средняя кнопка — панорама · клик — выбрать деталь ·

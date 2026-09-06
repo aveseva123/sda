@@ -201,9 +201,9 @@ backend/  FastAPI + SQLAlchemy + Alembic
   app/api/       роутеры
   app/core/      конфиги, БД, цветовая система
 worker/   тот же образ, команда `rq worker` — долгий нестинг вне HTTP-цикла
-frontend/ React + TypeScript
+frontend/ React + TypeScript, тёмная тема «Нестор» (IBM Plex, шрифты в сборке)
   src/editor/            геометрия размещения, отрисовка холста
-  src/components/editor/ холст, панель объектов, панель свойств
+  src/components/editor/ холст, буфер файлов, панель траекторий, выравнивание
 config/   YAML-конфиги (монтируются в контейнеры)
 ```
 

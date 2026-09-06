@@ -1,4 +1,5 @@
 const SOURCE_LABELS: Record<string, string> = {
+  layer_depth: 'глубина в слое',
   layer_map: 'слой DXF',
   filename: 'имя файла',
   folder: 'имя папки',

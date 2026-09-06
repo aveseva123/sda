@@ -9,7 +9,11 @@ export interface Vector {
   points: number
   preset_id: number | null
   enabled: boolean
+  /** Назначено вручную — тогда значок «АВТО» не показывается. */
+  assigned_manually: boolean
 }
+
+export type VectorView = Vector
 
 export interface PartGeometryData {
   outer: number[][]
