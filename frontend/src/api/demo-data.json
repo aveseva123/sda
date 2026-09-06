@@ -319,7 +319,7 @@
    "filename": "bazis_16mm_two_sheets.dxf",
    "relpath": "bazis_16mm_two_sheets.dxf",
    "order_name": "Кухня Ивановы",
-   "color": "#23AC74",
+   "color": "#0072B2",
    "color_index": 1,
    "status": "duplicate",
    "detected_source": "bazis",
@@ -338,7 +338,7 @@
    "filename": "bazis_12mm_strips.dxf",
    "relpath": "bazis_12mm_strips.dxf",
    "order_name": "Шкаф Петровы",
-   "color": "#7D82C5",
+   "color": "#23AC74",
    "color_index": 0,
    "status": "parsed",
    "detected_source": "bazis",
@@ -370,16 +370,16 @@
  ],
  "/palette": {
   "files": [
-   "#7D82C5",
    "#23AC74",
-   "#9D3725",
-   "#861CB4",
    "#0072B2",
-   "#E69F00",
-   "#CC79A7",
-   "#56B4E9",
    "#D55E00",
-   "#3B7C70"
+   "#CC79A7",
+   "#7A8C00",
+   "#861CB4",
+   "#E69F00",
+   "#3B7C70",
+   "#56B4E9",
+   "#9D3725"
   ],
   "sheet_patterns": [
    "solid",
@@ -1047,7 +1047,7 @@
    "length": 1954.0,
    "width": 630.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1060,9 +1060,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#7D82C5",
+    "base": "#23AC74",
+    "fill": "#23AC74",
     "pattern": "solid",
-    "stroke": "#515480",
+    "stroke": "#17704B",
     "text": "#FFFFFF"
    }
   },
@@ -1078,7 +1079,7 @@
    "length": 1954.0,
    "width": 38.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1091,9 +1092,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#7D82C5",
+    "base": "#23AC74",
+    "fill": "#23AC74",
     "pattern": "solid",
-    "stroke": "#515480",
+    "stroke": "#17704B",
     "text": "#FFFFFF"
    }
   },
@@ -1109,7 +1111,7 @@
    "length": 1754.0,
    "width": 38.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1122,9 +1124,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#7D82C5",
+    "base": "#23AC74",
+    "fill": "#23AC74",
     "pattern": "solid",
-    "stroke": "#515480",
+    "stroke": "#17704B",
     "text": "#FFFFFF"
    }
   },
@@ -1140,7 +1143,7 @@
    "length": 200.0,
    "width": 170.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1153,9 +1156,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#7D82C5",
+    "base": "#23AC74",
+    "fill": "#23AC74",
     "pattern": "solid",
-    "stroke": "#515480",
+    "stroke": "#17704B",
     "text": "#FFFFFF"
    }
   },
@@ -1171,7 +1175,7 @@
    "length": 788.0,
    "width": 38.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1184,9 +1188,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#7D82C5",
+    "base": "#23AC74",
+    "fill": "#23AC74",
     "pattern": "solid",
-    "stroke": "#515480",
+    "stroke": "#17704B",
     "text": "#FFFFFF"
    }
   },
@@ -1202,7 +1207,7 @@
    "length": 606.0,
    "width": 38.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1215,9 +1220,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#7D82C5",
+    "base": "#23AC74",
+    "fill": "#23AC74",
     "pattern": "solid",
-    "stroke": "#515480",
+    "stroke": "#17704B",
     "text": "#FFFFFF"
    }
   },
@@ -1233,7 +1239,7 @@
    "length": 182.0,
    "width": 38.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1246,9 +1252,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#7D82C5",
+    "base": "#23AC74",
+    "fill": "#23AC74",
     "pattern": "solid",
-    "stroke": "#515480",
+    "stroke": "#17704B",
     "text": "#FFFFFF"
    }
   },
@@ -1264,7 +1271,7 @@
    "length": 176.0,
    "width": 38.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1277,9 +1284,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#7D82C5",
+    "base": "#23AC74",
+    "fill": "#23AC74",
     "pattern": "solid",
-    "stroke": "#515480",
+    "stroke": "#17704B",
     "text": "#FFFFFF"
    }
   },
@@ -1295,7 +1303,7 @@
    "length": 712.0,
    "width": 500.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1308,9 +1316,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#23AC74",
+    "base": "#0072B2",
+    "fill": "#0072B2",
     "pattern": "solid",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1326,7 +1335,7 @@
    "length": 500.0,
    "width": 50.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1339,9 +1348,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#42B887",
+    "base": "#0072B2",
+    "fill": "#2486BD",
     "pattern": "diagonal",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1357,7 +1367,7 @@
    "length": 500.0,
    "width": 50.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1370,9 +1380,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#42B887",
+    "base": "#0072B2",
+    "fill": "#2486BD",
     "pattern": "diagonal",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1388,7 +1399,7 @@
    "length": 500.0,
    "width": 62.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1401,9 +1412,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#42B887",
+    "base": "#0072B2",
+    "fill": "#2486BD",
     "pattern": "diagonal",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1419,7 +1431,7 @@
    "length": 712.0,
    "width": 500.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1432,9 +1444,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#23AC74",
+    "base": "#0072B2",
+    "fill": "#0072B2",
     "pattern": "solid",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1450,7 +1463,7 @@
    "length": 500.0,
    "width": 62.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1463,9 +1476,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#42B887",
+    "base": "#0072B2",
+    "fill": "#2486BD",
     "pattern": "diagonal",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1481,7 +1495,7 @@
    "length": 712.0,
    "width": 500.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1494,9 +1508,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#23AC74",
+    "base": "#0072B2",
+    "fill": "#0072B2",
     "pattern": "solid",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1512,7 +1527,7 @@
    "length": 712.0,
    "width": 500.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1525,9 +1540,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#23AC74",
+    "base": "#0072B2",
+    "fill": "#0072B2",
     "pattern": "solid",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1543,7 +1559,7 @@
    "length": 500.0,
    "width": 62.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1556,9 +1572,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#42B887",
+    "base": "#0072B2",
+    "fill": "#2486BD",
     "pattern": "diagonal",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1574,7 +1591,7 @@
    "length": 500.0,
    "width": 50.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1587,9 +1604,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#42B887",
+    "base": "#0072B2",
+    "fill": "#2486BD",
     "pattern": "diagonal",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1605,7 +1623,7 @@
    "length": 500.0,
    "width": 50.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1618,9 +1636,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#42B887",
+    "base": "#0072B2",
+    "fill": "#2486BD",
     "pattern": "diagonal",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1636,7 +1655,7 @@
    "length": 500.0,
    "width": 50.0,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1649,9 +1668,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#42B887",
+    "base": "#0072B2",
+    "fill": "#2486BD",
     "pattern": "diagonal",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1667,7 +1687,7 @@
    "length": 500.0,
    "width": 289.6,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1680,9 +1700,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#23AC74",
+    "base": "#0072B2",
+    "fill": "#0072B2",
     "pattern": "solid",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   },
@@ -1698,7 +1719,7 @@
    "length": 500.0,
    "width": 289.6,
    "thickness": 16.0,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "grain": "none",
    "edge_top": null,
@@ -1711,9 +1732,10 @@
    "material_source": "manual",
    "clarification": null,
    "style": {
-    "fill": "#23AC74",
+    "base": "#0072B2",
+    "fill": "#0072B2",
     "pattern": "solid",
-    "stroke": "#17704B",
+    "stroke": "#004A74",
     "text": "#FFFFFF"
    }
   }
@@ -1739,15 +1761,15 @@
     "failed": 0
    },
    "error": null,
-   "created_at": "2026-09-06T22:45:35"
+   "created_at": "2026-09-06T23:35:43"
   }
  ],
  "/stock": [
   {
    "id": 1,
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
-   "thickness": 28.0,
+   "thickness": 16.0,
    "kind": "sheet",
    "w": 2070.0,
    "h": 2800.0,
@@ -1763,9 +1785,9 @@
  ],
  "/stock/summary": [
   {
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
-   "thickness": 28.0,
+   "thickness": 16.0,
    "sheets": 12,
    "offcuts": 0,
    "area_m2": 69.552
@@ -1775,7 +1797,7 @@
   {
    "id": 1,
    "name": "ЛДСП 16 мм",
-   "material_id": 7,
+   "material_id": 3,
    "thickness": 16.0,
    "status": "done",
    "stage": "planning",
@@ -1787,14 +1809,14 @@
     "sheet_w": 2070.0,
     "sheet_h": 2800.0
    },
-   "created_at": "2026-09-06T22:45:35"
+   "created_at": "2026-09-06T23:35:43"
   }
  ],
  "/nesting/jobs/1/layout": {
   "job": {
    "id": 1,
    "name": "ЛДСП 16 мм",
-   "material_id": 7,
+   "material_id": 3,
    "material_name": "ЛДСП",
    "has_grain": false,
    "thickness": 16.0,
@@ -1976,9 +1998,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#23AC74",
+     "base": "#0072B2",
+     "fill": "#0072B2",
      "pattern": "solid",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 712.0,
@@ -3194,9 +3217,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#23AC74",
+     "base": "#0072B2",
+     "fill": "#0072B2",
      "pattern": "solid",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 712.0,
@@ -4380,9 +4404,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#23AC74",
+     "base": "#0072B2",
+     "fill": "#0072B2",
      "pattern": "solid",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 712.0,
@@ -5566,9 +5591,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#23AC74",
+     "base": "#0072B2",
+     "fill": "#0072B2",
      "pattern": "solid",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 712.0,
@@ -6752,9 +6778,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#23AC74",
+     "base": "#0072B2",
+     "fill": "#0072B2",
      "pattern": "solid",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 500.0,
@@ -9599,9 +9626,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#23AC74",
+     "base": "#0072B2",
+     "fill": "#0072B2",
      "pattern": "solid",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 500.0,
@@ -12446,9 +12474,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 1,
     "style": {
-     "fill": "#42B887",
+     "base": "#0072B2",
+     "fill": "#2486BD",
      "pattern": "diagonal",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 500.0,
@@ -12806,9 +12835,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 1,
     "style": {
-     "fill": "#42B887",
+     "base": "#0072B2",
+     "fill": "#2486BD",
      "pattern": "diagonal",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 500.0,
@@ -13166,9 +13196,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 1,
     "style": {
-     "fill": "#42B887",
+     "base": "#0072B2",
+     "fill": "#2486BD",
      "pattern": "diagonal",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 500.0,
@@ -13526,9 +13557,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 1,
     "style": {
-     "fill": "#42B887",
+     "base": "#0072B2",
+     "fill": "#2486BD",
      "pattern": "diagonal",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 500.0,
@@ -13726,9 +13758,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 1,
     "style": {
-     "fill": "#42B887",
+     "base": "#0072B2",
+     "fill": "#2486BD",
      "pattern": "diagonal",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 500.0,
@@ -13926,9 +13959,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 1,
     "style": {
-     "fill": "#42B887",
+     "base": "#0072B2",
+     "fill": "#2486BD",
      "pattern": "diagonal",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 500.0,
@@ -14126,9 +14160,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 1,
     "style": {
-     "fill": "#42B887",
+     "base": "#0072B2",
+     "fill": "#2486BD",
      "pattern": "diagonal",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 500.0,
@@ -14326,9 +14361,10 @@
     "source_file": "bazis_16mm_two_sheets.dxf",
     "source_sheet_index": 1,
     "style": {
-     "fill": "#42B887",
+     "base": "#0072B2",
+     "fill": "#2486BD",
      "pattern": "diagonal",
-     "stroke": "#17704B",
+     "stroke": "#004A74",
      "text": "#FFFFFF"
     },
     "length": 500.0,
@@ -14526,9 +14562,10 @@
     "source_file": "bazis_12mm_strips.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#7D82C5",
+     "base": "#23AC74",
+     "fill": "#23AC74",
      "pattern": "solid",
-     "stroke": "#515480",
+     "stroke": "#17704B",
      "text": "#FFFFFF"
     },
     "length": 1954.0,
@@ -14602,9 +14639,10 @@
     "source_file": "bazis_12mm_strips.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#7D82C5",
+     "base": "#23AC74",
+     "fill": "#23AC74",
      "pattern": "solid",
-     "stroke": "#515480",
+     "stroke": "#17704B",
      "text": "#FFFFFF"
     },
     "length": 1954.0,
@@ -14678,9 +14716,10 @@
     "source_file": "bazis_12mm_strips.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#7D82C5",
+     "base": "#23AC74",
+     "fill": "#23AC74",
      "pattern": "solid",
-     "stroke": "#515480",
+     "stroke": "#17704B",
      "text": "#FFFFFF"
     },
     "length": 1754.0,
@@ -14754,9 +14793,10 @@
     "source_file": "bazis_12mm_strips.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#7D82C5",
+     "base": "#23AC74",
+     "fill": "#23AC74",
      "pattern": "solid",
-     "stroke": "#515480",
+     "stroke": "#17704B",
      "text": "#FFFFFF"
     },
     "length": 200.0,
@@ -14830,9 +14870,10 @@
     "source_file": "bazis_12mm_strips.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#7D82C5",
+     "base": "#23AC74",
+     "fill": "#23AC74",
      "pattern": "solid",
-     "stroke": "#515480",
+     "stroke": "#17704B",
      "text": "#FFFFFF"
     },
     "length": 788.0,
@@ -14906,9 +14947,10 @@
     "source_file": "bazis_12mm_strips.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#7D82C5",
+     "base": "#23AC74",
+     "fill": "#23AC74",
      "pattern": "solid",
-     "stroke": "#515480",
+     "stroke": "#17704B",
      "text": "#FFFFFF"
     },
     "length": 606.0,
@@ -14982,9 +15024,10 @@
     "source_file": "bazis_12mm_strips.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#7D82C5",
+     "base": "#23AC74",
+     "fill": "#23AC74",
      "pattern": "solid",
-     "stroke": "#515480",
+     "stroke": "#17704B",
      "text": "#FFFFFF"
     },
     "length": 182.0,
@@ -15058,9 +15101,10 @@
     "source_file": "bazis_12mm_strips.dxf",
     "source_sheet_index": 0,
     "style": {
-     "fill": "#7D82C5",
+     "base": "#23AC74",
+     "fill": "#23AC74",
      "pattern": "solid",
-     "stroke": "#515480",
+     "stroke": "#17704B",
      "text": "#FFFFFF"
     },
     "length": 176.0,
@@ -16320,7 +16364,7 @@
    },
    "tabs": "auto",
    "params": null,
-   "color": "#111827",
+   "color": "#101418",
    "is_builtin": true
   },
   {
@@ -16347,7 +16391,7 @@
    },
    "tabs": "never",
    "params": null,
-   "color": "#374151",
+   "color": "#3f4a57",
    "is_builtin": true
   },
   {
@@ -16377,7 +16421,7 @@
     "pocket_strategy": "offset",
     "stepover": 0.45
    },
-   "color": "#0891b2",
+   "color": "#0f6c8c",
    "is_builtin": true
   },
   {
@@ -16403,7 +16447,7 @@
    "params": {
     "peck": 0.0
    },
-   "color": "#b91c1c",
+   "color": "#be1414",
    "is_builtin": true
   },
   {
@@ -16430,7 +16474,7 @@
    },
    "tabs": "never",
    "params": null,
-   "color": "#7c3aed",
+   "color": "#6425c4",
    "is_builtin": true
   },
   {
@@ -16456,7 +16500,7 @@
    },
    "tabs": "never",
    "params": null,
-   "color": "#65a30d",
+   "color": "#46700d",
    "is_builtin": true
   },
   {
@@ -16479,7 +16523,7 @@
    "lead": null,
    "tabs": "never",
    "params": null,
-   "color": "#9ca3af",
+   "color": "#8a94a1",
    "is_builtin": true
   }
  ],
