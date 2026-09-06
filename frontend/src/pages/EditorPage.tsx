@@ -60,6 +60,16 @@ export default function EditorPage() {
   // Ширина фрезы — режим проверки, а не фон: включённой по умолчанию она
   // закрашивает весь лист и раскладку под ней не видно.
   const [showToolpaths, setShowToolpaths] = useState(false)
+  // Режим просмотра, как «Каркас» в векторных редакторах: заливка отвечает на
+  // вопрос «чьё и насколько плотно», каркас — «что за геометрия и где что
+  // налезает». Выбор запоминается: у технолога и оператора он обычно разный.
+  const [view, setView] = useState<'solid' | 'outline'>(() => {
+    try {
+      return window.localStorage.getItem('nestor.view') === 'outline' ? 'outline' : 'solid'
+    } catch {
+      return 'solid'
+    }
+  })
   const [scale, setScale] = useState(0.15)
   const [busy, setBusy] = useState(false)
   const [busyWhat, setBusyWhat] = useState<string | null>(null)
@@ -684,6 +694,7 @@ export default function EditorPage() {
               onFocusPart={setFocusedPartId}
               onMove={frozen ? () => undefined : applyMoves}
               onDropFiles={dropFiles}
+              view={view}
               showToolpaths={showToolpaths}
               gap={gap}
               onViewportChange={setScale}
@@ -763,6 +774,31 @@ export default function EditorPage() {
             </span>
             <span className="chip" title="Диаметр фрезы контура плюс мостик из пресета">
               Зазор <b className="mono">{gap} мм</b>
+            </span>
+            <span className="chip segmented" role="group" aria-label="Вид карты">
+              {(
+                [
+                  ['solid', 'Заливка', 'Деталь залита цветом своего файла'],
+                  ['outline', 'Контуры', 'Только линии: видно геометрию, вырезы и наложения'],
+                ] as const
+              ).map(([mode, title, hint]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={view === mode ? 'on' : undefined}
+                  title={hint}
+                  onClick={() => {
+                    setView(mode)
+                    try {
+                      window.localStorage.setItem('nestor.view', mode)
+                    } catch {
+                      /* приватное окно — просто не запомним */
+                    }
+                  }}
+                >
+                  {title}
+                </button>
+              ))}
             </span>
             <label className="chip" style={{ cursor: 'pointer' }}>
               <input

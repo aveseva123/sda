@@ -48,6 +48,7 @@ interface Props {
   onFocusPart: (partId: number | null) => void
   onMove: (moves: Move[]) => void
   onDropFiles: (files: File[]) => void
+  view: 'solid' | 'outline'
   showToolpaths: boolean
   gap: number
   onViewportChange?: (scale: number) => void
@@ -69,6 +70,7 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
     onFocusPart,
     onMove,
     onDropFiles,
+    view,
     showToolpaths,
     gap,
     onViewportChange,
@@ -223,6 +225,7 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
       hoveredInstance: hovered,
       collisions,
       presets: presetMap,
+      view,
       showToolpaths,
       guides,
       marquee,
@@ -236,6 +239,7 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
     hovered,
     collisions,
     presetMap,
+    view,
     showToolpaths,
     guides,
     marquee,

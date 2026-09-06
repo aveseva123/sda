@@ -755,6 +755,12 @@ canvas.preview {
 }
 .stage-chips .chip button:hover { background: #262c35; color: var(--ink); }
 
+/* Переключатель вида карты: одно из двух, состояние видно без подсказки. */
+.chip.segmented { padding: 0 3px; gap: 2px; }
+.chip.segmented button { padding: 0 9px; font-size: 11.5px; }
+.chip.segmented button.on { background: var(--accent); color: #fff; }
+.chip.segmented button.on:hover { background: var(--accent); color: #fff; }
+
 /* Долгая операция: видно, что именно считается, пока экран не отвечает. */
 .stage-busy {
   position: absolute;

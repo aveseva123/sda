@@ -28,6 +28,16 @@ export interface RenderInput {
   hoveredInstance: number | null
   collisions: Collision[]
   presets: Map<number, ToolpathPreset>
+  /**
+   * Режим просмотра, как «Каркас» в CorelDRAW.
+   *
+   * 'solid'   — деталь залита цветом своего файла: с одного взгляда видно,
+   *             чьё и насколько плотно уложено.
+   * 'outline' — только линии: на плотной раскладке заливки соседних деталей
+   *             сливаются, и разобрать геометрию, вырезы и наложения можно
+   *             только по контурам.
+   */
+  view: 'solid' | 'outline'
   showToolpaths: boolean
   guides: Array<{ axis: 'x' | 'y'; value: number; sheetIndex: number }>
   marquee: { x0: number; y0: number; x1: number; y1: number } | null
@@ -273,28 +283,45 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     const isColliding = collidingInstances.has(instance.id)
     const style = part.style
 
-    tracePath(ctx, placed.outer, toScreen, true)
-    ctx.fillStyle = style
-      ? hatch(ctx, style.fill, style.pattern)
-      : alpha(PART_EDGE(), 0.2)
-    ctx.fill()
+    const outline = input.view === 'outline'
 
-    // Вырезы «прорезают» деталь до листа.
-    for (const ring of placed.inners) {
-      tracePath(ctx, ring, toScreen, true)
-      ctx.fillStyle = SHEET_FILL()
+    if (!outline) {
+      tracePath(ctx, placed.outer, toScreen, true)
+      ctx.fillStyle = style
+        ? hatch(ctx, style.fill, style.pattern)
+        : alpha(PART_EDGE(), 0.2)
       ctx.fill()
-      ctx.strokeStyle = SHEET_STROKE()
-      ctx.lineWidth = 1
-      ctx.stroke()
+
+      // Вырезы «прорезают» деталь до листа.
+      for (const ring of placed.inners) {
+        tracePath(ctx, ring, toScreen, true)
+        ctx.fillStyle = SHEET_FILL()
+        ctx.fill()
+        ctx.strokeStyle = operationColor('INNER')
+        ctx.lineWidth = 1
+        ctx.stroke()
+      }
+    } else {
+      // В каркасе вырез — такая же линия, как всё остальное: заливать его
+      // цветом листа незачем, под ним ничего не прячется.
+      for (const ring of placed.inners) {
+        tracePath(ctx, ring, toScreen, true)
+        ctx.strokeStyle = operationColor('INNER')
+        ctx.lineWidth = 1.2
+        ctx.stroke()
+      }
     }
 
-    // Контур детали — нейтральный светлый, а не цвет файла: сотня цветных
-    // обводок сливается в неоновую сетку, в которой не видно самих деталей.
-    // Принадлежность к файлу несёт заливка, легенда и буфер.
+    // В заливке контур нейтральный: сотня цветных обводок сливается в сетку,
+    // а принадлежность уже несёт заливка. В каркасе заливки нет, и цвет файла
+    // остаётся единственным способом понять, чья это деталь.
     tracePath(ctx, placed.outer, toScreen, true)
-    ctx.strokeStyle = isColliding ? DANGER() : PART_EDGE()
-    ctx.lineWidth = isColliding ? 2.5 : 1.2
+    ctx.strokeStyle = isColliding
+      ? DANGER()
+      : outline
+        ? style?.fill ?? PART_EDGE()
+        : PART_EDGE()
+    ctx.lineWidth = isColliding ? 2.5 : outline ? 1.4 : 1.2
     ctx.stroke()
 
     if (isColliding) {
