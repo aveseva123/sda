@@ -231,8 +231,10 @@ def confirm(db: Session, job: NestingJob, batch_id: int, decisions: list[dict]) 
             conflicts.append({"file": record.filename, **conflict})
         for part in db.scalars(select(Part).where(Part.source_file_id == record.id)).all():
             if part.thickness is not None and abs(part.thickness - job.thickness) > 0.01:
+                # Чужая толщина ждёт своего раскроя и ни за кем не закрепляется.
                 foreign[part.thickness] += 1
             else:
+                part.job_id = job.id
                 added += 1
 
     material = db.get(Material, job.material_id)

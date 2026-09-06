@@ -45,6 +45,12 @@ class Part(Base, TimestampMixin):
     order_name: Mapped[str | None] = mapped_column(String(200))
     # Изделие внутри проекта: по нему детали сортируются после раскроя.
     product_name: Mapped[str | None] = mapped_column(String(200))
+    # Раскрой, которому деталь принадлежит. Без этого два раскроя одной пары
+    # «материал + толщина» делили бы одни и те же детали: разложил второй —
+    # у первого детали разъехались по чужим листам.
+    job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("nesting_jobs.id", ondelete="SET NULL")
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[str | None] = mapped_column(String(64))
     qty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

@@ -31,8 +31,14 @@ function SheetFormats({ material }: { material: Material }) {
   }
 
   const remove = async (formatId: number) => {
-    await api.deleteSheetFormat(material.id, formatId)
-    reload()
+    // Сервер отказывает осмысленно — этот отказ обязан долететь до человека,
+    // а не утонуть в необработанном промисе.
+    try {
+      await api.deleteSheetFormat(material.id, formatId)
+      reload()
+    } catch (err) {
+      setError((err as Error).message)
+    }
   }
 
   return (
@@ -135,8 +141,14 @@ export default function MaterialsPage() {
 
   const remove = async (material: Material) => {
     if (!window.confirm(`Удалить материал «${material.name}» ${material.thickness} мм?`)) return
-    await api.deleteMaterial(material.id)
-    reload()
+    try {
+      await api.deleteMaterial(material.id)
+      setFormError(null)
+      reload()
+    } catch (err) {
+      // «Удалить нельзя: на складе позиций — 12» бесполезно, если его не видно.
+      setFormError((err as Error).message)
+    }
   }
 
   return (

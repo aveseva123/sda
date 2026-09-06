@@ -106,10 +106,20 @@ def create_batch(db: Session, *, name: str | None, files: list[IncomingFile]) ->
 
     spec_warnings: list[str] = []
     spec_count = 0
+    # Ключ связывания в спецификации обязан быть уникальным на загрузку: в
+    # мебельном заказе «Полка» встречается десять раз, и без этой проверки
+    # вся загрузка падала бы на нарушении констрейнта — вместе с файлами.
+    seen_keys: set[str] = set()
+    duplicate_keys: list[str] = []
     for item in unpacked.spec:
         parsed = parse_spec(item.filename, item.data)
         spec_warnings.extend(f"{item.filename}: {w}" for w in parsed.warnings)
         for row in parsed.rows:
+            if row.match_key in seen_keys:
+                if row.match_key not in duplicate_keys:
+                    duplicate_keys.append(row.match_key)
+                continue
+            seen_keys.add(row.match_key)
             db.add(
                 SpecRow(
                     batch_id=batch.id,
@@ -132,9 +142,19 @@ def create_batch(db: Session, *, name: str | None, files: list[IncomingFile]) ->
             )
             spec_count += 1
 
+    if duplicate_keys:
+        shown = ", ".join(f"«{key}»" for key in duplicate_keys[:5])
+        more = f" и ещё {len(duplicate_keys) - 5}" if len(duplicate_keys) > 5 else ""
+        spec_warnings.append(
+            f"В спецификации повторяются ключи связывания: {shown}{more}. "
+            "Взята первая строка каждого — добавьте в выгрузку артикул или "
+            "имя файла, чтобы строки различались."
+        )
+
     batch.stats = {
         "files_total": len(unpacked.dxf),
         "spec_rows": spec_count,
+        "spec_duplicates": len(duplicate_keys),
         "skipped": unpacked.skipped,
         "spec_warnings": spec_warnings,
     }

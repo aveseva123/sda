@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.colors import part_style
@@ -283,9 +283,14 @@ def consume_stock(db: Session, job: NestingJob) -> dict:
 def job_instances(db: Session, job: NestingJob) -> list[tuple[PartInstance, Part]]:
     """Экземпляры деталей, которые должны лечь в это задание.
 
-    Берутся только готовые детали: у которых известны и материал, и толщина.
-    Деталь из очереди уточнений в раскрой не попадает — иначе она уедет на
-    чужой лист.
+    Деталь принадлежит раскрою, в который её добавили. Свободная деталь —
+    та, что пришла старым импортом мимо раскроя, — достаётся первому раскрою
+    своей пары «материал + толщина», который её разложит, и дальше остаётся
+    за ним. Иначе два раскроя 16 мм тянули бы одни и те же детали, и второй
+    пересчёт разбрасывал бы листы первого.
+
+    Берутся только готовые детали: из очереди уточнений деталь в раскрой не
+    попадает — иначе она уедет на чужой лист.
     """
     rows = db.execute(
         select(PartInstance, Part)
@@ -294,6 +299,7 @@ def job_instances(db: Session, job: NestingJob) -> list[tuple[PartInstance, Part
             Part.material_id == job.material_id,
             Part.thickness == job.thickness,
             Part.status == PartStatus.READY,
+            or_(Part.job_id == job.id, Part.job_id.is_(None)),
         )
         .order_by(PartInstance.id)
     ).all()
@@ -318,6 +324,13 @@ def arrange(db: Session, job: NestingJob, *, keep_pinned: bool = True) -> dict:
             "Для этой пары «материал + толщина» нет готовых деталей. "
             "Проверьте очередь уточнений."
         )
+
+    # Разложенная деталь закрепляется за этим раскроем: соседний раскрой той
+    # же толщины её больше не увидит и не сдвинет.
+    for _, part in pairs:
+        if part.job_id is None:
+            part.job_id = job.id
+    db.flush()
 
     existing_sheets = {
         sheet.index: sheet
@@ -567,11 +580,18 @@ def move_instances(db: Session, job: NestingJob, moves: list[dict]) -> dict:
         sheet.index: sheet
         for sheet in db.scalars(select(Sheet).where(Sheet.job_id == job.id)).all()
     }
+    own = {instance.id for instance, _ in job_instances(db, job)}
     updated = 0
     for move in moves:
         instance = db.get(PartInstance, move["instance_id"])
         if instance is None:
             continue
+        # Двигать можно только свои детали: чужая деталь принадлежит другому
+        # раскрою, и её положение — чужая производственная запись.
+        if instance.id not in own:
+            raise NestingError(
+                f"Деталь #{instance.id} не принадлежит этому раскрою"
+            )
         if "sheet_index" in move and move["sheet_index"] is not None:
             sheet = sheets.get(int(move["sheet_index"]))
             if sheet is None:

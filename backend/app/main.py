@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import (
@@ -65,6 +66,27 @@ for router in (
     presets.router,
 ):
     app.include_router(router, prefix=settings.api_prefix)
+
+
+@app.exception_handler(IntegrityError)
+def integrity_error(request: Request, exc: IntegrityError) -> JSONResponse:
+    """Нарушение целостности — это не «внутренняя ошибка сервера».
+
+    Технолог удаляет материал, на котором висит склад, или заводит второй
+    материал с тем же именем и толщиной. База отвечает отказом, и человек в
+    цеху должен прочитать, что именно не так, а не голое «500».
+    """
+    text = str(getattr(exc, "orig", exc))
+    if "unique" in text.lower():
+        detail = "Такая запись уже есть: значения должны быть уникальными."
+    elif "foreign key" in text.lower() or "violates foreign key" in text.lower():
+        detail = (
+            "Запись используется в других данных — сначала уберите её оттуда."
+        )
+    else:
+        detail = "Данные не прошли проверку целостности."
+    logging.getLogger(__name__).warning("Нарушение целостности: %s", text)
+    return JSONResponse(status_code=409, content={"detail": detail})
 
 
 @app.get(f"{settings.api_prefix}/health", tags=["Служебное"])

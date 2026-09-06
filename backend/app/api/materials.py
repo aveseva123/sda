@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.models import Material, MaterialSheetFormat, Part, StockItem
+from app.models import Material, MaterialSheetFormat, NestingJob, Part, StockItem
 from app.schemas import MaterialIn, MaterialOut, SheetFormatIn, SheetFormatOut
 
 router = APIRouter(prefix="/materials", tags=["Материалы"])
@@ -36,6 +36,21 @@ def update_material(
     material = db.get(Material, material_id)
     if material is None:
         raise HTTPException(404, "Материал не найден")
+
+    # Пара «название + толщина» уникальна: без этой проверки правка молча
+    # упиралась бы в констрейнт базы уже после ответа.
+    twin = db.scalar(
+        select(Material).where(
+            Material.name == payload.name,
+            Material.thickness == payload.thickness,
+            Material.id != material_id,
+        )
+    )
+    if twin is not None:
+        raise HTTPException(
+            409, f"Материал «{payload.name}» {payload.thickness:g} мм уже есть"
+        )
+
     for key, value in payload.model_dump().items():
         setattr(material, key, value)
     db.flush()
@@ -53,6 +68,18 @@ def delete_material(material_id: int, db: Session = Depends(get_db)) -> None:
     material = db.get(Material, material_id)
     if material is None:
         raise HTTPException(404, "Материал не найден")
+
+    jobs = db.scalar(
+        select(func.count()).select_from(NestingJob).where(
+            NestingJob.material_id == material_id
+        )
+    )
+    if jobs:
+        raise HTTPException(
+            409,
+            f"«{material.name}» {material.thickness:g} мм удалить нельзя: "
+            f"на нём заведено раскроев — {jobs}.",
+        )
 
     stock = db.scalar(
         select(func.count()).select_from(StockItem).where(

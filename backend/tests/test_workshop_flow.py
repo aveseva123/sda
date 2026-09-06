@@ -13,9 +13,9 @@ from sqlalchemy import select
 
 import tests.factories as factories
 from app.core.db import get_db
-from app.importer import IncomingFile
+from app.importer import ImportOptions, IncomingFile, create_batch, process_batch
 from app.main import app
-from app.models import Material, NestingJob, Part, PartInstance
+from app.models import Material, NestingJob, Part, PartInstance  # noqa: F401
 from app.nesting import intake
 from app.nesting import service as nesting
 from app.tools import service as tools
@@ -268,3 +268,73 @@ def test_stock_untouched_when_disabled_in_config(db, materials, monkeypatch, tmp
     result = nesting.consume_stock(db, job)
     assert result["consumed"] == 0
     assert result["skipped"]
+
+
+# --------------------------------------------- два раскроя не делят детали
+
+
+def test_two_jobs_of_same_thickness_do_not_steal_parts(db, materials, tmp_path, tmp_storage):
+    """Соседний раскрой той же толщины не должен трогать чужие детали.
+
+    Раньше выборка шла по паре «материал + толщина», и второй раскрой 18 мм
+    забирал детали первого: пересчёт разбрасывал уже разложенные листы.
+    """
+    material = db.scalar(select(Material).where(Material.thickness == 18.0))
+
+    first = nesting.create_job(db, material_id=material.id, thickness=18.0, operator="Севак")
+    analyzed = intake.analyze(db, first, _files(tmp_path, count=1))
+    intake.confirm(
+        db, first, analyzed["batch_id"],
+        [{"relpath": analyzed["files"][0]["relpath"], "thickness": 18.0}],
+    )
+    nesting.arrange(db, first)
+    placed_first = {i.id: (i.x, i.y) for i, _ in nesting.job_instances(db, first) if i.sheet_id}
+    assert placed_first
+
+    second = nesting.create_job(db, material_id=material.id, thickness=18.0, operator="Пётр")
+    assert nesting.job_instances(db, second) == [], "чужие детали второму раскрою не видны"
+    with pytest.raises(nesting.NestingError, match="нет готовых деталей"):
+        nesting.arrange(db, second)
+
+    for instance, _ in nesting.job_instances(db, first):
+        if instance.id in placed_first:
+            assert (instance.x, instance.y) == placed_first[instance.id], (
+                "первый раскрой остался нетронутым"
+            )
+
+
+def test_free_parts_are_claimed_by_the_job_that_places_them(db, materials, tmp_path, tmp_storage):
+    """Деталь из старого импорта достаётся тому раскрою, который её разложил."""
+    material = db.scalar(select(Material).where(Material.thickness == 18.0))
+    batch = create_batch(db, name="Мимо раскроя", files=_files(tmp_path, count=1))
+    process_batch(db, batch, ImportOptions())
+    for part in db.scalars(select(Part)).all():
+        part.material_id = material.id
+        part.status = "ready"
+        part.thickness = 18.0
+    db.flush()
+
+    job = nesting.create_job(db, material_id=material.id, thickness=18.0, operator="Севак")
+    assert nesting.job_instances(db, job), "свободная деталь видна раскрою"
+    nesting.arrange(db, job)
+
+    claimed = {part.job_id for _, part in nesting.job_instances(db, job)}
+    assert claimed == {job.id}, "после раскладки деталь закреплена за раскроем"
+
+
+def test_duplicate_spec_keys_do_not_break_the_upload(db, tmp_path, tmp_storage):
+    """«Полка» в спецификации десять раз — загрузка обязана выжить."""
+    spec = tmp_path / "spec.csv"
+    spec.write_text(
+        "Наименование;Кол-во;Длина;Ширина;Толщина\n"
+        "Полка;2;600;300;18\n"
+        "Полка;3;800;300;18\n",
+        encoding="utf-8",
+    )
+    files = _files(tmp_path, count=1)
+    files.append(IncomingFile("spec.csv", "spec.csv", spec.read_bytes()))
+
+    batch = create_batch(db, name="Спецификация с дублями", files=files)
+    stats = batch.stats or {}
+    assert stats.get("spec_duplicates") == 1
+    assert any("повторяются ключи" in w for w in stats.get("spec_warnings", []))
