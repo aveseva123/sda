@@ -1,0 +1,64 @@
+# Пресеты сопоставления слоёв DXF → технологическая семантика.
+#
+# ВАЖНО: имена слоёв здесь НЕ являются истиной в последней инстанции.
+# Это лишь стартовые подсказки для Мастера сопоставления слоёв: при первом
+# импорте из нового источника пользователь видит реальные слои файла и
+# назначает семантику сам, после чего пресет сохраняется в БД и
+# перекрывает содержимое этого файла.
+#
+# Семантики: OUTER, INNER, DRILL, GROOVE, POCKET, MARK, INFO, IGNORE
+
+semantics:
+  OUTER:  {title: "Внешний контур",   cut: true,  offset: outside, through: true}
+  INNER:  {title: "Внутренний вырез", cut: true,  offset: inside,  through: true}
+  DRILL:  {title: "Присадка",         cut: true,  offset: none,    through: false}
+  GROOVE: {title: "Паз",              cut: true,  offset: center,  through: false}
+  POCKET: {title: "Выборка",          cut: true,  offset: inside,  through: false}
+  MARK:   {title: "Гравировка",       cut: false, offset: center,  through: false}
+  INFO:   {title: "Метаданные",       cut: false, offset: none,    through: false}
+  IGNORE: {title: "Игнорировать",     cut: false, offset: none,    through: false}
+
+# Определение источника по сигнатуре DXF-файла ($ACADVER, комментарии,
+# набор системных переменных, характерные имена блоков).
+source_detection:
+  - source: bazis
+    title: "Базис-Мебельщик"
+    signals:
+      header_contains: ["BAZIS", "БАЗИС", "Bazis"]
+      layer_name_regex: '(?i)(контур|присадк|паз|деталь|габарит)'
+      weight: 1.0
+  - source: fusion
+    title: "Autodesk Fusion 360"
+    signals:
+      header_contains: ["Fusion", "Autodesk", "ACAD"]
+      # Fusion характерен тем, что кладёт всё в слой 0 или в слои по эскизам.
+      layer_name_regex: '(?i)^(0|sketch|эскиз)'
+      weight: 0.6
+
+# Стартовые пресеты. Пользователь правит их в мастере; сохранённая версия
+# живёт в таблице layer_presets и имеет приоритет над этим файлом.
+presets:
+  - name: "Базис"
+    source: bazis
+    # Сопоставление по regex имени слоя, проверяется по порядку.
+    rules:
+      - {regex: '(?i)^(габарит|контур|outer|деталь)', semantic: OUTER}
+      - {regex: '(?i)(вырез|внутр|inner|окно)',       semantic: INNER}
+      - {regex: '(?i)(присадк|сверл|отверст|drill)',  semantic: DRILL}
+      - {regex: '(?i)(паз|groove|четверт)',           semantic: GROOVE}
+      - {regex: '(?i)(выборк|карман|pocket|фрезеров)',semantic: POCKET}
+      - {regex: '(?i)(гравир|маркир|mark)',           semantic: MARK}
+      - {regex: '(?i)(текст|размер|рамк|штамп|info)', semantic: INFO}
+    # Толщина из имени слоя, если Базис её туда пишет.
+    thickness_from_layer_regex: '(?i)(?:^|[_\-\s])(?P<value>\d{1,2})(?:mm|мм)?(?:$|[_\-\s])'
+
+  - name: "Fusion"
+    source: fusion
+    # Fusion не несёт мебельной семантики: по умолчанию всё, что есть,
+    # трактуем как геометрию контуров и разбираем по вложенности площадей,
+    # а не по слоям.
+    rules:
+      - {regex: '(?i)(drill|hole|отверст)', semantic: DRILL}
+      - {regex: '(?i)(groove|slot|паз)',    semantic: GROOVE}
+      - {regex: '.*',                       semantic: OUTER, resolve_nesting_by_area: true}
+    thickness_from_layer_regex: null

@@ -1,0 +1,43 @@
+# Шаблоны разбора имён файлов. Актуально прежде всего для Fusion 360, который
+# не пишет в DXF ни изделия, ни проекта — метаданные едут в имени файла.
+# Если ни один шаблон не совпал — деталь идёт в очередь «требует уточнения».
+
+default: fusion_full
+
+templates:
+  - name: fusion_full
+    title: "Проект_Изделие_Деталь_Толщина_Количество"
+    delimiter: "_"
+    fields: [project, product, part, thickness, qty]
+    # Пример: Kvartira12_Shkaf-prihozhaya_Bok-levyy_18_2.dxf
+    example: "Kvartira12_Shkaf-prihozhaya_Bok-levyy_18_2.dxf"
+    required: [part]
+
+  - name: fusion_no_qty
+    title: "Проект_Изделие_Деталь_Толщина"
+    delimiter: "_"
+    fields: [project, product, part, thickness]
+    example: "Kvartira12_Shkaf-prihozhaya_Bok-levyy_18.dxf"
+    required: [part]
+
+  - name: product_part
+    title: "Изделие_Деталь_Толщина"
+    delimiter: "_"
+    fields: [product, part, thickness]
+    example: "Shkaf-prihozhaya_Bok-levyy_18.dxf"
+    required: [part]
+
+  - name: part_only
+    title: "Только имя детали"
+    delimiter: "_"
+    fields: [part]
+    example: "Bok-levyy.dxf"
+    required: [part]
+
+# Приведение значений полей.
+normalize:
+  # Дефисы и подчёркивания в человекочитаемых полях заменяются пробелами.
+  humanize_fields: [project, product, part]
+  # Количество обязано быть целым >= 1, иначе поле считается не распознанным.
+  qty_min: 1
+  qty_max: 999

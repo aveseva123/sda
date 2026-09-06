@@ -1,0 +1,66 @@
+# ПРАВИЛА ГЛУБИН ОБРАБОТКИ.
+#
+# DXF двумерен и глубину не несёт. Поэтому глубина каждой операции берётся
+# отсюда, а не из файла. Правила задаются на уровне «материал + толщина»,
+# переопределяются на уровне конкретной детали.
+#
+# !!! ВНИМАНИЕ: значения ниже — ДЕФОЛТЫ-ЗАГЛУШКИ из ТЗ, НЕ проверенные на
+# реальном производстве. Их надо заменить реальной таблицей глубин перед
+# запуском Этапа 4 (постпроцессор). Правила редактируются из UI.
+
+defaults:
+  # Сквозная резка: глубина = толщина детали + подрез.
+  through_overcut: 0.5
+
+# Правила подбираются сверху вниз, первое подходящее выигрывает.
+# match: any_of по material / thickness / diameter / semantic.
+rules:
+  - name: "Внешний контур насквозь"
+    match: {semantic: OUTER}
+    depth: {mode: through, overcut_from: defaults.through_overcut}
+
+  - name: "Внутренний вырез насквозь"
+    match: {semantic: INNER}
+    depth: {mode: through, overcut_from: defaults.through_overcut}
+
+  - name: "Шкант/конфирмат ⌀5"
+    match: {semantic: DRILL, diameter: 5.0, tolerance: 0.3}
+    depth: {mode: fixed, value: 12.0}      # ЗАГЛУШКА — уточнить
+
+  - name: "Присадка ⌀8"
+    match: {semantic: DRILL, diameter: 8.0, tolerance: 0.3}
+    depth: {mode: fixed, value: 12.0}      # ЗАГЛУШКА — уточнить
+
+  - name: "Чашка петли ⌀15"
+    match: {semantic: DRILL, diameter: 15.0, tolerance: 0.5}
+    depth: {mode: fixed, value: 13.0}      # ЗАГЛУШКА — уточнить
+
+  - name: "Чашка петли ⌀20"
+    match: {semantic: DRILL, diameter: 20.0, tolerance: 0.5}
+    depth: {mode: fixed, value: 13.0}      # ЗАГЛУШКА — уточнить
+
+  - name: "Чашка петли ⌀35"
+    match: {semantic: DRILL, diameter: 35.0, tolerance: 0.5}
+    depth: {mode: fixed, value: 13.0}      # ЗАГЛУШКА — уточнить
+
+  - name: "Отверстие диаметром в толщину детали — сквозное"
+    match: {semantic: DRILL, diameter_equals_thickness: true, tolerance: 0.5}
+    depth: {mode: through, overcut_from: defaults.through_overcut}
+
+  - name: "Паз под ХДФ ⌀4"
+    match: {semantic: GROOVE, tool_diameter: 4.0, tolerance: 0.2}
+    depth: {mode: fixed, value: 8.0}       # ЗАГЛУШКА — уточнить
+
+  - name: "Выборка/карман по умолчанию"
+    match: {semantic: POCKET}
+    depth: {mode: fixed, value: 8.0}       # ЗАГЛУШКА — уточнить
+
+  - name: "Гравировка"
+    match: {semantic: MARK}
+    depth: {mode: fixed, value: 0.3}       # ЗАГЛУШКА — уточнить
+
+# Отверстия, помеченные в DXF как сквозные (по слою или аннотации),
+# всегда режутся насквозь независимо от диаметра.
+through_markers:
+  layer_regex: '(?i)(скв|through|насквозь)'
+  annotation_regex: '(?i)(скв|through|насквозь)'

@@ -1,0 +1,98 @@
+# Диалект постпроцессора: станок Дайхонг, стойка NcStudio (Weihong).
+#
+# ЗАГОТОВКА ЭТАПА 4. Не проверена на эталонном .nc с реального станка —
+# до сверки с эталоном выгрузка УП помечается как черновая.
+#
+# Ничего из этого файла не продублировано в коде: генератор читает только
+# отсюда, поэтому переход на другую стойку = замена этого файла.
+
+id: daihong_ncstudio
+title: "Дайхонг / NcStudio (Weihong)"
+
+output:
+  # Стойка читает любое расширение — оно настраивается, а не зашито.
+  extension: ".nc"
+  encoding: "ascii"
+  line_ending: "\r\n"
+  decimals: 3
+  # Нумерация кадров (N10, N20...). false — без номеров.
+  line_numbers: false
+  line_number_start: 10
+  line_number_step: 10
+
+machine:
+  # Подтверждено заказчиком: автосмены инструмента НЕТ, меняет оператор.
+  tool_change: manual        # manual | atc
+  spindles: 1
+  drill_block: false
+  # НЕ ПОДТВЕРЖДЕНО — уточнить: угол листа или центр стола, направление осей.
+  origin: front_left         # front_left | front_right | rear_left | rear_right | center
+  axis_x_positive: right
+  axis_y_positive: back
+  z_positive: up
+  # Коррекцию на радиус считаем в приложении (offset геометрии).
+  # G41/G42 стойки — опционально.
+  use_cutter_comp_codes: false
+
+safety:
+  safe_z: 20.0
+  clearance_z: 5.0
+  retract_z_end: 50.0
+
+templates:
+  header: |
+    %
+    O{program_number} ({project} / {sheet_name} / {thickness}mm {material})
+    G90 G17 G21 G40 G49
+    G54
+  # Ручная смена: остановка с понятным оператору комментарием.
+  tool_change_manual: |
+    M5
+    G0 Z{retract_z_end}
+    M0 (SMENIT INSTRUMENT: T{tool_number} {tool_name} D{tool_diameter})
+    S{rpm} M3
+  tool_change_atc: |
+    M5
+    M6 T{tool_number} ({tool_name} D{tool_diameter})
+    S{rpm} M3
+  spindle_on: "S{rpm} M3"
+  spindle_off: "M5"
+  vacuum_on: ""     # УТОЧНИТЬ: есть ли M-коды вакуумных зон/пневмоприжимов
+  vacuum_off: ""
+  footer: |
+    M5
+    G0 Z{retract_z_end}
+    M30
+    %
+
+blocks:
+  rapid_xy: "G0 X{x} Y{y}"
+  rapid_z: "G0 Z{z}"
+  feed_z: "G1 Z{z} F{plunge_feed}"
+  feed_xy: "G1 X{x} Y{y} F{feed}"
+  arc_cw: "G2 X{x} Y{y} I{i} J{j} F{feed}"
+  arc_ccw: "G3 X{x} Y{y} I{i} J{j} F{feed}"
+  comment: "({text})"
+
+operation_order: [DRILL, GROOVE, POCKET, INNER, OUTER]
+
+tabs:
+  # Вакуум держит хорошо, поэтому крупные детали режутся без мостиков.
+  # Мостики ставятся по порогу, а не всегда.
+  mode: tabs                 # tabs | onion_skin | none
+  auto_threshold_area_m2: 0.05
+  auto_threshold_min_side_mm: 150
+  count: 4
+  length: 10.0
+  height: 3.0
+  onion_skin_thickness: 0.3
+
+lead:
+  type: arc                  # arc | normal | none
+  radius: 5.0
+  length: 5.0
+
+passes:
+  step_down: 8.0
+  finish_pass: true
+  finish_allowance: 0.2
