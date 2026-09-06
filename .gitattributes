@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Эталонные DXF заказчика и управляющие программы хранятся байт-в-байт:
+# нормализация переводов строк ломает сверку с эталоном, а стойка станка
+# требует именно CRLF.
+*.dxf -text
+*.nc -text
+*.tap -text
