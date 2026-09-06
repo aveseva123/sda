@@ -54,7 +54,8 @@ export const api = {
   config: () => request<AppConfig>('/config'),
 
   // Заказ — просто имя; настоящая единица принадлежности — файл.
-  files: () => request<SourceFile[]>('/files'),
+  files: (jobId?: number) =>
+    request<SourceFile[]>(jobId ? `/files?job=${jobId}` : '/files'),
   updateFile: (id: number, payload: { order_name?: string | null; color_index?: number }) =>
     request<SourceFile>(`/files/${id}`, json('PATCH', payload)),
   orders: () => request<Order[]>('/orders'),

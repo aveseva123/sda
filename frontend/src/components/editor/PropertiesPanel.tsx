@@ -183,12 +183,7 @@ export default function PropertiesPanel({
     return (
       <div className="panel-scroll">
         <div className="panel-title">Объект</div>
-        <div className="empty small">
-          Ничего не выделено.
-          <br />
-          Клик — выбрать деталь. Двойной клик — войти внутрь: там выделяются
-          отдельные векторы, и к ним применяются траектории.
-        </div>
+        <div className="empty small">Выберите деталь на листе.</div>
       </div>
     )
   }

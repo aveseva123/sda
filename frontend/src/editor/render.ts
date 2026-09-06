@@ -43,6 +43,7 @@ const LABEL_INK = '#F2F4F6'
 const DIM_INK = '#AEB6C0'
 const SELECT = '#FFFFFF'
 const DANGER = '#D9694A'
+const PART_EDGE = 'rgba(226,231,238,0.62)'
 
 /** Заливка детали: цвет файла с прозрачностью — контур остаётся главным. */
 function tint(hex: string, alpha: number): string {
@@ -65,25 +66,25 @@ function hatch(
   fill: string,
   pattern: string,
 ): CanvasPattern | string {
-  if (pattern === 'solid') return tint(fill, 0.24)
+  if (pattern === 'solid') return tint(fill, 0.30)
   const key = `${pattern}|${fill}`
   const cached = patternCache.get(key)
-  if (cached !== undefined) return cached ?? tint(fill, 0.24)
+  if (cached !== undefined) return cached ?? tint(fill, 0.30)
 
-  const size = 9
+  const size = 10
   const tile = document.createElement('canvas')
   tile.width = size
   tile.height = size
   const tctx = tile.getContext('2d')
   if (!tctx) {
     patternCache.set(key, null)
-    return tint(fill, 0.24)
+    return tint(fill, 0.30)
   }
-  tctx.fillStyle = tint(fill, 0.16)
+  tctx.fillStyle = tint(fill, 0.22)
   tctx.fillRect(0, 0, size, size)
-  tctx.strokeStyle = tint(fill, 0.52)
-  tctx.fillStyle = tint(fill, 0.52)
-  tctx.lineWidth = 2
+  tctx.strokeStyle = tint(fill, 0.44)
+  tctx.fillStyle = tint(fill, 0.44)
+  tctx.lineWidth = 1.1
   tctx.beginPath()
   switch (pattern) {
     case 'diagonal':
@@ -124,7 +125,7 @@ function hatch(
   tctx.stroke()
   const made = ctx.createPattern(tile, 'repeat')
   patternCache.set(key, made)
-  return made ?? tint(fill, 0.24)
+  return made ?? tint(fill, 0.30)
 }
 
 export function worldToScreen(v: Viewport, width: number, height: number, p: Point): Point {
@@ -206,8 +207,20 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
 
   drawRest(ctx, input, toScreen)
 
-  // Детали.
+  // Детали. Подписи собираются на второй проход: иначе траектории соседней
+  // детали ложатся поверх её названия и раскладку невозможно прочитать.
   const labelScale = viewport.scale > 0.06
+  const labels: Array<{
+    part: RenderInput['layout']['parts'][string]
+    instance: RenderInput['layout']['instances'][number]
+    placed: PlacedPart
+  }> = []
+  // Копий одной детали на листе бывает несколько, и подписать их одинаково —
+  // значит заставить оператора пересчитывать вручную.
+  const copies = new Map<number, number>()
+  for (const instance of layout.instances) {
+    copies.set(instance.part_id, (copies.get(instance.part_id) ?? 0) + 1)
+  }
   for (const instance of layout.instances) {
     const part = layout.parts[String(instance.part_id)]
     if (!part) continue
@@ -233,9 +246,12 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
       ctx.stroke()
     }
 
+    // Контур детали — нейтральный светлый, а не цвет файла: сотня цветных
+    // обводок сливается в неоновую сетку, в которой не видно самих деталей.
+    // Принадлежность к файлу несёт заливка, легенда и буфер.
     tracePath(ctx, placed.outer, toScreen, true)
-    ctx.strokeStyle = isColliding ? DANGER : style?.fill ?? '#9AA3AF'
-    ctx.lineWidth = isColliding ? 2.5 : 1.4
+    ctx.strokeStyle = isColliding ? DANGER : PART_EDGE
+    ctx.lineWidth = isColliding ? 2.5 : 1.2
     ctx.stroke()
 
     if (isColliding) {
@@ -257,11 +273,23 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     }
 
     if (instance.pinned) drawPin(ctx, placed, toScreen)
-    if (labelScale) drawLabel(ctx, part, instance, placed, toScreen, viewport.scale)
+    if (labelScale) labels.push({ part, instance, placed })
     if (labelScale && part.grain !== 'none') {
       drawGrainArrow(ctx, placed, toScreen, instance.rotation ?? 0)
     }
     void rotatedSize
+  }
+
+  for (const label of labels) {
+    drawLabel(
+      ctx,
+      label.part,
+      label.instance,
+      label.placed,
+      toScreen,
+      viewport.scale,
+      (copies.get(label.instance.part_id) ?? 1) > 1,
+    )
   }
 
   drawGuides(ctx, input, toScreen)
@@ -294,6 +322,13 @@ function drawOperations(
 ): void {
   const byTarget = new Map(part.vectors.map((v) => [v.target, v]))
 
+  // На общем виде пазы и присадка рисуются той же толщиной, что и вблизи, и
+  // лист превращается в штриховку. Издалека они приглушены до фактуры, при
+  // приближении набирают полную яркость.
+  const zoomInk = Math.min(1, Math.max(0.4, input.viewport.scale / 0.35))
+  ctx.save()
+  ctx.globalAlpha = zoomInk
+
   for (const op of placed.operations) {
     const vector = byTarget.get(op.target)
     const preset = vector?.preset_id ? input.presets.get(vector.preset_id) : undefined
@@ -303,7 +338,7 @@ function drawOperations(
 
     // Ширина фрезы: видно, что реально снимет инструмент.
     if (input.showToolpaths && preset?.tool_diameter && enabled) {
-      ctx.strokeStyle = `${color}55`
+      ctx.strokeStyle = `${color}40`
       ctx.lineWidth = Math.max(preset.tool_diameter * input.viewport.scale, 1)
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
@@ -334,6 +369,8 @@ function drawOperations(
     ctx.setLineDash([])
   }
 
+  ctx.restore()
+
   // Контуры детали как выбираемые векторы — только внутри выбранной детали.
   if (!isFocused) return
   const outerSelected = selectedVectors.has(vectorKey(part.id, 'outer'))
@@ -352,6 +389,23 @@ function drawOperations(
   })
 }
 
+/**
+ * Маркировка детали для карты раскроя.
+ *
+ * Базис не даёт деталям имён, и парсер называет их по файлу: на листе тогда
+ * стоит сотня одинаковых «bazis_16mm_two_sheets…». Общий префикс имени файла
+ * снимается — остаётся то, чем детали различаются.
+ */
+export function partMarking(part: RenderInput['layout']['parts'][string]): string | null {
+  const stem = (part.source_file ?? '').replace(/\.[^.]+$/, '')
+  let name = (part.name ?? '').trim()
+  if (stem && name.startsWith(stem)) name = name.slice(stem.length).trim()
+  name = name.replace(/^[-–—_·]+\s*/, '').trim()
+  const ordinal = name.match(/^\((\d+)\)$/)
+  if (ordinal) return `№${ordinal[1]}`
+  return name || null
+}
+
 function drawLabel(
   ctx: CanvasRenderingContext2D,
   part: RenderInput['layout']['parts'][string],
@@ -359,40 +413,66 @@ function drawLabel(
   placed: PlacedPart,
   toScreen: (p: Point) => Point,
   scale: number,
+  numbered: boolean,
 ): void {
   const [minX, minY, maxX, maxY] = placed.bbox
   const center = toScreen([(minX + maxX) / 2, (minY + maxY) / 2])
   const boxW = (maxX - minX) * scale
   const boxH = (maxY - minY) * scale
-  if (boxW < 46 || boxH < 22) return
+  if (boxW < 40 || boxH < 18) return
+
+  // Размер — то, по чему деталь опознают на листе руками, поэтому он главный;
+  // маркировка идёт второй строкой, её переписывают на деталь маркером.
+  // Размер берётся из габарита на листе, а не из «длина × ширина» детали:
+  // у повёрнутой или вертикальной детали те стороны идут в другом порядке, и
+  // подпись расходилась бы с тем, что человек видит перед собой.
+  const dimensions = `${(maxX - minX).toFixed(0)} × ${(maxY - minY).toFixed(0)}`
+  const base = partMarking(part)
+  const copy = numbered ? (instance.uid.match(/-(\d+)$/)?.[1] ?? '').replace(/^0+/, '') : ''
+  const marking = base && copy ? `${base}\u00A0/\u00A0${copy}` : base
 
   ctx.save()
   // Подпись обрезается по контуру детали: иначе на плотном листе названия
   // наползают на соседей и читать раскладку невозможно.
   tracePath(ctx, placed.outer, toScreen, true)
   ctx.clip()
-
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
 
-  const [w, h] = [part.length ?? 0, part.width ?? 0]
-  const dimensions = `${w.toFixed(0)} × ${h.toFixed(0)}`
-  const twoLines = boxH > 34
+  const twoLines = boxH > 30 && Boolean(marking)
+  const inner = boxW - 10
 
-  ctx.fillStyle = LABEL_INK
-  ctx.font = '500 11px "IBM Plex Mono", ui-monospace, monospace'
-  const name = fitText(ctx, part.name, boxW - 8)
-  if (name) ctx.fillText(name, center[0], center[1] - (twoLines ? 7 : 0))
+  ctx.font = '600 11.5px "IBM Plex Mono", ui-monospace, monospace'
+  const dims = fitText(ctx, dimensions, inner)
+  ctx.font = '400 10px "IBM Plex Mono", ui-monospace, monospace'
+  const mark = twoLines && marking ? fitText(ctx, marking, inner) : null
 
-  if (twoLines) {
+  if (!dims && !mark) {
+    ctx.restore()
+    return
+  }
+
+  // Подложка: под детали ложатся пазы и присадка, и без неё текст тонет
+  // в траекториях. Плашка ровно по строкам, а не по всей детали.
+  ctx.font = '600 11.5px "IBM Plex Mono", ui-monospace, monospace'
+  const dimsW = dims ? ctx.measureText(dims).width : 0
+  ctx.font = '400 10px "IBM Plex Mono", ui-monospace, monospace'
+  const markW = mark ? ctx.measureText(mark).width : 0
+  const plateW = Math.max(dimsW, markW) + 10
+  const plateH = (dims ? 13 : 0) + (mark ? 12 : 0) + 4
+  ctx.fillStyle = 'rgba(10,12,15,0.72)'
+  ctx.fillRect(center[0] - plateW / 2, center[1] - plateH / 2, plateW, plateH)
+
+  const dimsY = mark ? center[1] - 5 : center[1]
+  if (dims) {
+    ctx.fillStyle = LABEL_INK
+    ctx.font = '600 11.5px "IBM Plex Mono", ui-monospace, monospace'
+    ctx.fillText(dims, center[0], dimsY)
+  }
+  if (mark) {
     ctx.fillStyle = DIM_INK
     ctx.font = '400 10px "IBM Plex Mono", ui-monospace, monospace'
-    const dims = fitText(ctx, dimensions, boxW - 8)
-    if (dims) ctx.fillText(dims, center[0], center[1] + 7)
-    if (boxH > 52) {
-      const uid = fitText(ctx, instance.uid.slice(-7), boxW - 8)
-      if (uid) ctx.fillText(uid, center[0], center[1] + 20)
-    }
+    ctx.fillText(mark, center[0], dimsY + 12)
   }
 
   ctx.textAlign = 'left'
@@ -491,6 +571,10 @@ function drawRest(
   toScreen: (p: Point) => Point,
 ): void {
   const { layout, viewport } = input
+  // Порог делового обрезка берётся из пресета: узкая полоса — это отход, и
+  // подписывать её «на склад» значит врать кладовщику.
+  const rawMin = layout.job.preset_snapshot?.placement?.min_offcut
+  const minOffcut = typeof rawMin === 'number' ? rawMin : 200
   for (const sheet of layout.sheets) {
     const [ox, oy] = sheetOrigin(layout.sheets, sheet.index)
     let top = sheet.trim.bottom
@@ -523,11 +607,14 @@ function drawRest(
     ctx.setLineDash([])
 
     if (h > 16 && w > 150) {
-      ctx.fillStyle = '#69717D'
+      const keep = height >= minOffcut && width >= minOffcut
+      ctx.fillStyle = keep ? '#8E97A2' : '#69717D'
       ctx.font = '400 11px \'IBM Plex Mono\', ui-monospace, monospace'
       ctx.textAlign = 'center'
       ctx.fillText(
-        `остаток ${width.toFixed(0)} × ${height.toFixed(0)} → на склад`,
+        `остаток ${width.toFixed(0)} × ${height.toFixed(0)} · ${
+          keep ? 'деловой, на склад' : 'в отход'
+        }`,
         corner[0] + w / 2,
         corner[1] + h / 2 + 4,
       )

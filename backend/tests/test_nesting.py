@@ -256,3 +256,69 @@ def test_api_move_to_unknown_sheet_is_rejected(client, db, job_ready):
     )
     assert response.status_code == 400
     assert "нет в задании" in response.json()["detail"]
+
+
+def test_tall_parts_do_not_overlap_on_the_sheet(db, materials):
+    """Вертикальная на чертеже деталь не должна укладываться как горизонтальная.
+
+    ``part.length``/``part.width`` — это больший и меньший размеры: они не
+    помнят, как деталь лежит. Раскладчик считал по ним и резервировал под
+    стойку 1954×630 место 1954 в ширину, ставя следующую стойку через 630 мм
+    по высоте. На листе они при этом стоят вертикально и налезают друг на
+    друга на 1300 мм — а холст рисует настоящую геометрию, и раскрой уходит
+    на станок с наложением.
+    """
+    material = db.scalar(select(Material).where(Material.thickness == 18.0))
+
+    for number in (1, 2):
+        part = Part(
+            name=f"Стойка {number}",
+            material_id=material.id,
+            thickness=18.0,
+            status=PartStatus.READY,
+            qty=1,
+            length=1954.0,
+            width=630.0,
+            grain=GrainMode.NONE,
+            # На чертеже деталь стоит вертикально: 630 по X, 1954 по Y.
+            geometry={
+                "outer": [[0, 0], [630, 0], [630, 1954], [0, 1954]],
+                "inners": [],
+                "operations": [],
+                "bbox": [0.0, 0.0, 630.0, 1954.0],
+                "length": 1954.0,
+                "width": 630.0,
+                "area": 630.0 * 1954.0,
+            },
+        )
+        db.add(part)
+        db.flush()
+        db.add(PartInstance(part_id=part.id, uid=f"TALL-{number:03d}"))
+    db.flush()
+
+    job = nesting.create_job(db, material_id=material.id, thickness=18.0, operator="Севак")
+    nesting.arrange(db, job)
+
+    placed = []
+    for instance, part in nesting.job_instances(db, job):
+        w, h = nesting.part_footprint(part)
+        if int(instance.rotation or 0) % 180 == 90:
+            w, h = h, w
+        placed.append((instance.sheet_id, instance.x, instance.y, w, h))
+
+    for i in range(len(placed)):
+        for j in range(i + 1, len(placed)):
+            sheet_a, ax, ay, aw, ah = placed[i]
+            sheet_b, bx, by, bw, bh = placed[j]
+            if sheet_a != sheet_b:
+                continue
+            separated = (
+                ax + aw <= bx + 0.001
+                or bx + bw <= ax + 0.001
+                or ay + ah <= by + 0.001
+                or by + bh <= ay + 0.001
+            )
+            assert separated, "стойки налезли друг на друга"
+
+    for _, part in nesting.job_instances(db, job):
+        assert nesting.part_footprint(part) == (630.0, 1954.0)

@@ -230,6 +230,25 @@ def finish(db: Session, job: NestingJob) -> NestingJob:
     return job
 
 
+def part_footprint(part: Part) -> tuple[float, float]:
+    """Габарит детали так, как она лежит на чертеже: ширина по X, высота по Y.
+
+    ``part.length`` и ``part.width`` — это больший и меньший размеры: они
+    годятся для спецификации и стикера, но теряют ориентацию. Раскладчик,
+    считая по ним, резервировал под вертикальную деталь горизонтальное место,
+    а холст рисовал её как есть — детали налезали друг на друга уже на карте,
+    и раскрой уходил на станок с наложением.
+    """
+    geometry = part.geometry or {}
+    bbox = geometry.get("bbox") if isinstance(geometry, dict) else None
+    if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+        w = float(bbox[2]) - float(bbox[0])
+        h = float(bbox[3]) - float(bbox[1])
+        if w > 0 and h > 0:
+            return round(w, 3), round(h, 3)
+    return float(part.length or 0.0), float(part.width or 0.0)
+
+
 def _sheet_offcut(db: Session, job: NestingJob, sheet: Sheet) -> dict | None:
     """Свободная полоса листа сверху — то, что останется после раскроя."""
     material = db.get(Material, job.material_id)
@@ -241,9 +260,10 @@ def _sheet_offcut(db: Session, job: NestingJob, sheet: Sheet) -> dict | None:
     for instance, part in job_instances(db, job):
         if instance.sheet_id != sheet.id or instance.y is None:
             continue
-        height = float(part.width or 0.0)
+        footprint_w, footprint_h = part_footprint(part)
+        height = footprint_h
         if int(instance.rotation or 0) % 180 == 90:
-            height = float(part.length or 0.0)
+            height = footprint_w
         top = max(top, float(instance.y) + height)
 
     height = sheet.h - trim_top - top
@@ -370,12 +390,13 @@ def arrange(db: Session, job: NestingJob, *, keep_pinned: bool = True) -> dict:
     pieces: list[Piece] = []
     for instance, part in pairs:
         pinned = bool(instance.pinned) and keep_pinned
+        footprint_w, footprint_h = part_footprint(part)
         pieces.append(
             Piece(
                 instance_id=instance.id,
                 part_id=part.id,
-                w=float(part.length or 0.0),
-                h=float(part.width or 0.0),
+                w=footprint_w,
+                h=footprint_h,
                 grain=part.grain,
                 pinned=pinned and instance.x is not None,
                 x=instance.x,
@@ -652,8 +673,9 @@ def _recalculate_utilization(db: Session, job: NestingJob) -> None:
             select(PartInstance).where(PartInstance.sheet_id == sheet.id)
         ).all():
             part = pairs.get(instance.id)
-            if part and part.length and part.width:
-                used += float(part.length) * float(part.width)
+            if part is not None:
+                footprint_w, footprint_h = part_footprint(part)
+                used += footprint_w * footprint_h
         sheet.utilization = round(used / (sheet.w * sheet.h), 4) if sheet.w and sheet.h else 0.0
         total_area += sheet.w * sheet.h
         used_total += used
@@ -691,8 +713,7 @@ def collisions(db: Session, job: NestingJob) -> list[dict]:
     for instance, part in job_instances(db, job):
         if instance.sheet_id is None or instance.x is None or instance.y is None:
             continue
-        w = float(part.length or 0.0)
-        h = float(part.width or 0.0)
+        w, h = part_footprint(part)
         if int(instance.rotation or 0) % 180 == 90:
             w, h = h, w
         boxes.setdefault(instance.sheet_id, []).append(

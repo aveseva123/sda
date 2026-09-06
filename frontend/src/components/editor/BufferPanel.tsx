@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 
 import type { SourceFile } from '../../api/types'
 import type { Layout, Selection } from '../../editor/types'
+import { plural } from '../../lib/format'
 
 interface Props {
   files: SourceFile[]
@@ -100,9 +101,10 @@ export default function BufferPanel({
   return (
     <div className="panel-scroll">
       <div className="panel-title">
-        Буфер
+        Файлы раскроя
         <span className="count">
-          {totals.files} файл(ов) · {totals.parts} деталей
+          {plural(totals.files, 'файл', 'файла', 'файлов')} ·{' '}
+          {plural(totals.parts, 'деталь', 'детали', 'деталей')}
         </span>
         <button
           type="button"
@@ -138,7 +140,7 @@ export default function BufferPanel({
       <div className="tree">
         {files.length === 0 && (
           <div className="small muted" style={{ padding: '4px 8px 10px' }}>
-            Буфер пуст. Перетащите DXF в рабочее поле или в рамку выше.
+            Файлов пока нет. Перетащите DXF в рабочее поле или в рамку выше.
           </div>
         )}
 
@@ -224,21 +226,36 @@ export default function BufferPanel({
             Листов пока нет.
           </div>
         )}
-        {sheetsOfJob.map((sheet) => (
-          <div key={sheet.index} className="frow" onClick={() => onFocusSheet(sheet.index)}>
-            <span className="num" style={{ width: 14 }}>
-              {sheet.index + 1}
-            </span>
-            <span className="grow">
-              {sheet.is_offcut ? 'Обрезок' : 'Лист'} {layout?.job.thickness} мм
-            </span>
-            <span className="num">
-              {sheet.utilization
-                ? `${(sheet.utilization * 100).toFixed(1).replace('.', ',')} %`
-                : '—'}
-            </span>
-          </div>
-        ))}
+        {sheetsOfJob.map((sheet) => {
+          const onSheet = layout
+            ? layout.instances.filter((i) => i.sheet_index === sheet.index).length
+            : 0
+          return (
+            <div
+              key={sheet.index}
+              className="frow"
+              onClick={() => onFocusSheet(sheet.index)}
+              title="Показать этот лист целиком"
+            >
+              <span className="num" style={{ width: 14 }}>
+                {sheet.index + 1}
+              </span>
+              <SheetIcon />
+              <span className="grow mono" style={{ fontSize: 11.5 }}>
+                {sheet.w.toFixed(0)} × {sheet.h.toFixed(0)}
+                {sheet.is_offcut && <span className="muted"> обрезок</span>}
+              </span>
+              <span className="num muted" style={{ marginRight: 8 }}>
+                {onSheet} дет.
+              </span>
+              <span className="num">
+                {sheet.utilization
+                  ? `${(sheet.utilization * 100).toFixed(1).replace('.', ',')} %`
+                  : '—'}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

@@ -18,6 +18,18 @@ import type {
 } from '../api/types'
 import { useLoader } from '../lib/hooks'
 
+const STAGE_TITLE: Record<string, string> = {
+  planning: 'Раскладка',
+  in_progress: 'В работе',
+  finished: 'Завершён',
+}
+
+/** Проценты по-русски: запятая, один знак, прочерк вместо пустоты. */
+function percent(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—'
+  return `${(value * 100).toFixed(1).replace('.', ',')} %`
+}
+
 interface JobRow {
   id: number
   name: string | null
@@ -40,7 +52,9 @@ export default function EditorPage() {
   const [files, setFiles] = useState<SourceFile[]>([])
   const [selection, setSelection] = useState<Selection>(emptySelection)
   const [focusedPartId, setFocusedPartId] = useState<number | null>(null)
-  const [showToolpaths, setShowToolpaths] = useState(true)
+  // Ширина фрезы — режим проверки, а не фон: включённой по умолчанию она
+  // закрашивает весь лист и раскладку под ней не видно.
+  const [showToolpaths, setShowToolpaths] = useState(false)
   const [scale, setScale] = useState(0.15)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -68,13 +82,13 @@ export default function EditorPage() {
     const [data, issues] = await Promise.all([api.layout(id), api.collisions(id)])
     setLayout(data)
     setCollisions(issues)
-    api.files().then(setFiles).catch(() => undefined)
+    // Буфер — файлы этого раскроя, а не всё, что когда-либо загружали в цеху.
+    api.files(id).then(setFiles).catch(() => undefined)
   }, [])
 
   useEffect(() => {
     api.toolpathPresets().then(setPresets).catch(() => undefined)
     api.cuttingPresets().then(setCuttingPresets).catch(() => undefined)
-    api.files().then(setFiles).catch(() => undefined)
     loadJobs().catch((err: Error) => setError(err.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -371,80 +385,74 @@ export default function EditorPage() {
   }, [layout])
 
   const job = layout?.job
+  // Нехватка листов — не украшение шапки, а причина не начинать раскрой.
+  const shortage = layout ? layout.stock.needed > layout.stock.available : false
 
   return (
     <div className="editor">
-      {/* Верхняя строка: где мы, каким пресетом считаем и что делаем дальше. */}
+      {/* Верхняя строка: какой лист открыт, чем считаем и что с ним сейчас. */}
       <div className="editor-topbar">
-        <select
-          className="chip-select"
-          value={jobId ?? ''}
-          onChange={(event) => {
-            setJobId(Number(event.target.value))
-            setSelection(emptySelection)
-            setFocusedPartId(null)
-          }}
-        >
-          {jobs.length === 0 && <option value="">— заданий нет —</option>}
-          {jobs.map((row) => (
-            <option key={row.id} value={row.id}>
-              {row.name ?? `Задание ${row.id}`}
-            </option>
-          ))}
-        </select>
+        <label className="picker" title="Открытый раскрой">
+          <span>Раскрой</span>
+          <select
+            value={jobId ?? ''}
+            onChange={(event) => {
+              setJobId(Number(event.target.value))
+              setSelection(emptySelection)
+              setFocusedPartId(null)
+            }}
+          >
+            {jobs.length === 0 && <option value="">ещё не заведён</option>}
+            {jobs.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.name ?? `Задание ${row.id}`}
+              </option>
+            ))}
+          </select>
+        </label>
 
-        {job && (
-          <>
-            <span className="sep">/</span>
-            <span className="what">
-              {job.thickness} мм · {job.material_name}
-            </span>
-          </>
-        )}
-
-        <select
-          className="chip-select"
-          value={job?.preset?.id ?? ''}
-          disabled={busy || jobId === null}
-          title="Пресет раскроя: фреза, зазор, глубины, порядок обработки"
-          onChange={(event) => changePreset(event.target.value)}
+        <label
+          className="picker"
+          title="Шаблон траекторий: фреза, зазор, глубины, порядок обработки"
         >
-          <option value="">— пресет не выбран —</option>
-          {cuttingPresets.map((preset) => (
-            <option key={preset.id} value={preset.id}>
-              Пресет · {preset.name}
-            </option>
-          ))}
-        </select>
+          <span>Шаблон</span>
+          <select
+            value={job?.preset?.id ?? ''}
+            disabled={busy || jobId === null}
+            onChange={(event) => changePreset(event.target.value)}
+          >
+            <option value="">не выбран</option>
+            {cuttingPresets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {job && <span className={`stage-badge ${job.stage}`}>{STAGE_TITLE[job.stage]}</span>}
 
         <div className="spacer">
-          {job?.operator && (
-            <span className="chip" title="Кто ведёт этот лист">
-              {job.stage === 'finished' ? '✓' : '●'} <b>{job.operator}</b>
-            </span>
-          )}
           <span className="chip" title="Полезная площадь по всем листам задания">
-            КИМ{' '}
-            <b>
-              {job?.utilization
-                ? `${(job.utilization * 100).toFixed(1).replace('.', ',')} %`
-                : '—'}
+            КИМ <b>{percent(job?.utilization)}</b>
+          </span>
+          <span
+            className="chip"
+            title="Сколько листов уйдёт на этот раскрой и сколько числится на складе"
+          >
+            Листы{' '}
+            <b className={shortage ? 'bad' : undefined}>
+              {layout ? `${layout.stock.needed} из ${layout.stock.available}` : '—'}
             </b>
           </span>
-          <span className="chip" title="Хватает ли листов на складе">
-            Склад{' '}
-            <b>
-              {layout ? `${layout.stock.available} / ${layout.stock.needed}` : '—'}
-            </b>
-          </span>
-          <button type="button" onClick={() => arrange(false)} disabled={busy || jobId === null}>
-            Уплотнить всё
-          </button>
-          <button type="button" disabled title="Появится вместе с печатью стикеров">
-            Стикеры
-          </button>
-          <button type="button" className="primary" disabled title="Появится вместе с постпроцессором">
-            Сгенерировать УП
+          <button
+            type="button"
+            className="primary"
+            onClick={() => arrange(false)}
+            disabled={busy || jobId === null || !layout?.instances.length}
+            title="Полный пересчёт раскладки: двигаются все детали, включая закреплённые"
+          >
+            Разложить заново
           </button>
         </div>
       </div>
@@ -489,15 +497,7 @@ export default function EditorPage() {
             </div>
           )}
 
-          {layout ? (
-            <JobFlow
-              layout={layout}
-              busy={busy}
-              onTake={takeJob}
-              onCheck={checkItem}
-              onFinish={finishJob}
-            />
-          ) : (
+          {!layout && (
             <div style={{ padding: '10px 12px', borderTop: '1px solid var(--line)' }}>
               <div className="lbl" style={{ marginBottom: 8 }}>
                 Новый раскрой
@@ -629,9 +629,20 @@ export default function EditorPage() {
               busy={busy}
             />
           )}
+
+          <Shortcuts />
         </div>
 
         <aside className="editor-side right">
+          {layout && (
+            <JobFlow
+              layout={layout}
+              busy={busy}
+              onTake={takeJob}
+              onCheck={checkItem}
+              onFinish={finishJob}
+            />
+          )}
           {layout && (
             <PropertiesPanel
               layout={layout}
@@ -680,12 +691,52 @@ export default function EditorPage() {
         }}
       />
 
-      <div className="editor-hints">
-        колесо — зум · пробел или средняя кнопка — панорама · клик — выбрать деталь ·
-        двойной клик — войти в деталь и выбирать векторы · Shift — добавить к выделению ·
-        R — повернуть на 90° · стрелки — сдвинуть на 1 мм (с Shift — на 10) ·
-        Esc — снять выделение · перетащите DXF прямо в поле
-      </div>
+    </div>
+  )
+}
+
+const SHORTCUTS: Array<[string, string]> = [
+  ['Колесо', 'приблизить и отдалить'],
+  ['Пробел или средняя кнопка', 'двигать поле'],
+  ['Клик', 'выбрать деталь'],
+  ['Двойной клик', 'войти в деталь и выбирать её векторы'],
+  ['Shift + клик', 'добавить к выделению'],
+  ['R / Shift + R', 'повернуть на 90° туда и обратно'],
+  ['Стрелки', 'сдвинуть на 1 мм, с Shift — на 10'],
+  ['Esc', 'снять выделение'],
+]
+
+/**
+ * Подсказки по управлению. Раньше они стояли стеной внизу экрана и висели
+ * там всю смену, хотя нужны один раз — в первый день. Теперь их открывают.
+ */
+function Shortcuts() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="shortcuts">
+      {open && (
+        <div className="shortcuts-card">
+          <div className="lbl">Управление полем</div>
+          {SHORTCUTS.map(([key, what]) => (
+            <div className="shortcuts-row" key={key}>
+              <span className="kbd">{key}</span>
+              <span>{what}</span>
+            </div>
+          ))}
+          <div className="shortcuts-note">
+            DXF можно просто перетащить в поле — откроется диалог добавления.
+          </div>
+        </div>
+      )}
+      <button
+        type="button"
+        className={`shortcuts-toggle${open ? ' on' : ''}`}
+        title="Как управлять полем"
+        aria-label="Как управлять полем"
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        ?
+      </button>
     </div>
   )
 }

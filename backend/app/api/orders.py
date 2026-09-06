@@ -5,7 +5,7 @@ CRM-слоя нет: заказ — это просто имя, оно лежи�
 нему технолог опознаёт деталь в цеху.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -18,17 +18,28 @@ router = APIRouter(tags=["Заказы и файлы"])
 
 
 @router.get("/files", response_model=list[FileOut])
-def list_files(db: Session = Depends(get_db)) -> list[FileOut]:
-    """Буфер: файлы с их цветом, заказом и количеством деталей."""
-    files = list(db.scalars(select(ImportFile).order_by(ImportFile.id)).all())
+def list_files(
+    db: Session = Depends(get_db),
+    job: int | None = Query(None, description="Показать только файлы этого раскроя"),
+) -> list[FileOut]:
+    """Буфер: файлы с их цветом, заказом и количеством деталей.
+
+    С параметром ``job`` остаются только файлы, детали которых принадлежат
+    этому раскрою, и считаются тоже только они. Без него буфер показывал бы
+    вообще все когда-либо загруженные файлы — в цеху это чужие заказы на
+    чужом листе, и оператор не понимает, что из этого лежит перед ним.
+    """
+    scope = (lambda stmt: stmt.where(Part.job_id == job)) if job else (lambda stmt: stmt)
 
     stats: dict[int, dict] = {}
     for source_id, count, qty, sheets in db.execute(
-        select(
-            Part.source_file_id,
-            func.count(Part.id),
-            func.coalesce(func.sum(Part.qty), 0),
-            func.count(func.distinct(Part.source_sheet_index)),
+        scope(
+            select(
+                Part.source_file_id,
+                func.count(Part.id),
+                func.coalesce(func.sum(Part.qty), 0),
+                func.count(func.distinct(Part.source_sheet_index)),
+            )
         ).group_by(Part.source_file_id)
     ):
         stats[source_id] = {
@@ -40,21 +51,27 @@ def list_files(db: Session = Depends(get_db)) -> list[FileOut]:
     # Разбивка по листам внутри файла — для дерева в буфере.
     by_sheet: dict[int, dict[int, int]] = {}
     for source_id, sheet_index, qty in db.execute(
-        select(
-            Part.source_file_id,
-            Part.source_sheet_index,
-            func.coalesce(func.sum(Part.qty), 0),
+        scope(
+            select(
+                Part.source_file_id,
+                Part.source_sheet_index,
+                func.coalesce(func.sum(Part.qty), 0),
+            )
         ).group_by(Part.source_file_id, Part.source_sheet_index)
     ):
         by_sheet.setdefault(source_id, {})[int(sheet_index or 0)] = int(qty)
 
     pending: dict[int, int] = {}
     for source_id, count in db.execute(
-        select(Part.source_file_id, func.count(Part.id))
+        scope(select(Part.source_file_id, func.count(Part.id)))
         .where(Part.status == PartStatus.NEEDS_CLARIFICATION)
         .group_by(Part.source_file_id)
     ):
         pending[source_id] = count
+
+    files = list(db.scalars(select(ImportFile).order_by(ImportFile.id)).all())
+    if job:
+        files = [record for record in files if record.id in stats]
 
     out: list[FileOut] = []
     for record in files:

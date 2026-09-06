@@ -47,11 +47,11 @@ export default function App() {
           Нестор
         </h1>
         <nav>
-          <NavItem to="/import" icon="import">
-            Импорт DXF
-          </NavItem>
           <NavItem to="/editor" icon="editor">
             Раскрой
+          </NavItem>
+          <NavItem to="/import" icon="import">
+            Импорт DXF
           </NavItem>
           <NavItem to="/files" icon="files">
             Файлы и заказы
@@ -85,8 +85,8 @@ export default function App() {
       </aside>
       <main className="main">
         <Routes>
-          {/* Демо открывают, чтобы посмотреть раскрой, — с него и начинаем. */}
-          <Route path="/" element={<Navigate to={IS_DEMO ? '/editor' : '/import'} replace />} />
+          {/* Работа начинается с раскроя: файлы добавляются в него, а не наоборот. */}
+          <Route path="/" element={<Navigate to="/editor" replace />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/editor" element={<EditorPage />} />
           <Route path="/files" element={<FilesPage />} />
