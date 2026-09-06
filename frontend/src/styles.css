@@ -34,6 +34,35 @@
   --danger-bg: #1c1210;
   --accent: #7d82c5;
 
+  /* Рабочее поле. Холст рисуется на canvas, где CSS-переменные сами не
+     работают, — их читает editor/palette.ts. Тема остаётся в одном файле. */
+  --canvas-bg: #0a0c0f;
+  --canvas-grid: #1a1f26;
+  --sheet-fill: #0d1013;
+  --sheet-edge: #2e353e;
+  --sheet-trim: #333a44;
+  --rest-fill: #232a32;
+  --part-edge: rgba(226, 231, 238, 0.62);
+  --canvas-ink: #f2f4f6;
+  --canvas-ink-2: #aeb6c0;
+  --canvas-ink-3: #7c848f;
+  --canvas-plate: rgba(10, 12, 15, 0.72);
+  --canvas-select: #ffffff;
+  --canvas-danger: #d9694a;
+  --canvas-guide: #e11d48;
+  --canvas-grain: rgba(142, 151, 162, 0.75);
+
+  /* Цвет закреплён за ТИПОМ операции: его оператор и читает на карте.
+     Пресет траектории цвет типа не подменяет — иначе два пресета одного типа
+     выглядели бы разной операцией. */
+  --op-outer: #111827;
+  --op-inner: #374151;
+  --op-pocket: #0891b2;
+  --op-groove: #7c3aed;
+  --op-drill: #b91c1c;
+  --op-mark: #65a30d;
+  --preview-fill: #dbeafe;
+
   --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
 

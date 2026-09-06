@@ -5,6 +5,7 @@ import {
   rotatedSize,
   sheetOrigin,
 } from './geometry'
+import { alpha, themeColor } from './palette'
 import type { Collision, Layout, Selection, ToolpathPreset } from './types'
 import { vectorKey } from './types'
 
@@ -32,18 +33,31 @@ export interface RenderInput {
   marquee: { x0: number; y0: number; x1: number; y1: number } | null
 }
 
-// Палитра «Нестор»: холст тёмный, деталь светится своим цветом файла.
-const CANVAS_BG = '#0A0C0F'
-const GRID_DOT = '#1A1F26'
-const SHEET_FILL = '#0D1013'
-const SHEET_STROKE = '#2E353E'
-const TRIM_STROKE = '#333A44'
-const REST_FILL = '#232A32'
-const LABEL_INK = '#F2F4F6'
-const DIM_INK = '#AEB6C0'
-const SELECT = '#FFFFFF'
-const DANGER = '#D9694A'
-const PART_EDGE = 'rgba(226,231,238,0.62)'
+/**
+ * Палитра холста берётся из CSS-переменных: тема живёт в styles.css целиком,
+ * включая рабочее поле. Раньше здесь стояли литералы, и смена темы означала
+ * охоту за цветами по всему файлу.
+ *
+ * Значения читаются на каждый кадр из кеша palette.ts — это одно обращение к
+ * Map, а не к getComputedStyle.
+ */
+const ink = (name: string, fallback: string) => themeColor(name, fallback)
+
+const CANVAS_BG = () => ink('--canvas-bg', '#0A0C0F')
+const GRID_DOT = () => ink('--canvas-grid', '#1A1F26')
+const SHEET_FILL = () => ink('--sheet-fill', '#0D1013')
+const SHEET_STROKE = () => ink('--sheet-edge', '#2E353E')
+const TRIM_STROKE = () => ink('--sheet-trim', '#333A44')
+const REST_FILL = () => ink('--rest-fill', '#232A32')
+const LABEL_INK = () => ink('--canvas-ink', '#F2F4F6')
+const DIM_INK = () => ink('--canvas-ink-2', '#AEB6C0')
+const FAINT_INK = () => ink('--canvas-ink-3', '#69717D')
+const SELECT = () => ink('--canvas-select', '#FFFFFF')
+const DANGER = () => ink('--canvas-danger', '#D9694A')
+const PART_EDGE = () => ink('--part-edge', 'rgba(226,231,238,0.62)')
+const LABEL_PLATE = () => ink('--canvas-plate', 'rgba(10,12,15,0.72)')
+const GUIDE = () => ink('--canvas-guide', '#e11d48')
+const GRAIN_INK = () => ink('--canvas-grain', 'rgba(142,151,162,0.75)')
 
 /** Заливка детали: цвет файла с прозрачностью — контур остаётся главным. */
 function tint(hex: string, alpha: number): string {
@@ -146,7 +160,7 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
   const dpr = window.devicePixelRatio || 1
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, width, height)
-  ctx.fillStyle = CANVAS_BG
+  ctx.fillStyle = CANVAS_BG()
   ctx.fillRect(0, 0, width, height)
 
   const toScreen = (p: Point) => worldToScreen(viewport, width, height, p)
@@ -163,16 +177,16 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     const w = sheet.w * viewport.scale
     const h = sheet.h * viewport.scale
 
-    ctx.fillStyle = SHEET_FILL
+    ctx.fillStyle = SHEET_FILL()
     ctx.fillRect(topLeft[0], topLeft[1], w, h)
-    ctx.strokeStyle = SHEET_STROKE
+    ctx.strokeStyle = SHEET_STROKE()
     ctx.lineWidth = 1.5
     ctx.strokeRect(topLeft[0], topLeft[1], w, h)
 
     // Полезная область: то, что осталось после обрезки кромок листа.
     const inset = toScreen([ox + sheet.trim.left, oy + sheet.h - sheet.trim.top])
     ctx.setLineDash([6, 4])
-    ctx.strokeStyle = TRIM_STROKE
+    ctx.strokeStyle = TRIM_STROKE()
     ctx.lineWidth = 1
     ctx.strokeRect(
       inset[0],
@@ -193,14 +207,14 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     const fullWidth = titleWidth + (percent ? ctx.measureText(percent).width + 10 : 0)
 
     if (fullWidth <= w) {
-      ctx.fillStyle = DIM_INK
+      ctx.fillStyle = DIM_INK()
       ctx.fillText(title, topLeft[0], topLeft[1] - 8)
       if (percent) {
-        ctx.fillStyle = '#69717D'
+        ctx.fillStyle = FAINT_INK()
         ctx.fillText(percent, topLeft[0] + titleWidth + 10, topLeft[1] - 8)
       }
     } else if (percent && ctx.measureText(percent).width <= w) {
-      ctx.fillStyle = '#69717D'
+      ctx.fillStyle = FAINT_INK()
       ctx.fillText(percent, topLeft[0], topLeft[1] - 8)
     }
   }
@@ -233,15 +247,17 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     const style = part.style
 
     tracePath(ctx, placed.outer, toScreen, true)
-    ctx.fillStyle = style ? hatch(ctx, style.fill, style.pattern) : 'rgba(154,163,175,0.2)'
+    ctx.fillStyle = style
+      ? hatch(ctx, style.fill, style.pattern)
+      : alpha(PART_EDGE(), 0.2)
     ctx.fill()
 
     // Вырезы «прорезают» деталь до листа.
     for (const ring of placed.inners) {
       tracePath(ctx, ring, toScreen, true)
-      ctx.fillStyle = SHEET_FILL
+      ctx.fillStyle = SHEET_FILL()
       ctx.fill()
-      ctx.strokeStyle = SHEET_STROKE
+      ctx.strokeStyle = SHEET_STROKE()
       ctx.lineWidth = 1
       ctx.stroke()
     }
@@ -250,12 +266,12 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     // обводок сливается в неоновую сетку, в которой не видно самих деталей.
     // Принадлежность к файлу несёт заливка, легенда и буфер.
     tracePath(ctx, placed.outer, toScreen, true)
-    ctx.strokeStyle = isColliding ? DANGER : PART_EDGE
+    ctx.strokeStyle = isColliding ? DANGER() : PART_EDGE()
     ctx.lineWidth = isColliding ? 2.5 : 1.2
     ctx.stroke()
 
     if (isColliding) {
-      ctx.fillStyle = 'rgba(217,105,74,0.18)'
+      ctx.fillStyle = alpha(DANGER(), 0.18)
       tracePath(ctx, placed.outer, toScreen, true)
       ctx.fill()
     }
@@ -267,7 +283,7 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
 
     if (input.hoveredInstance === instance.id && !isSelected) {
       tracePath(ctx, placed.outer, toScreen, true)
-      ctx.strokeStyle = 'rgba(232,234,237,0.5)'
+      ctx.strokeStyle = alpha(SELECT(), 0.5)
       ctx.lineWidth = 2
       ctx.stroke()
     }
@@ -376,14 +392,14 @@ function drawOperations(
   const outerSelected = selectedVectors.has(vectorKey(part.id, 'outer'))
   if (outerSelected) {
     tracePath(ctx, placed.outer, toScreen, true)
-    ctx.strokeStyle = SELECT
+    ctx.strokeStyle = SELECT()
     ctx.lineWidth = 3.5
     ctx.stroke()
   }
   placed.inners.forEach((ring, index) => {
     if (!selectedVectors.has(vectorKey(part.id, `inner:${index}`))) return
     tracePath(ctx, ring, toScreen, true)
-    ctx.strokeStyle = SELECT
+    ctx.strokeStyle = SELECT()
     ctx.lineWidth = 3.5
     ctx.stroke()
   })
@@ -460,17 +476,17 @@ function drawLabel(
   const markW = mark ? ctx.measureText(mark).width : 0
   const plateW = Math.max(dimsW, markW) + 10
   const plateH = (dims ? 13 : 0) + (mark ? 12 : 0) + 4
-  ctx.fillStyle = 'rgba(10,12,15,0.72)'
+  ctx.fillStyle = LABEL_PLATE()
   ctx.fillRect(center[0] - plateW / 2, center[1] - plateH / 2, plateW, plateH)
 
   const dimsY = mark ? center[1] - 5 : center[1]
   if (dims) {
-    ctx.fillStyle = LABEL_INK
+    ctx.fillStyle = LABEL_INK()
     ctx.font = '600 11.5px "IBM Plex Mono", ui-monospace, monospace'
     ctx.fillText(dims, center[0], dimsY)
   }
   if (mark) {
-    ctx.fillStyle = DIM_INK
+    ctx.fillStyle = DIM_INK()
     ctx.font = '400 10px "IBM Plex Mono", ui-monospace, monospace'
     ctx.fillText(mark, center[0], dimsY + 12)
   }
@@ -508,7 +524,7 @@ function drawGrainArrow(
   const sa = toScreen(a)
   const sb = toScreen(b)
 
-  ctx.strokeStyle = 'rgba(142,151,162,0.75)'
+  ctx.strokeStyle = GRAIN_INK()
   ctx.lineWidth = 1.2
   ctx.beginPath()
   ctx.moveTo(sa[0], sa[1])
@@ -531,7 +547,7 @@ function drawPin(
 ): void {
   const [, , maxX, maxY] = placed.bbox
   const s = toScreen([maxX, maxY])
-  ctx.fillStyle = SELECT
+  ctx.fillStyle = SELECT()
   ctx.beginPath()
   ctx.arc(s[0] - 6, s[1] + 6, 3.2, 0, Math.PI * 2)
   ctx.fill()
@@ -552,7 +568,7 @@ function drawGrid(
   const y0 = Math.floor((viewport.cy - half[1]) / step) * step
   const y1 = viewport.cy + half[1]
 
-  ctx.fillStyle = GRID_DOT
+  ctx.fillStyle = GRID_DOT()
   for (let x = x0; x <= x1; x += step) {
     for (let y = y0; y <= y1; y += step) {
       const s = toScreen([x, y])
@@ -596,19 +612,19 @@ function drawRest(
     const w = width * viewport.scale
     const h = height * viewport.scale
 
-    ctx.fillStyle = REST_FILL
+    ctx.fillStyle = REST_FILL()
     ctx.globalAlpha = 0.5
     ctx.fillRect(corner[0], corner[1], w, h)
     ctx.globalAlpha = 1
     ctx.setLineDash([6, 4])
-    ctx.strokeStyle = SHEET_STROKE
+    ctx.strokeStyle = SHEET_STROKE()
     ctx.lineWidth = 1
     ctx.strokeRect(corner[0], corner[1], w, h)
     ctx.setLineDash([])
 
     if (h > 16 && w > 150) {
       const keep = height >= minOffcut && width >= minOffcut
-      ctx.fillStyle = keep ? '#8E97A2' : '#69717D'
+      ctx.fillStyle = keep ? DIM_INK() : FAINT_INK()
       ctx.font = '400 11px \'IBM Plex Mono\', ui-monospace, monospace'
       ctx.textAlign = 'center'
       ctx.fillText(
@@ -638,11 +654,11 @@ function drawSelection(
   const w = b[0] - a[0] + pad * 2
   const h = b[1] - a[1] + pad * 2
 
-  ctx.strokeStyle = SELECT
+  ctx.strokeStyle = SELECT()
   ctx.lineWidth = 1.5
   ctx.strokeRect(x, y, w, h)
 
-  ctx.fillStyle = SELECT
+  ctx.fillStyle = SELECT()
   const s = 5
   for (const [cx, cy] of [
     [x, y],
@@ -660,7 +676,7 @@ function drawGuides(
   toScreen: (p: Point) => Point,
 ): void {
   if (!input.guides.length) return
-  ctx.strokeStyle = '#e11d48'
+  ctx.strokeStyle = GUIDE()
   ctx.lineWidth = 1
   ctx.setLineDash([4, 3])
   for (const guide of input.guides) {
@@ -691,9 +707,9 @@ function drawMarquee(ctx: CanvasRenderingContext2D, input: RenderInput): void {
   const y = Math.min(m.y0, m.y1)
   const w = Math.abs(m.x1 - m.x0)
   const h = Math.abs(m.y1 - m.y0)
-  ctx.fillStyle = 'rgba(232,234,237,0.08)'
+  ctx.fillStyle = alpha(SELECT(), 0.08)
   ctx.fillRect(x, y, w, h)
-  ctx.strokeStyle = SELECT
+  ctx.strokeStyle = SELECT()
   ctx.lineWidth = 1
   ctx.strokeRect(x, y, w, h)
 }

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 
+import { operationColor, themeColor } from '../editor/palette'
+
 export interface ShapeOperation {
   semantic: string
   kind: string
@@ -23,15 +25,6 @@ interface Props {
   label?: string
 }
 
-const OPERATION_COLORS: Record<string, string> = {
-  DRILL: '#b91c1c',
-  GROOVE: '#7c3aed',
-  POCKET: '#0891b2',
-  MARK: '#65a30d',
-  INNER: '#374151',
-  OUTER: '#111827',
-}
-
 /**
  * Отрисовка геометрии на Canvas.
  *
@@ -44,12 +37,16 @@ export default function ShapeCanvas({
   inners = [],
   operations = [],
   paths = [],
-  fill = '#dbeafe',
-  stroke = '#1f2937',
+  fill,
+  stroke,
   height = 220,
   label,
 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
+  // Цвета превью — из темы: раньше здесь стояли светлые литералы, оставшиеся
+  // от первой версии, и превью слоя рисовалось тёмно-синим по почти чёрному.
+  const shapeFill = fill ?? themeColor('--preview-fill', '#dbeafe')
+  const shapeStroke = stroke ?? themeColor('--op-outer', '#111827')
 
   useEffect(() => {
     const canvas = ref.current
@@ -81,7 +78,7 @@ export default function ShapeCanvas({
 
     const points = everything.flat()
     if (!points.length) {
-      ctx.fillStyle = '#9ca3af'
+      ctx.fillStyle = themeColor('--canvas-ink-3', '#7c848f')
       ctx.font = '13px sans-serif'
       ctx.fillText('нет геометрии', 12, 24)
       return
@@ -120,18 +117,18 @@ export default function ShapeCanvas({
 
     if (outer && outer.length > 2) {
       trace(outer, true)
-      ctx.fillStyle = fill
+      ctx.fillStyle = shapeFill
       ctx.fill()
-      ctx.strokeStyle = stroke
+      ctx.strokeStyle = shapeStroke
       ctx.lineWidth = 1.5
       ctx.stroke()
 
-      ctx.fillStyle = '#ffffff'
+      ctx.fillStyle = themeColor('--sheet-fill', '#ffffff')
       for (const ring of inners) {
         if (ring.length < 3) continue
         trace(ring, true)
         ctx.fill()
-        ctx.strokeStyle = OPERATION_COLORS.INNER
+        ctx.strokeStyle = operationColor('INNER')
         ctx.lineWidth = 1
         ctx.stroke()
       }
@@ -141,12 +138,12 @@ export default function ShapeCanvas({
     for (const path of paths) {
       if (path.length < 2) continue
       trace(path, false)
-      ctx.strokeStyle = stroke
+      ctx.strokeStyle = shapeStroke
       ctx.stroke()
     }
 
     for (const op of operations) {
-      ctx.strokeStyle = OPERATION_COLORS[op.semantic] ?? '#6b7280'
+      ctx.strokeStyle = operationColor(op.semantic)
       ctx.lineWidth = 1.2
       if (op.center && op.diameter) {
         ctx.beginPath()
@@ -159,11 +156,11 @@ export default function ShapeCanvas({
     }
 
     if (label) {
-      ctx.fillStyle = '#374151'
+      ctx.fillStyle = themeColor('--canvas-ink-2', '#374151')
       ctx.font = '11px ui-monospace, monospace'
       ctx.fillText(label, 8, 14)
     }
-  }, [outer, inners, operations, paths, fill, stroke, height, label])
+  }, [outer, inners, operations, paths, shapeFill, shapeStroke, height, label])
 
   return <canvas className="preview" ref={ref} style={{ height }} />
 }
