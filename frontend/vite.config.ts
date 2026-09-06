@@ -6,6 +6,11 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 // снимком данных внутри: его можно открыть двойным кликом, без сервера.
 export default defineConfig(({ mode }) => ({
   plugins: [react(), ...(mode === 'demo' ? [viteSingleFile()] : [])],
+  // Признак демо-сборки задаётся здесь, а не в .env: файла с переменными в
+  // репозитории нет, и без него демо молча собиралось обычным — с
+  // BrowserRouter и запросами к серверу, которого рядом нет. Открытый двойным
+  // кликом файл показывал пустой экран.
+  define: { 'import.meta.env.VITE_DEMO': JSON.stringify(mode === 'demo' ? '1' : '0') },
   server: {
     port: 5173,
     proxy: {
