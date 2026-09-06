@@ -69,6 +69,11 @@ class ToolType(StrEnum):
     COMPRESSION = "compression"
     DRILL = "drill"
     GROOVE = "groove"
+    # Спиральная «вверх» под выборку карманов и фигурная под скругление —
+    # в цеху их называют по работе, а не по конструкции.
+    POCKET = "pocket"
+    V_BIT = "v_bit"
+    PROFILE = "profile"
 
 
 class JobStatus(StrEnum):

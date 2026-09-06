@@ -8,6 +8,8 @@ const TYPE_TITLE: Record<string, string> = {
   end_mill: 'Раскрой',
   compression: 'Раскрой',
   drill: 'Присадка',
+  groove: 'Паз',
+  pocket: 'Выборка',
   v_bit: 'Гравировка',
   profile: 'Скругление',
   saw: 'Пила',

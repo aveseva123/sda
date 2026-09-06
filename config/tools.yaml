@@ -16,7 +16,7 @@ tools:
   - id: compression_8
     slot: 2
     name: "Компрессионная 8×32"
-    type: end_mill
+    type: compression
     diameter: 8.0
     flute_length: 32.0
     total_length: 80.0
@@ -37,7 +37,7 @@ tools:
   - id: groove_4
     slot: 1
     name: "Пазовая спиральная 4×22"
-    type: end_mill
+    type: groove
     diameter: 4.0
     flute_length: 22.0
     total_length: 60.0
@@ -90,7 +90,7 @@ tools:
   - id: spiral_6
     slot: 4
     name: "Спиральная вверх 6×25"
-    type: end_mill
+    type: pocket
     diameter: 6.0
     flute_length: 25.0
     total_length: 65.0
@@ -108,7 +108,7 @@ tools:
   - id: compression_12
     slot: 6
     name: "Компрессионная 12×45"
-    type: end_mill
+    type: compression
     diameter: 12.0
     flute_length: 45.0
     total_length: 90.0
