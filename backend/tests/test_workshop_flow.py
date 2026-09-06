@@ -338,3 +338,36 @@ def test_duplicate_spec_keys_do_not_break_the_upload(db, tmp_path, tmp_storage):
     stats = batch.stats or {}
     assert stats.get("spec_duplicates") == 1
     assert any("повторяются ключи" in w for w in stats.get("spec_warnings", []))
+
+
+def test_finished_job_cannot_be_rearranged(db, job, tmp_path):
+    """Завершённый раскрой не переставляется.
+
+    Лист отрезан, детали размечены и посчитаны, лист списан со склада. Если
+    после этого переложить карту, маркировка на деталях перестанет совпадать
+    с экраном — а именно по ней их и раскладывают по проектам.
+    """
+    analyzed = intake.analyze(db, job, _files(tmp_path, count=1))
+    intake.confirm(
+        db, job, analyzed["batch_id"],
+        [{"relpath": analyzed["files"][0]["relpath"], "thickness": 18.0}],
+    )
+    nesting.arrange(db, job)
+    instance = next(i for i, _ in nesting.job_instances(db, job) if i.x is not None)
+
+    nesting.take(db, job, "Севак")
+    nesting.set_checklist(db, job, {key: True for key, _ in nesting.CHECKLIST})
+    nesting.finish(db, job)
+
+    with pytest.raises(nesting.NestingError, match="завершён"):
+        nesting.arrange(db, job)
+
+    with pytest.raises(nesting.NestingError, match="завершён"):
+        nesting.move_instances(db, job, [{"instance_id": instance.id, "x": 5.0}])
+
+    later = intake.analyze(db, job, _files(tmp_path, count=1))
+    with pytest.raises(nesting.NestingError, match="завершён"):
+        intake.confirm(
+            db, job, later["batch_id"],
+            [{"relpath": later["files"][0]["relpath"], "thickness": 18.0}],
+        )

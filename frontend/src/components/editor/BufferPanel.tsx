@@ -12,6 +12,8 @@ interface Props {
   onFocusSheet: (index: number) => void
   onPickFiles: () => void
   onDropFiles: (files: File[]) => void
+  /** Завершённый раскрой заморожен: файлы в него больше не добавляют. */
+  frozen: boolean
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -62,6 +64,7 @@ export default function BufferPanel({
   onFocusSheet,
   onPickFiles,
   onDropFiles,
+  frozen,
 }: Props) {
   const [open, setOpen] = useState<Record<number, boolean>>({})
   // Рамка выглядела как место для перетаскивания, но обработчиков не имела:
@@ -123,13 +126,15 @@ export default function BufferPanel({
         <button
           type="button"
           style={{ marginLeft: 'auto', padding: '2px 8px', height: 22 }}
-          title="Выбрать DXF на диске"
+          title={frozen ? 'Раскрой завершён — файлы больше не добавляются' : 'Выбрать DXF на диске'}
+          disabled={frozen}
           onClick={onPickFiles}
         >
           + Файл
         </button>
       </div>
 
+      {!frozen && (
       <div className="buffer-drop">
         <div
           data-drop
@@ -164,6 +169,7 @@ export default function BufferPanel({
           </span>
         </div>
       </div>
+      )}
 
       <div className="tree">
         {files.length === 0 && (

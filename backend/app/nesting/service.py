@@ -357,6 +357,7 @@ def job_instances(db: Session, job: NestingJob) -> list[tuple[PartInstance, Part
 
 def arrange(db: Session, job: NestingJob, *, keep_pinned: bool = True) -> dict:
     """Автораскладка. Зафиксированные детали остаются на своих местах."""
+    _require_open(job)
     material = db.get(Material, job.material_id)
     params = job.params or {}
     sheet_w = float(params.get("sheet_w") or material.sheet_w)
@@ -638,6 +639,7 @@ def move_instances(db: Session, job: NestingJob, moves: list[dict]) -> dict:
     Каждое перемещение фиксирует деталь: пересчёт раскладки её больше не
     двигает. Это прямое требование — последнее слово за технологом.
     """
+    _require_open(job)
     sheets = {
         sheet.index: sheet
         for sheet in db.scalars(select(Sheet).where(Sheet.job_id == job.id)).all()
@@ -671,6 +673,20 @@ def move_instances(db: Session, job: NestingJob, moves: list[dict]) -> dict:
     db.flush()
     _recalculate_utilization(db, job)
     return {"updated": updated, "utilization": job.utilization}
+
+
+def _require_open(job: NestingJob) -> None:
+    """Завершённый раскрой не переставляется.
+
+    Лист уже отрезан, детали размечены и посчитаны, лист списан со склада.
+    Переложить карту после этого — значит сделать её описанием того, чего в
+    цеху не было: маркировка на деталях перестанет совпадать с экраном.
+    """
+    if job.stage == JobStage.FINISHED:
+        raise NestingError(
+            "Раскрой завершён: лист отрезан и списан. Раскладку менять нельзя — "
+            "заведите новый раскрой."
+        )
 
 
 def _recalculate_utilization(db: Session, job: NestingJob) -> None:

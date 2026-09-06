@@ -307,6 +307,14 @@ export default function EditorPage() {
       fail(new Error('Сначала заведите раскрой: материал, толщина, оператор.'))
       return
     }
+    if (layoutRef.current?.job.stage === 'finished') {
+      fail(
+        new Error(
+          'Раскрой завершён: лист отрезан и списан. Заведите новый раскрой для этих файлов.',
+        ),
+      )
+      return
+    }
     await run(
       `Читаю ${plural(files.length, 'файл', 'файла', 'файлов')}`,
       async () => {
@@ -517,6 +525,9 @@ export default function EditorPage() {
   // Наложения — испорченный лист, поэтому о них говорят в шапке, а не в
   // сообщении, которое закроют через минуту.
   const trouble = collisions.length
+  // Завершённый раскрой заморожен: лист отрезан и списан, детали размечены.
+  // Переложить карту — значит сделать её описанием того, чего в цеху не было.
+  const frozen = job?.stage === 'finished'
   const unplaced = (layout?.instances ?? []).filter((i) => i.sheet_index === null).length
 
   return (
@@ -542,6 +553,7 @@ export default function EditorPage() {
           </select>
         </label>
 
+        {job && (
         <label
           className="picker"
           title="Шаблон траекторий: фреза, зазор, глубины, порядок обработки"
@@ -560,10 +572,13 @@ export default function EditorPage() {
             ))}
           </select>
         </label>
+        )}
 
         {job && <span className={`stage-badge ${job.stage}`}>{STAGE_TITLE[job.stage]}</span>}
 
         <div className="spacer">
+          {job && (
+            <>
           <span className="chip" title="Полезная площадь по всем листам задания">
             КИМ <b>{percent(job?.utilization)}</b>
           </span>
@@ -603,11 +618,17 @@ export default function EditorPage() {
             type="button"
             className="primary"
             onClick={() => arrange(false)}
-            disabled={busy || jobId === null || !layout?.instances.length}
-            title="Полный пересчёт раскладки: двигаются все детали, включая закреплённые"
+            disabled={busy || jobId === null || frozen || !layout?.instances.length}
+            title={
+              frozen
+                ? 'Раскрой завершён: лист отрезан и списан, раскладка заморожена'
+                : 'Полный пересчёт раскладки: двигаются все детали, включая закреплённые'
+            }
           >
             Разложить заново
           </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -630,9 +651,11 @@ export default function EditorPage() {
         </div>
       )}
 
-      <div className="editor-body">
-        <aside className="editor-side left">
-          {layout || files.length ? (
+      <div className={`editor-body${layout ? '' : ' alone'}`}>
+        {/* Панели появляются вместе с раскроем: до него они пусты, а пустая
+            панель на весь экран — это не интерфейс, а тишина. */}
+        {layout && (
+          <aside className="editor-side left">
             <BufferPanel
               files={files}
               layout={layout}
@@ -642,71 +665,10 @@ export default function EditorPage() {
               onFocusSheet={(index) => stage.current?.focusSheet(index)}
               onPickFiles={() => filePicker.current?.click()}
               onDropFiles={dropFiles}
+              frozen={frozen}
             />
-          ) : (
-            <div className="panel-scroll">
-              <div className="panel-title">Буфер</div>
-              <div className="small muted" style={{ padding: '0 12px 12px' }}>
-                Перетащите DXF в рабочее поле — файлы попадут в буфер.
-              </div>
-            </div>
-          )}
-
-          {!layout && (
-            <div style={{ padding: '10px 12px', borderTop: '1px solid var(--line)' }}>
-              <div className="lbl" style={{ marginBottom: 8 }}>
-                Новый раскрой
-              </div>
-              <div className="small muted" style={{ marginBottom: 8 }}>
-                Работа начинается отсюда: материал, толщина, оператор. Файлы
-                добавляются в уже заведённый раскрой — хоть из Базиса, хоть
-                откуда.
-              </div>
-              <label className="field">
-                Материал и толщина
-                <select
-                  value={creating.material_id}
-                  onChange={(event) => {
-                    const material = (materials ?? []).find(
-                      (m) => String(m.id) === event.target.value,
-                    )
-                    setCreating((prev) => ({
-                      ...prev,
-                      material_id: event.target.value,
-                      thickness: material ? String(material.thickness) : '',
-                    }))
-                  }}
-                >
-                  <option value="">— выберите —</option>
-                  {(materials ?? []).map((material) => (
-                    <option key={material.id} value={material.id}>
-                      {material.name} · {material.thickness} мм
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field" style={{ marginTop: 8 }}>
-                Оператор
-                <input
-                  placeholder="кто ведёт лист"
-                  value={creating.operator}
-                  onChange={(event) =>
-                    setCreating((prev) => ({ ...prev, operator: event.target.value }))
-                  }
-                />
-              </label>
-              <button
-                type="button"
-                className="primary"
-                style={{ width: '100%', marginTop: 10 }}
-                disabled={!creating.material_id || !creating.thickness}
-                onClick={createJob}
-              >
-                Создать раскрой
-              </button>
-            </div>
-          )}
-        </aside>
+          </aside>
+        )}
 
         <div className="stage-wrap">
           {layout ? (
@@ -719,18 +681,72 @@ export default function EditorPage() {
               onSelectionChange={setSelection}
               focusedPartId={focusedPartId}
               onFocusPart={setFocusedPartId}
-              onMove={applyMoves}
+              onMove={frozen ? () => undefined : applyMoves}
               onDropFiles={dropFiles}
               showToolpaths={showToolpaths}
               gap={gap}
               onViewportChange={setScale}
             />
           ) : (
-            <div className="stage empty">
-              Заведите раскрой слева, потом перетащите сюда DXF.
+            <div className="stage start">
+              <div className="start-card">
+                <div className="start-step">Шаг 1 из 2</div>
+                <h2>Заведите раскрой</h2>
+                <p>
+                  Раскрой — это лист на станке: материал, толщина и тот, кто его
+                  ведёт. Файлы добавляются в уже заведённый раскрой — хоть из
+                  Базиса, хоть откуда, хоть из нескольких проектов сразу, чтобы
+                  не тратить лист зря.
+                </p>
+                <label className="field">
+                  Материал и толщина
+                  <select
+                    value={creating.material_id}
+                    onChange={(event) => {
+                      const material = (materials ?? []).find(
+                        (m) => String(m.id) === event.target.value,
+                      )
+                      setCreating((prev) => ({
+                        ...prev,
+                        material_id: event.target.value,
+                        thickness: material ? String(material.thickness) : '',
+                      }))
+                    }}
+                  >
+                    <option value="">— выберите —</option>
+                    {(materials ?? []).map((material) => (
+                      <option key={material.id} value={material.id}>
+                        {material.name} · {material.thickness} мм
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  Оператор
+                  <input
+                    placeholder="кто ведёт лист"
+                    value={creating.operator}
+                    onChange={(event) =>
+                      setCreating((prev) => ({ ...prev, operator: event.target.value }))
+                    }
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={!creating.material_id || !creating.thickness}
+                  onClick={createJob}
+                >
+                  Создать раскрой
+                </button>
+                <div className="start-next">
+                  Шаг 2 — перетащить сюда DXF или нажать «+ Файл».
+                </div>
+              </div>
             </div>
           )}
 
+          {layout && (
           <div className="stage-chips">
             <span className="chip">
               <button type="button" onClick={() => stage.current?.zoomBy(1 / 1.25)} title="Отдалить">
@@ -756,6 +772,7 @@ export default function EditorPage() {
               Ширина фрезы
             </label>
           </div>
+          )}
 
           {legend.length > 0 && (
             <div className="legend">
@@ -781,7 +798,7 @@ export default function EditorPage() {
               selection={selection}
               onMove={applyMoves}
               onCompact={() => arrange(true)}
-              busy={busy}
+              busy={busy || frozen}
             />
           )}
 
@@ -795,6 +812,7 @@ export default function EditorPage() {
           <Shortcuts />
         </div>
 
+        {layout && (
         <aside className="editor-side right">
           {layout && (
             <JobFlow
@@ -819,6 +837,7 @@ export default function EditorPage() {
             />
           )}
         </aside>
+        )}
       </div>
 
       {/* Диалог показывается по факту разобранных файлов: раньше он ждал

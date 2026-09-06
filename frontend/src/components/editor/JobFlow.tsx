@@ -87,6 +87,13 @@ export default function JobFlow({ layout, busy, onTake, onCheck, onFinish }: Pro
         ))}
       </div>
 
+      {stage === 'finished' && (
+        <div className="small muted" style={{ marginTop: 10, lineHeight: 1.5 }}>
+          Лист отрезан и списан со склада, раскладка заморожена. Для новых
+          деталей заведите новый раскрой.
+        </div>
+      )}
+
       {stage !== 'finished' && (
         <>
           <button

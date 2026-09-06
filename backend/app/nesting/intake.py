@@ -189,6 +189,11 @@ def confirm(db: Session, job: NestingJob, batch_id: int, decisions: list[dict]) 
     ``decisions`` — по одному на файл: relpath, thickness, order_name,
     product_name, grain. Файл, которого нет в списке, в раскрой не идёт.
     """
+    from app.nesting.service import _require_open
+
+    # Лист уже отрезан и списан — новые детали ему не добавить.
+    _require_open(job)
+
     batch = db.get(ImportBatch, batch_id)
     if batch is None:
         raise ValueError("Загрузка не найдена")
