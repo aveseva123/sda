@@ -892,6 +892,14 @@ canvas.preview {
 
 .legend-row .mono { font-size: 11px; }
 .legend-count { color: var(--ink-3); }
+
+/* Правило чтения линий — одной фразой, над самими линиями. */
+.legend-rule {
+  margin: 2px 0 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
 .legend-note {
   margin-top: 9px;
   padding-top: 8px;

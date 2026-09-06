@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-import { operationColor } from '../../editor/palette'
+import { vectorStyle } from '../../editor/palette'
 import type { Layout } from '../../editor/types'
 
 interface FileRow {
@@ -21,8 +21,8 @@ interface Props {
  * Порядок тот же, в каком идёт обработка: сначала мелкое и неглубокое, контур
  * последним. Так легенда заодно напоминает порядок резания.
  */
-const LINES: Array<{ semantic: string; title: string; means: string; dash?: string }> = [
-  { semantic: 'DRILL', title: 'Присадка', means: 'отверстия под фурнитуру, не насквозь' },
+const LINES: Array<{ semantic: string; title: string; means: string }> = [
+  { semantic: 'DRILL', title: 'Присадка', means: 'отверстия под фурнитуру, на глубину' },
   { semantic: 'GROOVE', title: 'Паз', means: 'канавка на глубину: задняя стенка, полкодержатель' },
   { semantic: 'POCKET', title: 'Выборка', means: 'карман: выбирается площадь на глубину' },
   { semantic: 'INNER', title: 'Внутренний вырез', means: 'проём внутри детали, насквозь' },
@@ -30,8 +30,17 @@ const LINES: Array<{ semantic: string; title: string; means: string; dash?: stri
   { semantic: 'MARK', title: 'Разметка', means: 'гравировка: метка, номер, надпись' },
 ]
 
-/** Образец линии: то же, что увидят на карте. */
-function LineSample({ color, dash }: { color: string; dash?: string }) {
+/** Образец линии — ровно тем же цветом, штрихом и толщиной, что и на карте. */
+function LineSample({ semantic }: { semantic: string }) {
+  const style = vectorStyle(semantic)
+  if (semantic === 'DRILL') {
+    return (
+      <svg width="22" height="10" viewBox="0 0 22 10" aria-hidden style={{ flex: 'none' }}>
+        <circle cx="7" cy="5" r="2.6" fill="none" stroke={style.color} strokeWidth={style.width} />
+        <circle cx="16" cy="5" r="2.6" fill="none" stroke={style.color} strokeWidth={style.width} />
+      </svg>
+    )
+  }
   return (
     <svg width="22" height="10" viewBox="0 0 22 10" aria-hidden style={{ flex: 'none' }}>
       <line
@@ -39,9 +48,9 @@ function LineSample({ color, dash }: { color: string; dash?: string }) {
         y1="5.5"
         x2="21"
         y2="5.5"
-        stroke={color}
-        strokeWidth="1.6"
-        strokeDasharray={dash}
+        stroke={style.color}
+        strokeWidth={style.width}
+        strokeDasharray={style.dash.length ? style.dash.join(' ') : undefined}
       />
     </svg>
   )
@@ -124,9 +133,12 @@ export default function MapLegend({ layout, files }: Props) {
           {present.length > 0 && (
             <>
               <div className="legend-section">Линии</div>
+              <div className="legend-rule">
+                Сплошная — насквозь, штриховая — на глубину, кружок — отверстие.
+              </div>
               {present.map((line) => (
                 <div className="legend-row" key={line.semantic} title={line.means}>
-                  <LineSample color={operationColor(line.semantic)} dash={line.dash} />
+                  <LineSample semantic={line.semantic} />
                   <span className="grow">{line.title}</span>
                 </div>
               ))}

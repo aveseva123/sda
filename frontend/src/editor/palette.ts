@@ -108,3 +108,44 @@ export function operationColor(semantic: string): string {
   const fallback = OPERATION_FALLBACK[key] ?? '#6b7280'
   return themeColor(`--op-${key.toLowerCase()}`, fallback)
 }
+
+/**
+ * Начертание линии по типу операции.
+ *
+ * Цвета операций в CAM никем не стандартизованы: в ArtCAM, Aspire и Fusion они
+ * разные и настраиваются, так что «отраслевого» цвета, который оператор узнаёт
+ * не задумываясь, просто нет. Значит, цвет придётся выучить по легенде — и
+ * значит, он не должен быть ЕДИНСТВЕННЫМ различием: на дешёвом мониторе, при
+ * солнце в окно и при дальтонизме он подводит первым.
+ *
+ * Поэтому к цвету добавлено начертание, и правило одно на всю карту:
+ *
+ *     сплошная — режется НАСКВОЗЬ
+ *     штриховая — снимается НА ГЛУБИНУ
+ *     кружок — отверстие
+ *
+ * Толщина третий канал: контур детали — то, по чему её отделяют от листа, —
+ * самая жирная линия; разметка — самая тонкая.
+ */
+export interface VectorStyle {
+  color: string
+  /** Толщина в экранных пикселях: она не должна зависеть от зума. */
+  width: number
+  /** Штрих в экранных пикселях; пустой массив — сплошная. */
+  dash: number[]
+}
+
+const VECTOR_STYLES: Record<string, Omit<VectorStyle, 'color'>> = {
+  OUTER: { width: 1.6, dash: [] },
+  INNER: { width: 1.4, dash: [] },
+  POCKET: { width: 1.3, dash: [7, 3] },
+  GROOVE: { width: 1.3, dash: [4, 3] },
+  DRILL: { width: 1.3, dash: [] },
+  MARK: { width: 1, dash: [1, 3] },
+}
+
+export function vectorStyle(semantic: string): VectorStyle {
+  const key = semantic.toUpperCase()
+  const shape = VECTOR_STYLES[key] ?? { width: 1.3, dash: [2, 2] }
+  return { color: operationColor(key), ...shape }
+}

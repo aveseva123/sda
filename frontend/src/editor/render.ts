@@ -5,7 +5,7 @@ import {
   rotatedSize,
   sheetOrigin,
 } from './geometry'
-import { alpha, operationColor, themeColor } from './palette'
+import { alpha, operationColor, themeColor, vectorStyle } from './palette'
 import type { Collision, Layout, Selection, ToolpathPreset } from './types'
 import { vectorKey } from './types'
 
@@ -306,7 +306,7 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
         ctx.fillStyle = SHEET_FILL()
         ctx.fill()
         ctx.strokeStyle = operationColor('INNER')
-        ctx.lineWidth = 1
+        ctx.lineWidth = vectorStyle('INNER').width
         ctx.stroke()
       }
     } else {
@@ -315,7 +315,7 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
       for (const ring of placed.inners) {
         tracePath(ctx, ring, toScreen, true)
         ctx.strokeStyle = operationColor('INNER')
-        ctx.lineWidth = 1.2
+        ctx.lineWidth = vectorStyle('INNER').width
         ctx.stroke()
       }
     }
@@ -329,7 +329,7 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
       : outline
         ? style?.fill ?? PART_EDGE()
         : PART_EDGE()
-    ctx.lineWidth = isColliding ? 2.5 : outline ? 1.4 : 1.2
+    ctx.lineWidth = isColliding ? 2.8 : vectorStyle('OUTER').width
     ctx.stroke()
 
     if (isColliding) {
@@ -526,7 +526,8 @@ function drawOperations(
     // Цвет — по ТИПУ операции, а не по пресету: оператор читает на карте
     // «это паз», «это присадка». Два пресета одного типа не должны выглядеть
     // разными операциями, а цвет из конфига не знает, на каком фоне рисуют.
-    const color = operationColor(op.semantic)
+    const style = vectorStyle(op.semantic)
+    const color = style.color
     const selected = selectedVectors.has(vectorKey(part.id, op.target))
     const enabled = vector?.enabled !== false
 
@@ -548,9 +549,12 @@ function drawOperations(
       ctx.lineCap = 'butt'
     }
 
+    // Начертание — второй канал различия к цвету: сплошная режется насквозь,
+    // штриховая снимается на глубину. Выключенный вектор гасится и цветом, и
+    // рисуется тем же штрихом, что и был, — чтобы тип оставался узнаваем.
     ctx.strokeStyle = enabled ? color : FAINT_INK()
-    ctx.lineWidth = selected ? 3 : 1.3
-    if (!enabled) ctx.setLineDash([4, 3])
+    ctx.lineWidth = selected ? style.width + 1.7 : style.width
+    ctx.setLineDash(enabled ? style.dash : [2, 3])
     if (op.center && op.diameter) {
       const c = toScreen(op.center)
       ctx.beginPath()
