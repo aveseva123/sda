@@ -10,7 +10,7 @@ from sqlalchemy import select
 import tests.factories as factories
 from app.importer import ImportOptions, IncomingFile, create_batch, process_batch
 from app.importer.spec import index_rows, lookup, parse_csv, parse_spec
-from app.models import GrainMode, Part, Product, Project
+from app.models import GrainMode, ImportFile, Part
 
 HEADERS = [
     "Файл",
@@ -134,10 +134,9 @@ def test_spec_fills_product_qty_and_edges(db, materials, tmp_storage, tmp_path):
     assert part.edge_top == "ПВХ 2мм"
     assert part.grain == GrainMode.ALONG_LENGTH
 
-    project = db.scalar(select(Project))
-    product = db.scalar(select(Product))
-    assert project.name == "Квартира 12"
-    assert product.name == "Шкаф прихожая"
+    assert part.order_name == "Квартира 12", "заказ приезжает из спецификации"
+    source = db.get(ImportFile, part.source_file_id)
+    assert source.order_name == "Квартира 12"
 
 
 def test_spec_material_missing_from_catalogue_requires_clarification(

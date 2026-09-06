@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -47,40 +47,41 @@ class MaterialOut(ORMModel):
     aliases: list[str] | None
 
 
-# ------------------------------------------------------- проекты и изделия
+# ---------------------------------------------------------- заказы и файлы
 
 
-class ProjectIn(BaseModel):
-    name: str
-    client: str | None = None
-    deadline: date | None = None
-    color: str | None = None
-    color_index: int | None = None
+class FileOut(BaseModel):
+    """Файл в буфере: он держит цвет и заказ."""
 
-
-class ProductOut(ORMModel):
     id: int
-    project_id: int
-    name: str
-    code: str | None
-    shade_index: int
-    # Стиль изделия: заливка, штриховка, обводка — заполняется роутером.
-    style: dict | None = None
-    parts_count: int = 0
-    parts_qty: int = 0
-
-
-class ProjectOut(ORMModel):
-    id: int
-    name: str
-    client: str | None
+    filename: str
+    relpath: str
+    order_name: str | None
     color: str
     color_index: int
-    deadline: date | None
     status: str
-    products: list[ProductOut] = Field(default_factory=list)
-    parts_count: int = 0
-    needs_clarification: int = 0
+    detected_source: str
+    # Листов внутри файла, позиций и экземпляров деталей.
+    sheets: int
+    positions: int
+    parts: int
+    needs_clarification: int
+    error: str | None = None
+
+
+class FilePatch(BaseModel):
+    order_name: str | None = None
+    color_index: int | None = Field(default=None, ge=0)
+
+
+class OrderOut(BaseModel):
+    """Заказ — просто имя и то, что под ним лежит."""
+
+    name: str
+    positions: int
+    parts: int
+    files: int
+    needs_clarification: int
 
 
 # ------------------------------------------------------------------ детали
@@ -88,10 +89,10 @@ class ProjectOut(ORMModel):
 
 class PartOut(ORMModel):
     id: int
-    product_id: int
-    product_name: str | None = None
-    project_id: int | None = None
-    project_name: str | None = None
+    source_file_id: int | None
+    source_file: str | None = None
+    source_sheet_index: int
+    order_name: str | None
     name: str
     code: str | None
     qty: int
@@ -131,7 +132,7 @@ class PartPatch(BaseModel):
     edge_bottom: str | None = None
     edge_left: str | None = None
     edge_right: str | None = None
-    product_id: int | None = None
+    order_name: str | None = None
 
 
 class BulkAssign(BaseModel):
@@ -140,7 +141,7 @@ class BulkAssign(BaseModel):
     part_ids: list[int] = Field(min_length=1)
     thickness: float | None = Field(default=None, gt=0)
     material_id: int | None = None
-    product_id: int | None = None
+    order_name: str | None = None
 
 
 class BulkAssignResult(BaseModel):
@@ -181,8 +182,7 @@ class ImportBatchDetail(ImportBatchOut):
 
 
 class ProcessRequest(BaseModel):
-    project_name: str | None = None
-    product_name: str | None = None
+    order_name: str | None = None
     material_id: int | None = None
     filename_template: str | None = None
     layer_preset_id: int | None = None

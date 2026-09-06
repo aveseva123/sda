@@ -3,30 +3,30 @@ import { useSearchParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import ShapeCanvas from '../components/ShapeCanvas'
-import type { Material, Part, PartGeometry, Project } from '../api/types'
+import type { Material, Order, Part, PartGeometry } from '../api/types'
 import { mm, sourceLabel } from '../lib/format'
 import { useLoader } from '../lib/hooks'
 
 export default function PartsPage() {
   const [params, setParams] = useSearchParams()
-  const projectFilter = params.get('project') ?? ''
-  const productFilter = params.get('product') ?? ''
+  const orderFilter = params.get('order') ?? ''
+  const fileFilter = params.get('file') ?? ''
   const thicknessFilter = params.get('thickness') ?? ''
   const statusFilter = params.get('status') ?? ''
 
   const [selected, setSelected] = useState<PartGeometry | null>(null)
 
-  const { data: projects } = useLoader<Project[]>(() => api.projects(), [])
+  const { data: orders } = useLoader<Order[]>(() => api.orders(), [])
   const { data: materials } = useLoader<Material[]>(() => api.materials(), [])
   const { data: parts, error, loading } = useLoader<Part[]>(
     () =>
       api.parts({
-        project_id: projectFilter || undefined,
-        product_id: productFilter || undefined,
+        order_name: orderFilter || undefined,
+        source_file_id: fileFilter || undefined,
         thickness: thicknessFilter || undefined,
         status: statusFilter || undefined,
       }),
-    [projectFilter, productFilter, thicknessFilter, statusFilter],
+    [orderFilter, fileFilter, thicknessFilter, statusFilter],
   )
 
   const thicknesses = useMemo(
@@ -71,12 +71,12 @@ export default function PartsPage() {
       <div className="panel">
         <div className="row">
           <label className="field">
-            Проект
-            <select value={projectFilter} onChange={(e) => setFilter('project', e.target.value)}>
+            Заказ
+            <select value={orderFilter} onChange={(e) => setFilter('order', e.target.value)}>
               <option value="">все</option>
-              {(projects ?? []).map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
+              {(orders ?? []).map((order) => (
+                <option key={order.name} value={order.name}>
+                  {order.name}
                 </option>
               ))}
             </select>
@@ -103,9 +103,9 @@ export default function PartsPage() {
               <option value="needs_clarification">требуют уточнения</option>
             </select>
           </label>
-          {productFilter && (
-            <button type="button" onClick={() => setFilter('product', '')}>
-              Сбросить фильтр по изделию
+          {fileFilter && (
+            <button type="button" onClick={() => setFilter('file', '')}>
+              Сбросить фильтр по файлу
             </button>
           )}
         </div>
@@ -132,7 +132,7 @@ export default function PartsPage() {
                 <thead>
                   <tr>
                     <th>Деталь</th>
-                    <th>Проект / изделие</th>
+                    <th>Заказ / файл</th>
                     <th className="num">Кол-во</th>
                     <th className="num">Габарит, мм</th>
                     <th>Материал</th>
@@ -149,7 +149,7 @@ export default function PartsPage() {
                             <span
                               className="swatch"
                               style={{ background: part.style.fill }}
-                              title={`${part.project_name} / ${part.product_name}`}
+                              title={`${part.order_name ?? "без заказа"} · ${part.source_file ?? ""}`}
                             />
                           )}
                           <b>{part.name}</b>
@@ -159,8 +159,8 @@ export default function PartsPage() {
                         )}
                       </td>
                       <td className="small">
-                        {part.project_name}
-                        <div className="muted">{part.product_name}</div>
+                        {part.order_name ?? <span className="muted">без заказа</span>}
+                        <div className="muted mono">{part.source_file}</div>
                       </td>
                       <td className="num">{part.qty}</td>
                       <td className="num">

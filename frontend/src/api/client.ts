@@ -7,10 +7,11 @@ import type {
   LayerSummary,
   Material,
   OffcutVerdict,
+  Order,
   Part,
   PartGeometry,
-  Project,
   SheetFormat,
+  SourceFile,
   StockItem,
   StockMovement,
   StockSummaryRow,
@@ -45,10 +46,13 @@ function json(method: string, body: unknown): RequestInit {
 export const api = {
   config: () => request<AppConfig>('/config'),
 
-  projects: () => request<Project[]>('/projects'),
-  createProject: (payload: { name: string; client?: string | null }) =>
-    request<Project>('/projects', json('POST', payload)),
-  deleteProject: (id: number) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
+  // Заказ — просто имя; настоящая единица принадлежности — файл.
+  files: () => request<SourceFile[]>('/files'),
+  updateFile: (id: number, payload: { order_name?: string | null; color_index?: number }) =>
+    request<SourceFile>(`/files/${id}`, json('PATCH', payload)),
+  orders: () => request<Order[]>('/orders'),
+  palette: () =>
+    request<{ files: string[]; sheet_patterns: string[]; note: string }>('/palette'),
 
   materials: () => request<Material[]>('/materials'),
   createMaterial: (payload: Partial<Material> & { name: string; thickness: number }) =>
@@ -77,7 +81,7 @@ export const api = {
     part_ids: number[]
     thickness?: number
     material_id?: number
-    product_id?: number
+    order_name?: string
   }) =>
     request<{ updated: number; resolved: number; still_pending: number }>(
       '/parts/bulk-assign',

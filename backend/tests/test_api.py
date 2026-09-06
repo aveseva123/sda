@@ -80,10 +80,13 @@ def test_full_import_flow(client, materials, dxf_18, dxf_15):
     processed = client.post(f"/api/imports/{batch['id']}/process", json={}).json()
     assert processed["stats"]["parsed"] == 2, processed["stats"]
 
-    projects = client.get("/api/projects").json()
-    assert len(projects) == 1
-    assert projects[0]["parts_count"] == 2
-    assert projects[0]["color"].startswith("#")
+    files = client.get("/api/files").json()
+    assert len(files) == 2, "буфер показывает загруженные файлы"
+    assert all(f["color"].startswith("#") for f in files), "цвет закреплён за файлом"
+    assert sum(f["positions"] for f in files) == 2
+
+    orders = client.get("/api/orders").json()
+    assert orders, "заказ — просто имя, сгруппированное по деталям"
 
     parts = client.get("/api/parts").json()
     assert sorted(p["thickness"] for p in parts) == [15.0, 18.0]

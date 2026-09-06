@@ -56,13 +56,8 @@ class ImportBatch(Base, TimestampMixin):
     layer_preset_id: Mapped[int | None] = mapped_column(
         ForeignKey("layer_presets.id", ondelete="SET NULL")
     )
-    # Проект/изделие по умолчанию, если из файлов их извлечь не удалось.
-    default_project_id: Mapped[int | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="SET NULL")
-    )
-    default_product_id: Mapped[int | None] = mapped_column(
-        ForeignKey("products.id", ondelete="SET NULL")
-    )
+    # Заказ по умолчанию, если из имени файла его извлечь не удалось.
+    default_order_name: Mapped[str | None] = mapped_column(String(200))
     default_material_id: Mapped[int | None] = mapped_column(
         ForeignKey("materials.id", ondelete="SET NULL")
     )
@@ -102,7 +97,26 @@ class ImportFile(Base, TimestampMixin):
     # Габариты листов, найденных в чертеже (слой контуров листа). Технолог
     # подтверждает их и заводит как формат листа на складе.
     detected_sheets: Mapped[list | None] = mapped_column(JSONType)
-    part_id: Mapped[int | None] = mapped_column(ForeignKey("parts.id", ondelete="SET NULL"))
+
+    # Заказ — просто имя, без клиентов и сроков.
+    order_name: Mapped[str | None] = mapped_column(String(200))
+    # Цвет закреплён за ФАЙЛОМ: в раскрое рядом лежат детали из разных DXF,
+    # и вопрос «откуда эта деталь» — это вопрос «из какого файла».
+    color_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    color: Mapped[str] = mapped_column(String(7), nullable=False, default="#7D82C5")
+    # Сводка для буфера: сколько листов и деталей дал файл.
+    sheets_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    parts_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # use_alter: parts.source_file_id ссылается обратно на import_files,
+    # поэтому FK создаётся отдельным ALTER после обеих таблиц.
+    part_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "parts.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_import_files_part_id",
+        )
+    )
     error: Mapped[str | None] = mapped_column(Text)
 
     batch: Mapped[ImportBatch] = relationship(back_populates="files")
@@ -124,8 +138,7 @@ class SpecRow(Base, TimestampMixin):
         ForeignKey("import_batches.id", ondelete="CASCADE"), nullable=False
     )
     match_key: Mapped[str] = mapped_column(String(200), nullable=False)
-    project_name: Mapped[str | None] = mapped_column(String(200))
-    product_name: Mapped[str | None] = mapped_column(String(200))
+    order_name: Mapped[str | None] = mapped_column(String(200))
     part_name: Mapped[str | None] = mapped_column(String(200))
     code: Mapped[str | None] = mapped_column(String(64))
     qty: Mapped[int | None] = mapped_column(Integer)

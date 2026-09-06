@@ -9,8 +9,8 @@ match_by: [source_file, code, part_name]
 
 columns:
   source_file: ["файл", "имя файла", "dxf", "файл dxf", "filename", "file"]
-  project_name: ["проект", "заказ", "объект", "project"]
-  product_name: ["изделие", "блок", "узел", "шкаф", "product", "unit"]
+  # Заказ — просто имя. Изделий и клиентов в платформе нет.
+  order_name: ["заказ", "проект", "объект", "order", "project"]
   part_name: ["наименование", "деталь", "название", "name", "part"]
   code: ["артикул", "код", "обозначение", "code", "sku", "id"]
   qty: ["количество", "кол-во", "кол", "qty", "count"]

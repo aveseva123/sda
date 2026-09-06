@@ -15,9 +15,9 @@ from app.api import (
     imports,
     materials,
     nesting,
+    orders,
     parts,
     presets,
-    projects,
     stock,
     toolpaths,
 )
@@ -48,7 +48,7 @@ app.add_middleware(
 )
 
 for router in (
-    projects.router,
+    orders.router,
     parts.router,
     materials.router,
     imports.router,

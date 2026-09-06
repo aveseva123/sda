@@ -5,7 +5,7 @@ import ImportPage from './pages/ImportPage'
 import MaterialsPage from './pages/MaterialsPage'
 import PartsPage from './pages/PartsPage'
 import PendingPage from './pages/PendingPage'
-import ProjectsPage from './pages/ProjectsPage'
+import FilesPage from './pages/FilesPage'
 import StockPage from './pages/StockPage'
 import { usePendingCount } from './lib/hooks'
 
@@ -25,8 +25,8 @@ export default function App() {
         <NavLink className="nav-link" to="/editor">
           Редактор раскроя
         </NavLink>
-        <NavLink className="nav-link" to="/projects">
-          Проекты
+        <NavLink className="nav-link" to="/files">
+          Файлы и заказы
         </NavLink>
         <NavLink className="nav-link" to="/parts">
           Детали
@@ -47,7 +47,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/import" replace />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/editor" element={<EditorPage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/files" element={<FilesPage />} />
           <Route path="/parts" element={<PartsPage />} />
           <Route path="/pending" element={<PendingPage />} />
           <Route path="/materials" element={<MaterialsPage />} />

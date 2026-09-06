@@ -87,6 +87,43 @@ def bazis_part(
     return path
 
 
+def repeated_parts(
+    path: Path,
+    *,
+    count: int = 3,
+    width: float = 600.0,
+    height: float = 300.0,
+    thickness: float = 18.0,
+) -> Path:
+    """Один лист с несколькими одинаковыми деталями.
+
+    Так выглядит реальная выгрузка: одна и та же полка разложена по листу
+    двадцать раз, и в дереве это должна быть одна позиция с количеством.
+    """
+    doc = _new_doc()
+    msp = doc.modelspace()
+    perimeter = f"PERIMETER D {thickness:.2f}"
+    doc.layers.add("BOARDS")
+    doc.layers.add(perimeter)
+
+    sheet_w = 2800.0
+    sheet_h = 2070.0
+    msp.add_lwpolyline(
+        [(0, 0), (sheet_w, 0), (sheet_w, -sheet_h), (0, -sheet_h)],
+        close=True,
+        dxfattribs={"layer": "BOARDS"},
+    )
+    for index in range(count):
+        y = -20.0 - index * (height + 20.0)
+        msp.add_lwpolyline(
+            [(20, y), (20 + width, y), (20 + width, y - height), (20, y - height)],
+            close=True,
+            dxfattribs={"layer": perimeter},
+        )
+    doc.saveas(path)
+    return path
+
+
 def bazis_multi_thickness(
     path: Path,
     *,

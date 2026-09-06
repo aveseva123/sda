@@ -24,27 +24,29 @@ export interface Style {
   text: string
 }
 
-export interface Product {
+/** Файл в буфере: он держит цвет и заказ. */
+export interface SourceFile {
   id: number
-  project_id: number
-  name: string
-  code: string | null
-  shade_index: number
-  style: Style | null
-  parts_count: number
-  parts_qty: number
-}
-
-export interface Project {
-  id: number
-  name: string
-  client: string | null
+  filename: string
+  relpath: string
+  order_name: string | null
   color: string
   color_index: number
-  deadline: string | null
   status: string
-  products: Product[]
-  parts_count: number
+  detected_source: string
+  sheets: number
+  positions: number
+  parts: number
+  needs_clarification: number
+  error: string | null
+}
+
+/** Заказ — просто имя и то, что под ним лежит. */
+export interface Order {
+  name: string
+  positions: number
+  parts: number
+  files: number
   needs_clarification: number
 }
 
@@ -80,10 +82,10 @@ export interface Clarification {
 
 export interface Part {
   id: number
-  product_id: number
-  product_name: string | null
-  project_id: number | null
-  project_name: string | null
+  source_file_id: number | null
+  source_file: string | null
+  source_sheet_index: number
+  order_name: string | null
   name: string
   code: string | null
   qty: number
@@ -102,7 +104,6 @@ export interface Part {
   thickness_confidence: number
   material_source: string
   clarification: Clarification | null
-  source_file: string | null
   style: Style | null
 }
 

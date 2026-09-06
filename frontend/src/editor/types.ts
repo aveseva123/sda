@@ -33,10 +33,11 @@ export interface PartGeometryData {
 export interface PartView {
   id: number
   name: string
-  product_id: number
-  product_name: string | null
-  project_id: number | null
-  project_name: string | null
+  order_name: string | null
+  source_file_id: number | null
+  source_file: string | null
+  /** Номер листа ВНУТРИ исходного файла: им размечается штриховка. */
+  source_sheet_index: number
   style: { fill: string; pattern: string; stroke: string; text: string } | null
   length: number | null
   width: number | null

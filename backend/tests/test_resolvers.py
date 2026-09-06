@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 import tests.factories as factories
-from app.core.colors import PROJECT_PALETTE, next_color_index, product_style, project_color
+from app.core.colors import FILE_PALETTE, file_color, next_color_index, part_style
 from app.dxf import read_file
 from app.dxf.layer_meta import parse_layer_attributes
 from app.importer.dedup import geometry_signature
@@ -154,8 +154,8 @@ def test_batch_default_material_is_used_as_fallback():
 def test_filename_template_parsing():
     parsed = parse_filename("Kvartira12_Shkaf-prihozhaya_Bok-levyy_18_2.dxf")
     assert parsed.template == "fusion_full"
-    assert parsed.project == "Kvartira12"
-    assert parsed.product == "Shkaf prihozhaya"
+    assert parsed.order == "Kvartira12"
+    assert parsed.group == "Shkaf prihozhaya"
     assert parsed.part == "Bok levyy"
     assert parsed.thickness == 18.0
     assert parsed.qty == 2
@@ -260,19 +260,22 @@ def test_overcut_depth_snaps_to_sheet_thickness():
 # --------------------------------------------------------------- цвета
 
 
-def test_project_colors_are_distinct():
-    colors = {project_color(i) for i in range(len(PROJECT_PALETTE))}
-    assert len(colors) == len(PROJECT_PALETTE)
+def test_file_colors_are_distinct():
+    colors = {file_color(i) for i in range(len(FILE_PALETTE))}
+    assert len(colors) == len(FILE_PALETTE)
 
 
 def test_next_color_index_fills_gaps():
     assert next_color_index([0, 1, 3]) == 2
 
 
-def test_products_differ_by_pattern_not_only_hue():
-    """Различимость не должна опираться только на оттенок."""
-    base = project_color(0)
-    styles = [product_style(base, i) for i in range(4)]
+def test_sheets_of_one_file_differ_by_pattern_not_only_hue():
+    """Штриховка размечает номер листа внутри файла.
+
+    Опираться только на оттенок нельзя: карта должна читаться и в ч/б.
+    """
+    base = file_color(0)
+    styles = [part_style(base, i) for i in range(4)]
     assert len({s["pattern"] for s in styles}) == 4
     assert len({s["fill"] for s in styles}) == 4
 

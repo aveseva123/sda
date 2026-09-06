@@ -134,8 +134,7 @@ def process(
         db,
         batch,
         ImportOptions(
-            project_name=payload.project_name,
-            product_name=payload.product_name,
+            order_name=payload.order_name,
             material_id=payload.material_id,
             filename_template=payload.filename_template,
             layer_preset_id=payload.layer_preset_id,

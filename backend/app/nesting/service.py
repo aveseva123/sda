@@ -13,16 +13,15 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.colors import product_style
+from app.core.colors import part_style
 from app.models import (
+    ImportFile,
     JobStatus,
     Material,
     NestingJob,
     Part,
     PartInstance,
     PartStatus,
-    Product,
-    Project,
     Sheet,
     StockItem,
 )
@@ -221,19 +220,13 @@ def layout_payload(db: Session, job: NestingJob) -> dict:
     part_ids = {part.id for _, part in pairs}
     parts = {part.id: part for _, part in pairs}
 
-    products = {
-        product.id: product
-        for product in db.scalars(
-            select(Product).where(
-                Product.id.in_({part.product_id for part in parts.values()})
-            )
-        ).all()
-    }
-    projects = {
-        project.id: project
-        for project in db.scalars(
-            select(Project).where(
-                Project.id.in_({product.project_id for product in products.values()})
+    files = {
+        record.id: record
+        for record in db.scalars(
+            select(ImportFile).where(
+                ImportFile.id.in_(
+                    {part.source_file_id for part in parts.values() if part.source_file_id}
+                )
             )
         ).all()
     }
@@ -244,21 +237,19 @@ def layout_payload(db: Session, job: NestingJob) -> dict:
 
     part_payload = {}
     for part in parts.values():
-        product = products.get(part.product_id)
-        project = projects.get(product.project_id) if product else None
-        style = (
-            product_style(project.color, product.shade_index)
-            if product and project
-            else None
+        source = files.get(part.source_file_id) if part.source_file_id else None
+        # Цвет — по файлу, штриховка — по листу внутри файла.
+        style = part_style(
+            source.color if source else "#7D82C5", part.source_sheet_index or 0
         )
         assigned = {row.target: row for row in assignments.get(part.id, [])}
         part_payload[part.id] = {
             "id": part.id,
             "name": part.name,
-            "product_id": part.product_id,
-            "product_name": product.name if product else None,
-            "project_id": project.id if project else None,
-            "project_name": project.name if project else None,
+            "order_name": part.order_name,
+            "source_file_id": part.source_file_id,
+            "source_file": source.filename if source else None,
+            "source_sheet_index": part.source_sheet_index,
             "style": style,
             "length": part.length,
             "width": part.width,

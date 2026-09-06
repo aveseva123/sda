@@ -123,7 +123,9 @@ export default function PropertiesPanel({
             </div>
             {singlePart && (
               <div className="small muted">
-                {singlePart.project_name} · {singlePart.product_name}
+                {singlePart.order_name ?? 'без заказа'} · {singlePart.source_file}
+                {singlePart.source_sheet_index > 0 &&
+                  ` · лист ${singlePart.source_sheet_index + 1} в файле`}
                 <br />
                 {singlePart.length?.toFixed(1)} × {singlePart.width?.toFixed(1)} ×{' '}
                 {singlePart.thickness ?? '—'} мм

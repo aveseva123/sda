@@ -122,7 +122,7 @@ export default function PendingPage() {
                   />
                 </th>
                 <th>Деталь</th>
-                <th>Проект / изделие</th>
+                <th>Заказ / файл</th>
                 <th className="num">Габарит, мм</th>
                 <th>Толщина</th>
                 <th>Материал</th>
@@ -147,8 +147,8 @@ export default function PendingPage() {
                     <Trace part={part} />
                   </td>
                   <td className="small">
-                    {part.project_name}
-                    <div className="muted">{part.product_name}</div>
+                    {part.order_name ?? <span className="muted">без заказа</span>}
+                    <div className="muted mono">{part.source_file}</div>
                   </td>
                   <td className="num">
                     {mm(part.length)} × {mm(part.width)}

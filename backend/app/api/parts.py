@@ -2,15 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.colors import product_style
+from app.core.colors import part_style
 from app.core.db import get_db
 from app.models import (
+    ImportFile,
     Material,
     Part,
     PartInstance,
     PartStatus,
-    Product,
-    Project,
     ResolveSource,
 )
 from app.schemas import (
@@ -25,15 +24,13 @@ router = APIRouter(prefix="/parts", tags=["Детали"])
 
 
 def _decorate(db: Session, parts: list[Part]) -> list[PartOut]:
+    """Дополняет детали тем, что живёт рядом: файлом, цветом, материалом."""
     if not parts:
         return []
-    product_ids = {p.product_id for p in parts}
-    products = {
-        p.id: p for p in db.scalars(select(Product).where(Product.id.in_(product_ids))).all()
-    }
-    project_ids = {p.project_id for p in products.values()}
-    projects = {
-        p.id: p for p in db.scalars(select(Project).where(Project.id.in_(project_ids))).all()
+    file_ids = {p.source_file_id for p in parts if p.source_file_id}
+    files = {
+        f.id: f
+        for f in db.scalars(select(ImportFile).where(ImportFile.id.in_(file_ids))).all()
     }
     material_ids = {p.material_id for p in parts if p.material_id}
     materials = {
@@ -44,14 +41,12 @@ def _decorate(db: Session, parts: list[Part]) -> list[PartOut]:
     out: list[PartOut] = []
     for part in parts:
         item = PartOut.model_validate(part)
-        product = products.get(part.product_id)
-        if product is not None:
-            item.product_name = product.name
-            project = projects.get(product.project_id)
-            if project is not None:
-                item.project_id = project.id
-                item.project_name = project.name
-                item.style = product_style(project.color, product.shade_index)
+        source = files.get(part.source_file_id) if part.source_file_id else None
+        item.source_file = source.filename if source else None
+        # Цвет — по файлу, штриховка — по листу внутри файла.
+        item.style = part_style(
+            source.color if source else "#7D82C5", part.source_sheet_index or 0
+        )
         material = materials.get(part.material_id) if part.material_id else None
         item.material_name = material.name if material else None
         out.append(item)
@@ -61,19 +56,19 @@ def _decorate(db: Session, parts: list[Part]) -> list[PartOut]:
 @router.get("", response_model=list[PartOut])
 def list_parts(
     db: Session = Depends(get_db),
-    project_id: int | None = None,
-    product_id: int | None = None,
+    order_name: str | None = None,
+    source_file_id: int | None = None,
     material_id: int | None = None,
     thickness: float | None = None,
     status: str | None = Query(default=None, description="ready | needs_clarification"),
     limit: int = Query(default=500, le=5000),
     offset: int = 0,
 ) -> list[PartOut]:
-    stmt = select(Part).join(Product, Product.id == Part.product_id)
-    if project_id is not None:
-        stmt = stmt.where(Product.project_id == project_id)
-    if product_id is not None:
-        stmt = stmt.where(Part.product_id == product_id)
+    stmt = select(Part)
+    if order_name is not None:
+        stmt = stmt.where(Part.order_name == order_name)
+    if source_file_id is not None:
+        stmt = stmt.where(Part.source_file_id == source_file_id)
     if material_id is not None:
         stmt = stmt.where(Part.material_id == material_id)
     if thickness is not None:
@@ -140,9 +135,6 @@ def bulk_assign(payload: BulkAssign, db: Session = Depends(get_db)) -> BulkAssig
 
     if payload.material_id is not None and db.get(Material, payload.material_id) is None:
         raise HTTPException(400, "Материал не найден")
-    if payload.product_id is not None and db.get(Product, payload.product_id) is None:
-        raise HTTPException(400, "Изделие не найдено")
-
     resolved = 0
     for part in parts:
         if payload.thickness is not None:
@@ -152,8 +144,8 @@ def bulk_assign(payload: BulkAssign, db: Session = Depends(get_db)) -> BulkAssig
         if payload.material_id is not None:
             part.material_id = payload.material_id
             part.material_source = ResolveSource.MANUAL
-        if payload.product_id is not None:
-            part.product_id = payload.product_id
+        if payload.order_name is not None:
+            part.order_name = payload.order_name
         _refresh_status(part)
         if part.status == PartStatus.READY:
             resolved += 1

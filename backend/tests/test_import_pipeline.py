@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 
 import tests.factories as factories
 from app.importer import ImportOptions, IncomingFile, create_batch, process_batch
-from app.models import ImportFile, Part, PartInstance, PartStatus, Product, Project
+from app.models import ImportFile, Part, PartInstance, PartStatus
 
 
 def _dxf_bytes(tmp_path: Path, maker, name: str, **kwargs) -> bytes:
@@ -99,41 +99,87 @@ def test_thickness_from_folder_name(db, materials, tmp_storage, tmp_path):
     assert part.status == PartStatus.READY
 
 
-def test_fusion_filename_template_builds_project_tree(db, materials, tmp_storage, tmp_path):
-    """Fusion не пишет проект и изделие в DXF — они едут в имени файла."""
+def test_filename_template_gives_order_and_part_name(db, materials, tmp_storage, tmp_path):
+    """Источник без метаданных в DXF: заказ и имя детали едут в имени файла."""
     data = _dxf_bytes(tmp_path, factories.fusion_part, "plain.dxf")
     files = [
         _incoming("Kvartira12_Shkaf-prihozhaya_Bok-levyy_18_2.dxf", data),
     ]
-    batch = create_batch(db, name="Fusion", files=files)
+    batch = create_batch(db, name="Из имени файла", files=files)
     process_batch(db, batch, ImportOptions())
 
-    project = db.scalar(select(Project).where(Project.name == "Kvartira12"))
-    assert project is not None
-    product = db.scalar(select(Product).where(Product.project_id == project.id))
-    assert product.name == "Shkaf prihozhaya"
-
     part = db.scalar(select(Part))
+    assert part.order_name == "Kvartira12", "заказ — просто имя, без клиентов и сроков"
     assert part.name == "Bok levyy"
     assert part.qty == 2
+
+    source = db.get(ImportFile, part.source_file_id)
+    assert source.order_name == "Kvartira12"
+    assert source.color.startswith("#"), "цвет закреплён за файлом"
+
     instances = db.scalar(select(func.count()).select_from(PartInstance))
     assert instances == 2, "на каждый экземпляр нужен свой стикер"
 
 
-def test_identical_parts_are_deduplicated(db, materials, tmp_storage, tmp_path):
-    data = _dxf_bytes(tmp_path, factories.fusion_part, "polka.dxf")
-    files = [
-        _incoming("Kv12_Shkaf_Polka_18_1.dxf", data),
-        _incoming("Kv12_Shkaf_Polka-2_18_1.dxf", data),
-        _incoming("Kv12_Shkaf_Polka-3_18_1.dxf", data),
-    ]
-    batch = create_batch(db, name="Дубли", files=files)
+def test_each_file_gets_its_own_colour(db, materials, tmp_storage, tmp_path):
+    """В раскрое рядом лежат детали из разных DXF — их различает цвет файла."""
+    first = _dxf_bytes(tmp_path, factories.fusion_part, "a.dxf", width=800, height=300)
+    second = _dxf_bytes(tmp_path, factories.fusion_part, "b.dxf", width=500, height=250)
+    batch = create_batch(
+        db,
+        name="Два файла",
+        files=[
+            _incoming("Zakaz_Gruppa_Bok_18_1.dxf", first),
+            _incoming("Zakaz_Gruppa_Polka_18_1.dxf", second),
+        ],
+    )
+    process_batch(db, batch, ImportOptions())
+
+    colours = {f.color for f in db.scalars(select(ImportFile)).all()}
+    assert len(colours) == 2, "разным файлам — разные цвета"
+
+
+def test_identical_parts_inside_one_file_are_deduplicated(db, materials, tmp_storage, tmp_path):
+    """Один разложенный лист содержит одну и ту же полку двадцать раз.
+
+    Дедупликация идёт В ПРЕДЕЛАХ ФАЙЛА: схлопнуть детали из разных DXF
+    нельзя — потеряется, из какого файла деталь приехала, а именно по этому
+    её и опознают в цеху.
+    """
+    path = tmp_path / "polki.dxf"
+    factories.repeated_parts(path, count=3, width=600, height=300, thickness=18.0)
+    batch = create_batch(
+        db,
+        name="Дубли в одном файле",
+        files=[_incoming("Kv12_Shkaf_Polka_18_1.dxf", path.read_bytes())],
+    )
     process_batch(db, batch, ImportOptions())
 
     parts = db.scalars(select(Part)).all()
     assert len(parts) == 1, "одинаковые детали схлопываются в позицию с количеством"
     assert parts[0].qty == 3
     assert db.scalar(select(func.count()).select_from(PartInstance)) == 3
+
+
+def test_identical_parts_in_different_files_stay_separate(db, materials, tmp_storage, tmp_path):
+    """Одинаковые детали из разных файлов не схлопываются: у них разный цвет
+    и разное происхождение, и в цеху их различают именно по файлу."""
+    data = _dxf_bytes(tmp_path, factories.fusion_part, "polka.dxf")
+    batch = create_batch(
+        db,
+        name="Дубли в разных файлах",
+        files=[
+            _incoming("Kv12_Shkaf_Polka_18_1.dxf", data),
+            _incoming("Kv12_Shkaf_Polka-2_18_1.dxf", data),
+        ],
+    )
+    process_batch(db, batch, ImportOptions())
+
+    parts = db.scalars(select(Part)).all()
+    assert len(parts) == 2
+    assert {p.source_file_id for p in parts} == {
+        f.id for f in db.scalars(select(ImportFile)).all()
+    }
 
 
 def test_zip_upload_is_unpacked(db, materials, tmp_storage, tmp_path):

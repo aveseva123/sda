@@ -13,12 +13,16 @@ from pathlib import PurePosixPath
 
 from app.core.config_files import app_config, filename_templates
 
+# Старые имена полей продолжают работать: конфиги у заказчика уже написаны.
+_FIELD_ALIASES = {"project": "order", "product": "group"}
+
 
 @dataclass(slots=True)
 class FilenameParse:
     template: str | None = None
-    project: str | None = None
-    product: str | None = None
+    # Заказ — просто имя. Группа — необязательная подпапка смысла внутри заказа.
+    order: str | None = None
+    group: str | None = None
     part: str | None = None
     thickness: float | None = None
     qty: int | None = None
@@ -32,8 +36,8 @@ class FilenameParse:
     def as_dict(self) -> dict:
         return {
             "template": self.template,
-            "project": self.project,
-            "product": self.product,
+            "order": self.order,
+            "group": self.group,
             "part": self.part,
             "thickness": self.thickness,
             "qty": self.qty,
@@ -59,7 +63,9 @@ def parse_filename(filename: str, *, template_name: str | None = None) -> Filena
     cfg = filename_templates()
     templates = cfg.get("templates", []) or []
     normalize = cfg.get("normalize", {}) or {}
-    humanize_fields = set(normalize.get("humanize_fields", []) or [])
+    humanize_fields = {
+        _FIELD_ALIASES.get(f, f) for f in normalize.get("humanize_fields", []) or []
+    }
     qty_min = int(normalize.get("qty_min", 1))
     qty_max = int(normalize.get("qty_max", 999))
 
@@ -76,7 +82,7 @@ def parse_filename(filename: str, *, template_name: str | None = None) -> Filena
     for tpl in templates:
         name = tpl.get("name", "?")
         delimiter = tpl.get("delimiter", "_")
-        fields = list(tpl.get("fields", []))
+        fields = [_FIELD_ALIASES.get(f, f) for f in tpl.get("fields", [])]
         required = set(tpl.get("required", []) or [])
         chunks = stem.split(delimiter)
 
@@ -120,7 +126,7 @@ def parse_filename(filename: str, *, template_name: str | None = None) -> Filena
         result.template = name
         result.thickness = thickness
         result.qty = qty
-        for key in ("project", "product", "part"):
+        for key in ("order", "group", "part"):
             raw = values.get(key)
             if raw is None:
                 continue

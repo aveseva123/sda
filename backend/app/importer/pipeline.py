@@ -19,7 +19,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.colors import next_color_index, project_color
+from app.core.colors import file_color, next_color_index
 from app.core.config_files import app_config
 from app.core.settings import get_settings
 from app.dxf import build_shapes, read_file
@@ -37,8 +37,6 @@ from app.models import (
     Part,
     PartInstance,
     PartStatus,
-    Product,
-    Project,
     ResolveSource,
     SpecRow,
 )
@@ -64,8 +62,8 @@ UNASSIGNED_PRODUCT = "Без изделия"
 class ImportOptions:
     """Что пользователь выбрал для этой загрузки."""
 
-    project_name: str | None = None
-    product_name: str | None = None
+    # Заказ — просто имя. Ни клиентов, ни изделий, ни сроков.
+    order_name: str | None = None
     material_id: int | None = None
     filename_template: str | None = None
     layer_preset_id: int | None = None
@@ -112,8 +110,7 @@ def create_batch(db: Session, *, name: str | None, files: list[IncomingFile]) ->
                 SpecRow(
                     batch_id=batch.id,
                     match_key=row.match_key,
-                    project_name=row.fields.get("project_name"),
-                    product_name=row.fields.get("product_name"),
+                    order_name=row.fields.get("order_name"),
                     part_name=row.fields.get("part_name"),
                     code=row.fields.get("code"),
                     qty=row.fields.get("qty"),
@@ -353,25 +350,13 @@ def _process_file(
 
     parsed_name = parse_filename(record.filename, template_name=options.filename_template)
 
-    project = _ensure_project(
-        db,
-        name=_first(
-            spec_row.project_name if spec_row else None,
-            options.project_name,
-            parsed_name.project,
-            UNASSIGNED_PROJECT,
-        ),
+    order_name = _first(
+        spec_row.order_name if spec_row else None,
+        options.order_name,
+        parsed_name.order,
+        parsed_name.group,
     )
-    product = _ensure_product(
-        db,
-        project=project,
-        name=_first(
-            spec_row.product_name if spec_row else None,
-            options.product_name,
-            parsed_name.product,
-            UNASSIGNED_PRODUCT,
-        ),
-    )
+    _tag_file(db, record, order_name)
 
     base_name = _first(
         spec_row.part_name if spec_row else None,
@@ -424,7 +409,8 @@ def _process_file(
         name = base_name if len(contours.shapes) == 1 else f"{base_name} ({index + 1})"
         part, is_duplicate = _upsert_part(
             db,
-            product=product,
+            record=record,
+            order_name=order_name,
             name=name,
             code=spec_row.code if spec_row else None,
             qty=qty,
@@ -557,7 +543,8 @@ def _resolve_part(
 def _upsert_part(
     db: Session,
     *,
-    product: Product,
+    record: ImportFile,
+    order_name: str | None,
     name: str,
     code: str | None,
     qty: int,
@@ -576,7 +563,7 @@ def _upsert_part(
     signature = geometry_signature(geometry, thickness)
 
     if dedup_enabled() and signature:
-        for existing in _parts_of(db, product.id):
+        for existing in _parts_of(db, record.id):
             if not existing.geometry:
                 continue
             # Материал — часть идентичности детали наравне с геометрией и
@@ -590,7 +577,9 @@ def _upsert_part(
                 return existing, True
 
     part = Part(
-        product_id=product.id,
+        source_file_id=record.id,
+        source_sheet_index=shape.sheet_index or 0,
+        order_name=order_name,
         name=name,
         code=code,
         qty=qty,
@@ -632,7 +621,7 @@ def _make_instances(db: Session, part: Part, qty: int) -> None:
         db.add(
             PartInstance(
                 part_id=part.id,
-                uid=f"P{part.product_id:04d}-D{part.id:06d}-{start + i + 1:03d}",
+                uid=f"F{part.source_file_id or 0:04d}-D{part.id:06d}-{start + i + 1:03d}",
             )
         )
     db.flush()
@@ -675,8 +664,11 @@ def _spec_rows(db: Session, batch_id: int) -> list[SpecRow]:
     return list(db.scalars(select(SpecRow).where(SpecRow.batch_id == batch_id)).all())
 
 
-def _parts_of(db: Session, product_id: int) -> list[Part]:
-    return list(db.scalars(select(Part).where(Part.product_id == product_id)).all())
+def _parts_of(db: Session, source_file_id: int) -> list[Part]:
+    """Детали одного файла — в его пределах и ищутся дубли."""
+    return list(
+        db.scalars(select(Part).where(Part.source_file_id == source_file_id)).all()
+    )
 
 
 def _material_refs(db: Session) -> list[MaterialRef]:
@@ -708,29 +700,23 @@ def _material_by_name(
     return candidates[0] if candidates else None
 
 
-def _ensure_project(db: Session, *, name: str) -> Project:
-    project = db.scalar(select(Project).where(Project.name == name))
-    if project is not None:
-        return project
-    used = [p.color_index for p in db.scalars(select(Project)).all()]
-    index = next_color_index(used)
-    project = Project(name=name, color_index=index, color=project_color(index))
-    db.add(project)
-    db.flush()
-    return project
+def _tag_file(db: Session, record: ImportFile, order_name: str | None) -> None:
+    """Закрепляет за файлом цвет и заказ.
 
-
-def _ensure_product(db: Session, *, project: Project, name: str) -> Product:
-    product = db.scalar(
-        select(Product).where(Product.project_id == project.id, Product.name == name)
-    )
-    if product is not None:
-        return product
-    siblings = db.scalars(select(Product).where(Product.project_id == project.id)).all()
-    product = Product(project_id=project.id, name=name, shade_index=len(siblings))
-    db.add(product)
+    Цвет выдаётся один раз на файл: в раскрое рядом лежат детали из разных
+    DXF, и вопрос «откуда эта деталь» — это вопрос «из какого файла».
+    """
+    if record.order_name is None and order_name:
+        record.order_name = order_name
+    if not record.color or record.color == "#7D82C5":
+        used = [
+            other.color_index
+            for other in db.scalars(select(ImportFile)).all()
+            if other.id != record.id
+        ]
+        record.color_index = next_color_index(used)
+        record.color = file_color(record.color_index)
     db.flush()
-    return product
 
 
 def _preset_resolver(db: Session, batch: ImportBatch, options: ImportOptions):

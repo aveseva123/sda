@@ -1,10 +1,17 @@
+"""Детали и их экземпляры.
+
+CRM-слоя в платформе нет: ни проектов с клиентами и сроками, ни изделий.
+Заказ — это просто имя, оно лежит текстом на детали. Принадлежность
+детали определяется файлом, из которого она приехала, и номером листа
+внутри этого файла: именно так технолог и опознаёт её в цеху.
+"""
+
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
-    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -21,61 +28,21 @@ from app.models.base import JSONType, TimestampMixin
 from app.models.enums import GrainMode, PartStatus, ResolveSource
 
 
-class Project(Base, TimestampMixin):
-    """Объект/заказ. Носитель базового цвета всей цветовой системы."""
-
-    __tablename__ = "projects"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    client: Mapped[str | None] = mapped_column(String(200))
-    # Индекс в палитре (различимой для дальтоников); hex вычисляется из него,
-    # но хранится тоже — чтобы технолог мог переопределить цвет вручную.
-    color_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    color: Mapped[str] = mapped_column(String(7), nullable=False, default="#1f77b4")
-    deadline: Mapped[date | None] = mapped_column(Date)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
-
-    products: Mapped[list[Product]] = relationship(
-        back_populates="project", cascade="all, delete-orphan"
-    )
-
-    __table_args__ = (UniqueConstraint("name", name="uq_projects_name"),)
-
-
-class Product(Base, TimestampMixin):
-    """Изделие внутри проекта (шкаф, тумба, стеллаж)."""
-
-    __tablename__ = "products"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
-    )
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    code: Mapped[str | None] = mapped_column(String(64))
-    # Оттенок/паттерн базового цвета проекта: цвет = проект, штриховка = изделие.
-    shade_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-    project: Mapped[Project] = relationship(back_populates="products")
-    parts: Mapped[list[Part]] = relationship(
-        back_populates="product", cascade="all, delete-orphan"
-    )
-
-    __table_args__ = (
-        UniqueConstraint("project_id", "name", name="uq_products_project_name"),
-    )
-
-
 class Part(Base, TimestampMixin):
     """Деталь — позиция с количеством, а не отдельный экземпляр."""
 
     __tablename__ = "parts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    product_id: Mapped[int] = mapped_column(
-        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    # Файл, из которого приехала деталь. Он же держит цвет и заказ.
+    source_file_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_files.id", ondelete="CASCADE")
     )
+    # Номер листа ВНУТРИ исходного файла: один DXF часто содержит
+    # несколько разложенных листов. Штриховка на карте — по этому номеру.
+    source_sheet_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Заказ — просто имя, без клиентов, изделий и сроков.
+    order_name: Mapped[str | None] = mapped_column(String(200))
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[str | None] = mapped_column(String(64))
     qty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -116,13 +83,12 @@ class Part(Base, TimestampMixin):
     # Переопределения правил глубин на уровне конкретной детали.
     depth_overrides: Mapped[dict | None] = mapped_column(JSONType)
 
-    product: Mapped[Product] = relationship(back_populates="parts")
     instances: Mapped[list[PartInstance]] = relationship(
         back_populates="part", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
-        Index("ix_parts_product", "product_id"),
+        Index("ix_parts_source_file", "source_file_id"),
         Index("ix_parts_status", "status"),
         Index("ix_parts_material_thickness", "material_id", "thickness"),
     )
