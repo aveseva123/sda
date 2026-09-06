@@ -183,16 +183,101 @@ def finish(db: Session, job: NestingJob) -> NestingJob:
 
     Незакрытый пункт — это несделанная работа: неразмеченные детали в цеху
     никто не найдёт, а несосчитанные всплывут на сборке.
+
+    Здесь же закрывается круг со складом: листы, которые ушли под фрезу,
+    списываются, а свободная полоса каждого листа возвращается деловым
+    отходом — если она достаточно велика, чтобы её стоило хранить.
     """
     if job.stage != JobStage.IN_PROGRESS:
         raise NestingError("Сначала возьмите раскрой в работу")
     missing = [item["title"] for item in checklist_state(job) if not item["done"]]
     if missing:
         raise NestingError("Не отмечено: " + "; ".join(missing))
+
     job.stage = JobStage.FINISHED
     job.finished_at = datetime.now(UTC)
     db.flush()
+    consume_stock(db, job)
     return job
+
+
+def _sheet_offcut(db: Session, job: NestingJob, sheet: Sheet) -> dict | None:
+    """Свободная полоса листа сверху — то, что останется после раскроя."""
+    material = db.get(Material, job.material_id)
+    trim_top = material.trim_top if material else 0.0
+    trim_left = material.trim_left if material else 0.0
+    trim_right = material.trim_right if material else 0.0
+
+    top = material.trim_bottom if material else 0.0
+    for instance, part in job_instances(db, job):
+        if instance.sheet_id != sheet.id or instance.y is None:
+            continue
+        height = float(part.width or 0.0)
+        if int(instance.rotation or 0) % 180 == 90:
+            height = float(part.length or 0.0)
+        top = max(top, float(instance.y) + height)
+
+    height = sheet.h - trim_top - top
+    width = sheet.w - trim_left - trim_right
+    if height <= 0 or width <= 0:
+        return None
+    return {"w": round(width, 1), "h": round(height, 1)}
+
+
+def consume_stock(db: Session, job: NestingJob) -> dict:
+    """Списывает израсходованные листы и возвращает на склад обрезки.
+
+    Поведение включается ``stock.consume_on_cut`` в config/app.yaml: у кого-то
+    склад ведётся в другой системе, и тогда платформа не должна в него лезть.
+    Целые листы, которых не хватило на складе, не выдумываются: сколько было,
+    столько и списывается, остальное остаётся расхождением для кладовщика.
+    """
+    from app.core.config_files import app_config
+    from app.stock import service as stock
+
+    cfg = (app_config().get("stock", {}) or {})
+    if not cfg.get("consume_on_cut", True):
+        return {"consumed": 0, "offcuts": 0, "skipped": "выключено в конфиге"}
+
+    sheets = list(
+        db.scalars(select(Sheet).where(Sheet.job_id == job.id).order_by(Sheet.index)).all()
+    )
+    available = stock.available_items(db, material_id=job.material_id, kind="sheet")
+
+    consumed = 0
+    offcuts = 0
+    for sheet in sheets:
+        source = next((item for item in available if item.qty > 0), None)
+        if source is None:
+            break
+        rest = _sheet_offcut(db, job, sheet)
+        spec = []
+        if rest is not None:
+            verdict = stock.judge_offcut(rest["w"], rest["h"])
+            if verdict.worth_keeping:
+                spec.append(
+                    stock.OffcutSpec(
+                        w=rest["w"],
+                        h=rest["h"],
+                        note=f"остаток листа {sheet.index + 1} · раскрой №{job.id}",
+                    )
+                )
+        result = stock.consume(
+            db,
+            item_id=source.id,
+            qty=1,
+            offcuts=spec,
+            reason=f"раскрой №{job.id}",
+            actor=job.operator,
+            sheet_id=sheet.id,
+        )
+        consumed += 1
+        offcuts += len(result.get("offcuts", []))
+        if source.qty <= 0:
+            available = [item for item in available if item.id != source.id]
+
+    db.flush()
+    return {"consumed": consumed, "offcuts": offcuts, "sheets": len(sheets)}
 
 
 def job_instances(db: Session, job: NestingJob) -> list[tuple[PartInstance, Part]]:

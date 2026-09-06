@@ -25,6 +25,8 @@ _PATH_TYPES = {
     "SPLINE",
     "ELLIPSE",
 }
+# Чистые дуги: им отводится свой допуск аппроксимации.
+_ARC_TYPES = {"ARC", "ELLIPSE"}
 _TEXT_TYPES = {"TEXT", "MTEXT"}
 _MAX_INSERT_DEPTH = 8
 
@@ -43,12 +45,15 @@ def read_file(path: str | Path) -> DxfScan:
 
 def scan_document(doc: Drawing) -> DxfScan:
     cfg = geometry_config()
-    tol = float(cfg.get("spline_tolerance", 0.05))
+    spline_tol = float(cfg.get("spline_tolerance", 0.05))
+    # Дуги и окружности аппроксимируются отдельным допуском: присадка ⌀8
+    # требует более гладкой окружности, чем декоративный сплайн.
+    arc_tol = float(cfg.get("arc_tolerance", spline_tol))
 
     warnings: list[str] = []
     primitives: list[Primitive] = []
     for entity in _flatten(doc.modelspace(), depth=0, warnings=warnings):
-        prim = _to_primitive(entity, tol, warnings)
+        prim = _to_primitive(entity, spline_tol, arc_tol, warnings)
         if prim is not None:
             primitives.append(prim)
 
@@ -84,7 +89,9 @@ def _flatten(container: Any, depth: int, warnings: list[str]):
             yield entity
 
 
-def _to_primitive(entity: Any, tol: float, warnings: list[str]) -> Primitive | None:
+def _to_primitive(
+    entity: Any, spline_tol: float, arc_tol: float, warnings: list[str]
+) -> Primitive | None:
     dxftype = entity.dxftype()
     layer = str(getattr(entity.dxf, "layer", "0"))
 
@@ -105,7 +112,7 @@ def _to_primitive(entity: Any, tol: float, warnings: list[str]) -> Primitive | N
             center=center,
             radius=float(entity.dxf.radius),
             closed=True,
-            points=_circle_points(center, float(entity.dxf.radius), tol),
+            points=_circle_points(center, float(entity.dxf.radius), arc_tol),
         )
 
     if dxftype not in _PATH_TYPES:
@@ -117,9 +124,10 @@ def _to_primitive(entity: Any, tol: float, warnings: list[str]) -> Primitive | N
         warnings.append(f"{dxftype} на слое «{layer}» не разобран: {exc}")
         return None
 
-    # flattening() держит стрелку прогиба не больше tol — это и есть допуск
-    # аппроксимации сплайнов и дуг из ТЗ.
-    points = [(round(v.x, 6), round(v.y, 6)) for v in path.flattening(distance=tol)]
+    # flattening() держит стрелку прогиба не больше допуска. Для чистых дуг
+    # берётся arc_tolerance, для всего остального — spline_tolerance.
+    tolerance = arc_tol if dxftype in _ARC_TYPES else spline_tol
+    points = [(round(v.x, 6), round(v.y, 6)) for v in path.flattening(distance=tolerance)]
     points = _drop_consecutive_duplicates(points)
     if len(points) < 2:
         return None

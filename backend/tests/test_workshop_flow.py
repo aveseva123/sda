@@ -211,3 +211,60 @@ def test_tool_api_lists_and_updates(client, db):
     replaced = client.post(f"/api/tools/{tool['id']}/resource", json={"used": 0})
     assert replaced.json()["resource"]["used"] == 0
     assert replaced.json()["resource"]["low"] is False
+
+
+# ------------------------------------------------- склад закрывается сам
+
+
+def test_finished_job_writes_off_sheets_and_keeps_offcut(db, materials, tmp_path, tmp_storage):
+    """«Раскрой завершён» закрывает круг: лист ушёл, обрезок вернулся.
+
+    Это ровно тот сценарий, который назвал заказчик: отрезал лист — лист со
+    склада исчез, а крупный остаток остался, чтобы пустить его в дело.
+    """
+    from app.stock import service as stock
+
+    material = db.scalar(select(Material).where(Material.thickness == 18.0))
+    stock.receive(db, material_id=material.id, w=material.sheet_w, h=material.sheet_h, qty=3)
+
+    job = nesting.create_job(db, material_id=material.id, thickness=18.0, operator="Севак")
+    analyzed = intake.analyze(db, job, _files(tmp_path, count=1))
+    intake.confirm(
+        db, job, analyzed["batch_id"],
+        [{"relpath": analyzed["files"][0]["relpath"], "thickness": 18.0}],
+    )
+    nesting.arrange(db, job)
+
+    def sheets_left() -> int:
+        items = stock.available_items(db, material_id=material.id, kind="sheet")
+        return sum(item.qty for item in items)
+
+    before = sheets_left()
+
+    nesting.take(db, job, "Севак")
+    nesting.set_checklist(db, job, {"marking": True, "sorted": True, "counted": True})
+    nesting.finish(db, job)
+
+    assert sheets_left() == before - 1, "лист под фрезой списан со склада"
+
+    offcuts = stock.available_items(db, material_id=material.id, kind="offcut")
+    assert offcuts, "крупный остаток вернулся на склад деловым отходом"
+    assert offcuts[0].note and f"раскрой №{job.id}" in offcuts[0].note
+
+
+def test_stock_untouched_when_disabled_in_config(db, materials, monkeypatch, tmp_storage):
+    """Если склад ведётся в другой системе — платформа в него не лезет."""
+    from app.core import config_files
+    from app.stock import service as stock
+
+    material = db.scalar(select(Material).where(Material.thickness == 18.0))
+    stock.receive(db, material_id=material.id, w=material.sheet_w, h=material.sheet_h, qty=2)
+    job = nesting.create_job(db, material_id=material.id, thickness=18.0, operator="Севак")
+
+    original = config_files.app_config()
+    patched = {**original, "stock": {**original.get("stock", {}), "consume_on_cut": False}}
+    monkeypatch.setattr(config_files, "app_config", lambda: patched)
+
+    result = nesting.consume_stock(db, job)
+    assert result["consumed"] == 0
+    assert result["skipped"]
