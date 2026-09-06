@@ -804,8 +804,8 @@ canvas.preview {
   position: absolute;
   right: 16px;
   top: 14px;
-  width: 196px;
-  max-height: 42vh;
+  width: 214px;
+  max-height: 52vh;
   overflow-y: auto;
   padding: 10px 12px;
   border: 1px solid var(--line);
@@ -813,15 +813,46 @@ canvas.preview {
   background: rgba(20, 23, 28, 0.94);
 }
 
+.legend-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.legend-head .lbl { flex: 1; text-align: left; }
+.legend-chevron { color: var(--ink-3); font-size: 14px; line-height: 1; }
+.legend.closed { padding-bottom: 8px; }
+
+.legend-body { margin-top: 4px; }
+
+.legend-section {
+  margin-top: 10px;
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.legend-section:first-child { margin-top: 6px; }
+
 .legend-row {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 11.5px;
-  margin-top: 7px;
+  min-height: 20px;
 }
 
 .legend-row .mono { font-size: 11px; }
+.legend-count { color: var(--ink-3); }
 .legend-note {
   margin-top: 9px;
   padding-top: 8px;

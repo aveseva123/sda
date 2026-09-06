@@ -6,6 +6,7 @@ import BufferPanel from '../components/editor/BufferPanel'
 import CanvasStage, { type Move, type StageHandle } from '../components/editor/CanvasStage'
 import IntakeDialog, { type Placement } from '../components/editor/IntakeDialog'
 import JobFlow from '../components/editor/JobFlow'
+import MapLegend from '../components/editor/MapLegend'
 import PropertiesPanel from '../components/editor/PropertiesPanel'
 import type { Collision, Layout, Selection, ToolpathPreset } from '../editor/types'
 import { emptySelection } from '../editor/types'
@@ -774,23 +775,7 @@ export default function EditorPage() {
           </div>
           )}
 
-          {legend.length > 0 && (
-            <div className="legend">
-              <div className="lbl">Файлы на листе</div>
-              {legend.map((row) => (
-                <div className="legend-row" key={row.id}>
-                  <span className="swatch" style={{ background: row.color }} />
-                  <span className="mono ellipsis grow">{row.name}</span>
-                  <span className="mono" style={{ color: 'var(--ink-3)' }}>
-                    {row.count}
-                  </span>
-                </div>
-              ))}
-              <div className="legend-note">
-                штриховка — второй и следующий листы внутри файла
-              </div>
-            </div>
-          )}
+          {layout && <MapLegend layout={layout} files={legend} />}
 
           {layout && (
             <AlignBar
