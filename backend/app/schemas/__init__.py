@@ -445,11 +445,64 @@ class NestingJobIn(BaseModel):
     material_id: int
     thickness: float = Field(gt=0)
     name: str | None = None
+    operator: str | None = None
     sheet_w: float | None = Field(default=None, gt=0)
     sheet_h: float | None = Field(default=None, gt=0)
     # Не указан — подберётся по паре «материал + толщина».
     preset_id: int | None = None
     auto_arrange: bool = True
+
+
+class FileDecisionIn(BaseModel):
+    """Ответ оператора по одному файлу из диалога добавления."""
+
+    relpath: str
+    thickness: float = Field(gt=0)
+    material_id: int | None = None
+    order_name: str | None = None
+    product_name: str | None = None
+    # none | along | across — направление волокна, если материал текстурный.
+    grain: str = "none"
+
+
+class ConfirmFilesIn(BaseModel):
+    batch_id: int
+    files: list[FileDecisionIn] = Field(min_length=1)
+
+
+class ToolIn(BaseModel):
+    """Фреза в библиотеке. Слот пуст — лежит в ящике, ставится вручную."""
+
+    name: str
+    type: str = "end_mill"
+    diameter: float = Field(gt=0)
+    slot: int | None = Field(default=None, ge=1)
+    flute_length: float | None = None
+    total_length: float | None = None
+    flutes: int | None = None
+    shank: float | None = None
+    article: str | None = None
+    rpm: int = 18000
+    feed: float = 4000.0
+    plunge_feed: float = 1200.0
+    step_down: float = 6.0
+    resource_used: float = 0.0
+    resource_limit: float | None = None
+    resource_unit: str = "м"
+    modes: list[dict] | None = None
+
+
+class ToolResourceIn(BaseModel):
+    used: float = Field(ge=0)
+    limit: float | None = Field(default=None, gt=0)
+
+
+class TakeJobIn(BaseModel):
+    operator: str = Field(min_length=1, max_length=120)
+
+
+class ChecklistIn(BaseModel):
+    items: dict[str, bool]
 
 
 class JobPresetIn(BaseModel):
@@ -465,6 +518,8 @@ class NestingJobOut(ORMModel):
     material_id: int
     thickness: float
     status: str
+    stage: str
+    operator: str | None
     version: int
     preset_id: int | None
     utilization: float | None

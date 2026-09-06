@@ -1,16 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from pathlib import PurePosixPath
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.importer import IncomingFile
+from app.importer.pipeline import max_upload_bytes
 from app.models import NestingJob
-from app.nesting import service
+from app.nesting import intake, service
 from app.schemas import (
+    ChecklistIn,
     CollisionOut,
+    ConfirmFilesIn,
     JobPresetIn,
     MoveRequest,
     NestingJobIn,
     NestingJobOut,
+    TakeJobIn,
 )
 
 router = APIRouter(prefix="/nesting", tags=["Раскрой"])
@@ -34,6 +41,84 @@ def create_job(payload: NestingJobIn, db: Session = Depends(get_db)) -> NestingJ
         return service.create_job(db, **payload.model_dump())
     except service.NestingError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/jobs/{job_id}/files", response_model=dict)
+async def add_files(
+    job_id: int,
+    files: list[UploadFile] = File(..., description="DXF, ZIP или папка"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Первый шаг добавления файлов: разбор и карточки для диалога.
+
+    Деталей ещё не создаётся: сначала оператор подтверждает толщину, проект,
+    изделие и волокно по каждому файлу.
+    """
+    job = _require(db, job_id)
+    if not files:
+        raise HTTPException(400, "Не выбрано ни одного файла")
+
+    limit = max_upload_bytes()
+    total = 0
+    incoming: list[IncomingFile] = []
+    for upload_file in files:
+        data = await upload_file.read()
+        total += len(data)
+        if total > limit:
+            raise HTTPException(
+                413, f"Суммарный размер загрузки больше {limit // 1024 // 1024} МБ"
+            )
+        filename = PurePosixPath((upload_file.filename or "file").replace("\\", "/")).name
+        incoming.append(IncomingFile(filename=filename, relpath=filename, data=data))
+
+    return intake.analyze(db, job, incoming)
+
+
+@router.post("/jobs/{job_id}/files/confirm", response_model=dict)
+def confirm_files(
+    job_id: int, payload: ConfirmFilesIn, db: Session = Depends(get_db)
+) -> dict:
+    """Второй шаг: решения оператора приняты, детали ложатся на листы."""
+    job = _require(db, job_id)
+    try:
+        result = intake.confirm(
+            db, job, payload.batch_id, [d.model_dump() for d in payload.files]
+        )
+        if result["added"]:
+            result["layout"] = service.arrange(db, job)
+    except (ValueError, service.NestingError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return result
+
+
+@router.post("/jobs/{job_id}/take", response_model=dict)
+def take_job(job_id: int, payload: TakeJobIn, db: Session = Depends(get_db)) -> dict:
+    """«Взял в работу»: у листа появляется оператор."""
+    job = _require(db, job_id)
+    try:
+        service.take(db, job, payload.operator)
+    except service.NestingError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"stage": job.stage, "operator": job.operator}
+
+
+@router.put("/jobs/{job_id}/checklist", response_model=dict)
+def set_checklist(job_id: int, payload: ChecklistIn, db: Session = Depends(get_db)) -> dict:
+    """Отметки чеклиста: маркировка, сортировка, подсчёт."""
+    job = _require(db, job_id)
+    service.set_checklist(db, job, payload.items)
+    return {"checklist": service.checklist_state(job)}
+
+
+@router.post("/jobs/{job_id}/finish", response_model=dict)
+def finish_job(job_id: int, db: Session = Depends(get_db)) -> dict:
+    """«Раскрой завершён» — только при полностью отмеченном чеклисте."""
+    job = _require(db, job_id)
+    try:
+        service.finish(db, job)
+    except service.NestingError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"stage": job.stage, "finished_at": job.finished_at}
 
 
 @router.get("/jobs/{job_id}/layout", response_model=dict)

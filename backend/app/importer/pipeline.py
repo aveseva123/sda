@@ -69,6 +69,10 @@ class ImportOptions:
     layer_preset_id: int | None = None
     # Ручное назначение семантики слоям в мастере — перекрывает пресет.
     layer_overrides: dict[str, str] = field(default_factory=dict)
+    # Решения оператора по каждому файлу из диалога добавления в раскрой:
+    # {relpath: {thickness, material_id, order_name, product_name, grain}}.
+    # Это не подсказка, а ответ живого человека — он главнее резолверов.
+    file_overrides: dict[str, dict] = field(default_factory=dict)
 
 
 def batch_dir(batch_id: int) -> Path:
@@ -345,17 +349,21 @@ def _process_file(
     record.detected_sheets = contours.sheets_as_dicts()
 
     spec_row = lookup(spec_index, record.filename)
+    override = options.file_overrides.get(record.relpath) or {}
 
     from app.resolve.filename import parse_filename
 
     parsed_name = parse_filename(record.filename, template_name=options.filename_template)
 
     order_name = _first(
+        override.get("order_name"),
         spec_row.order_name if spec_row else None,
         options.order_name,
         parsed_name.order,
         parsed_name.group,
     )
+    product_name = _first(override.get("product_name"), parsed_name.group)
+    grain = str(override.get("grain") or GrainMode.NONE)
     _tag_file(db, record, order_name)
 
     base_name = _first(
@@ -388,6 +396,7 @@ def _process_file(
             materials=materials,
             known_thicknesses=known_thicknesses,
             spec_row=spec_row,
+            override=override,
         )
         accepted = (
             resolved["thickness_accepted"]
@@ -411,6 +420,8 @@ def _process_file(
             db,
             record=record,
             order_name=order_name,
+            product_name=product_name,
+            grain=grain,
             name=name,
             code=spec_row.code if spec_row else None,
             qty=qty,
@@ -443,8 +454,20 @@ def _process_file(
                 }
             )
 
+    # Оператор указывает одну толщину на файл. Если слои чертежа говорят
+    # иное — молчать нельзя: деталь уедет на чужой лист и будет прорезана
+    # насквозь. Расхождение видно в отчёте о добавлении файлов.
+    conflicts: list[dict] = []
+    if override.get("thickness") is not None:
+        declared = float(override["thickness"])
+        for shape in contours.shapes:
+            hint = shape.thickness_hint
+            if hint is not None and abs(hint - declared) > 0.01:
+                conflicts.append({"layer": shape.source_layer, "thickness": hint})
+
     record.resolve_trace = {
         "filename": parsed_name.as_dict(),
+        "thickness_conflicts": conflicts,
         "layer_mapping": mapping.as_dict(),
         "sheets": record.detected_sheets,
         "geometry_warnings": contours.warnings + scan.warnings,
@@ -480,12 +503,16 @@ def _resolve_part(
     materials: list[MaterialRef],
     known_thicknesses: list[float] | None,
     spec_row,
+    override: dict | None = None,
 ) -> dict:
     """Определяет толщину и материал ОДНОЙ детали.
 
     Порядок источников: глубина контура из имени слоя -> общая цепочка
-    резолверов по файлу -> спецификация (перекрывает всё, она достовернее).
+    резолверов по файлу -> спецификация (перекрывает всё, она достовернее)
+    -> решение оператора в диалоге (перекрывает и её: человек смотрит на
+    настоящий лист).
     """
+    override = override or {}
     thickness_res = resolve_thickness(
         ResolveContext(
             filename=record.filename,
@@ -531,6 +558,22 @@ def _resolve_part(
                 "отсутствует в справочнике"
             )
 
+    if override.get("thickness") is not None:
+        thickness = float(override["thickness"])
+        thickness_source = ResolveSource.MANUAL
+        thickness_accepted = True
+    if override.get("material_id") is not None:
+        matched = next(
+            (m for m in materials if m.id == int(override["material_id"])), None
+        )
+        if matched is not None:
+            material_res.material_id = matched.id
+            material_res.material_name = matched.name
+            material_res.source = ResolveSource.MANUAL
+            material_res.confidence = 1.0
+            material_res.accepted = True
+            material_res.note = "выбрано оператором при добавлении файла"
+
     return {
         "thickness": thickness,
         "thickness_source": thickness_source,
@@ -545,6 +588,8 @@ def _upsert_part(
     *,
     record: ImportFile,
     order_name: str | None,
+    product_name: str | None,
+    grain: str,
     name: str,
     code: str | None,
     qty: int,
@@ -580,6 +625,7 @@ def _upsert_part(
         source_file_id=record.id,
         source_sheet_index=shape.sheet_index or 0,
         order_name=order_name,
+        product_name=product_name,
         name=name,
         code=code,
         qty=qty,
@@ -587,7 +633,7 @@ def _upsert_part(
         width=spec_row.width if spec_row and spec_row.width else shape.width,
         thickness=thickness,
         material_id=material_res.material_id,
-        grain=(spec_row.grain if spec_row and spec_row.grain else GrainMode.NONE),
+        grain=_first(spec_row.grain if spec_row else None, grain, GrainMode.NONE),
         edge_top=spec_row.edge_top if spec_row else None,
         edge_bottom=spec_row.edge_bottom if spec_row else None,
         edge_left=spec_row.edge_left if spec_row else None,

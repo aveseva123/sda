@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -18,6 +19,7 @@ from app.cutting import service as cutting
 from app.models import (
     CuttingPreset,
     ImportFile,
+    JobStage,
     JobStatus,
     Material,
     NestingJob,
@@ -57,6 +59,7 @@ def create_job(
     sheet_w: float | None = None,
     sheet_h: float | None = None,
     preset_id: int | None = None,
+    operator: str | None = None,
     auto_arrange: bool = True,
 ) -> NestingJob:
     """Создаёт задание и, если попросили, сразу раскладывает детали.
@@ -80,6 +83,8 @@ def create_job(
         name=name or f"{material.name} {thickness:g} мм",
         material_id=material_id,
         thickness=thickness,
+        operator=(operator or None),
+        stage=JobStage.PLANNING,
         status=JobStatus.DRAFT,
         params={
             "sheet_w": sheet_w or material.sheet_w,
@@ -90,7 +95,9 @@ def create_job(
     db.add(job)
     db.flush()
 
-    if auto_arrange:
+    # Раскладывать нечего, пока в раскрой не добавили файлы: пустое задание
+    # — это нормальное начало работы, а не ошибка.
+    if auto_arrange and job_instances(db, job):
         arrange(db, job)
     return job
 
@@ -123,6 +130,67 @@ def set_preset(db: Session, job: NestingJob, preset_id: int | None) -> NestingJo
     if preset_id is not None and preset is None:
         raise NestingError("Пресет раскроя не найден")
     _apply_preset(job, preset)
+    db.flush()
+    return job
+
+
+# Чеклист закрытия раскроя — ровно то, что цех проверяет у стола.
+CHECKLIST: tuple[tuple[str, str], ...] = (
+    ("marking", "Маркировка сделана"),
+    ("sorted", "Детали отсортированы по проектам и изделиям"),
+    ("counted", "Количество деталей посчитано"),
+)
+
+
+def checklist_state(job: NestingJob) -> list[dict]:
+    saved = job.checklist or {}
+    return [
+        {"key": key, "title": title, "done": bool(saved.get(key))}
+        for key, title in CHECKLIST
+    ]
+
+
+def take(db: Session, job: NestingJob, operator: str) -> NestingJob:
+    """«Взял в работу»: у листа появляется хозяин.
+
+    Учётных записей в платформе нет — в цеху их не заводят, поэтому оператор
+    просто называет себя. Имя уходит в журнал и в стикеры.
+    """
+    operator = (operator or "").strip()
+    if not operator:
+        raise NestingError("Назовите оператора — кто берёт лист в работу")
+    job.operator = operator
+    job.stage = JobStage.IN_PROGRESS
+    job.taken_at = datetime.now(UTC)
+    db.flush()
+    return job
+
+
+def set_checklist(db: Session, job: NestingJob, values: dict) -> NestingJob:
+    """Отметки чеклиста. Ставятся по ходу работы, до завершения."""
+    known = {key for key, _ in CHECKLIST}
+    saved = dict(job.checklist or {})
+    for key, value in values.items():
+        if key in known:
+            saved[key] = bool(value)
+    job.checklist = saved
+    db.flush()
+    return job
+
+
+def finish(db: Session, job: NestingJob) -> NestingJob:
+    """«Раскрой завершён». Закрывается только по полному чеклисту.
+
+    Незакрытый пункт — это несделанная работа: неразмеченные детали в цеху
+    никто не найдёт, а несосчитанные всплывут на сборке.
+    """
+    if job.stage != JobStage.IN_PROGRESS:
+        raise NestingError("Сначала возьмите раскрой в работу")
+    missing = [item["title"] for item in checklist_state(job) if not item["done"]]
+    if missing:
+        raise NestingError("Не отмечено: " + "; ".join(missing))
+    job.stage = JobStage.FINISHED
+    job.finished_at = datetime.now(UTC)
     db.flush()
     return job
 
@@ -363,6 +431,9 @@ def layout_payload(db: Session, job: NestingJob) -> dict:
                 db.get(CuttingPreset, job.preset_id) if job.preset_id else None
             ),
             "preset_snapshot": job.preset_snapshot,
+            "operator": job.operator,
+            "stage": job.stage,
+            "checklist": checklist_state(job),
         },
         "sheets": [
             {

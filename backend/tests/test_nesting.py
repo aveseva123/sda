@@ -197,9 +197,19 @@ def test_layout_payload_has_everything_the_canvas_needs(db, job_ready):
     assert payload["sheets"][0]["trim"]["left"] >= 0, "обрезка кромок для полезной области"
 
 
-def test_job_without_ready_parts_is_rejected(db, materials):
+def test_new_job_starts_empty(db, materials):
+    """Работа начинается с раскроя, а не с файлов: пустое задание — норма.
+
+    Файлы добавляются в уже созданный раскрой, поэтому отсутствие деталей на
+    старте не ошибка. Ошибкой это становится только при попытке разложить.
+    """
+    job = nesting.create_job(db, material_id=materials[0].id, thickness=18.0)
+    assert job.id is not None
+    assert job.stage == "planning"
+    assert db.scalars(select(Sheet).where(Sheet.job_id == job.id)).all() == []
+
     with pytest.raises(nesting.NestingError, match="нет готовых деталей"):
-        nesting.create_job(db, material_id=materials[0].id, thickness=18.0)
+        nesting.arrange(db, job)
 
 
 # ----------------------------------------------------------------- API

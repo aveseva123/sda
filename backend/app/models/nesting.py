@@ -16,7 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 from app.models.base import JSONType, TimestampMixin
-from app.models.enums import JobStatus, ToolType
+from app.models.enums import JobStage, JobStatus, ToolType
 
 
 class NestingJob(Base, TimestampMixin):
@@ -47,6 +47,17 @@ class NestingJob(Base, TimestampMixin):
     )
     utilization: Mapped[float | None] = mapped_column(Float)
     error: Mapped[str | None] = mapped_column(Text)
+
+    # Кто ведёт этот лист. Учётных записей в платформе нет — в цеху их не
+    # заводят, поэтому оператор просто называет себя, когда берёт лист.
+    operator: Mapped[str | None] = mapped_column(String(120))
+    stage: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=JobStage.PLANNING
+    )
+    taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Чеклист закрытия: {"marking": true, "sorted": false, "counted": false}.
+    checklist: Mapped[dict | None] = mapped_column(JSONType)
 
     sheets: Mapped[list[Sheet]] = relationship(
         back_populates="job", cascade="all, delete-orphan"
@@ -93,6 +104,28 @@ class Tool(Base, TimestampMixin):
     step_down: Mapped[float] = mapped_column(Float, nullable=False, default=8.0)
     # Попутно / встречно.
     direction: Mapped[str] = mapped_column(String(16), nullable=False, default="climb")
+
+    # Слот магазина станка. Пусто — фреза лежит в ящике и ставится вручную:
+    # смена инструмента у Дайхонга ручная, и это надо видеть заранее.
+    slot: Mapped[int | None] = mapped_column(Integer)
+    # Рабочая длина и геометрия — по ним видно, пройдёт ли фреза толщину.
+    flute_length: Mapped[float | None] = mapped_column(Float)
+    total_length: Mapped[float | None] = mapped_column(Float)
+    flutes: Mapped[int | None] = mapped_column(Integer)
+    shank: Mapped[float | None] = mapped_column(Float)
+    article: Mapped[str | None] = mapped_column(String(64))
+    # Ресурс считается по пройденному в материале пути (или числу отверстий).
+    resource_used: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    resource_limit: Mapped[float | None] = mapped_column(Float)
+    resource_unit: Mapped[str] = mapped_column(String(16), nullable=False, default="м")
+    # Режимы по материалам: [{"material": "ЛДСП 18", "rpm": .., "feed": .., "step_z": ..}]
+    modes: Mapped[list | None] = mapped_column(JSONType)
+    is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    @property
+    def min_radius(self) -> float:
+        """Минимальный внутренний радиус, который эта фреза может выбрать."""
+        return round(self.diameter / 2.0, 3)
 
 
 class NcProgram(Base, TimestampMixin):

@@ -43,6 +43,8 @@ class Part(Base, TimestampMixin):
     source_sheet_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Заказ — просто имя, без клиентов, изделий и сроков.
     order_name: Mapped[str | None] = mapped_column(String(200))
+    # Изделие внутри проекта: по нему детали сортируются после раскроя.
+    product_name: Mapped[str | None] = mapped_column(String(200))
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[str | None] = mapped_column(String(64))
     qty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

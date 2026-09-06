@@ -79,6 +79,18 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
+class JobStage(StrEnum):
+    """Стадия работы цеха над раскроем — то, что видит оператор.
+
+    Отдельно от ``JobStatus``: тот говорит, посчитана ли раскладка, а этот —
+    взял ли кто-то лист в работу и закрыт ли он по чеклисту.
+    """
+
+    PLANNING = "planning"        # раскладка, лист ещё не в работе
+    IN_PROGRESS = "in_progress"  # оператор нажал «Взял в работу»
+    FINISHED = "finished"        # чеклист заполнен, раскрой завершён
+
+
 class StockKind(StrEnum):
     SHEET = "sheet"      # целый лист
     OFFCUT = "offcut"    # деловой отход

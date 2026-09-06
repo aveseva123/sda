@@ -21,6 +21,7 @@ from app.api import (
     presets,
     stock,
     toolpaths,
+    tools,
 )
 from app.core.settings import get_settings
 
@@ -56,6 +57,7 @@ for router in (
     stock.router,
     nesting.router,
     toolpaths.router,
+    tools.router,
     cutting.router,
     presets.router,
 ):
