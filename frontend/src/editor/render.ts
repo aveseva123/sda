@@ -62,7 +62,15 @@ const REST_FILL = () => ink('--rest-fill', '#232A32')
 const LABEL_INK = () => ink('--canvas-ink', '#F2F4F6')
 const DIM_INK = () => ink('--canvas-ink-2', '#AEB6C0')
 const FAINT_INK = () => ink('--canvas-ink-3', '#69717D')
+/**
+ * Белым на холсте были обозначены пять разных вещей: выделенная деталь, её
+ * угловые маркеры, подсветка под курсором, выбранный вектор внутри детали,
+ * значок закрепления и рамка резинового выделения. Всё это разные смыслы, и
+ * на светлом фоне белый вдобавок не виден вовсе.
+ */
 const SELECT = () => ink('--canvas-select', '#FFFFFF')
+const HOVER_INK = () => ink('--canvas-hover', 'rgba(255,255,255,0.5)')
+const PIN_INK = () => ink('--canvas-pin', '#F2F4F6')
 const DANGER = () => ink('--canvas-danger', '#D9694A')
 const PART_EDGE = () => ink('--part-edge', 'rgba(226,231,238,0.62)')
 const LABEL_PLATE = () => ink('--canvas-plate', 'rgba(10,12,15,0.72)')
@@ -345,7 +353,9 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
 
     if (input.hoveredInstance === instance.id && !isSelected) {
       tracePath(ctx, placed.outer, toScreen, true)
-      ctx.strokeStyle = alpha(SELECT(), 0.5)
+      // Подсветка под курсором: слабее выделения, иначе непонятно, что уже
+      // выбрано, а что просто под мышью.
+      ctx.strokeStyle = HOVER_INK()
       ctx.lineWidth = 2
       ctx.stroke()
     }
@@ -745,7 +755,7 @@ function drawPin(
 ): void {
   const [, , maxX, maxY] = placed.bbox
   const s = toScreen([maxX, maxY])
-  ctx.fillStyle = SELECT()
+  ctx.fillStyle = PIN_INK()
   ctx.beginPath()
   ctx.arc(s[0] - 6, s[1] + 6, 3.2, 0, Math.PI * 2)
   ctx.fill()
