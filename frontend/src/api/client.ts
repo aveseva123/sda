@@ -1,6 +1,7 @@
-import type { Collision, Layout, ToolpathPreset } from '../editor/types'
+import type { Collision, Layout, PresetSnapshot, ToolpathPreset } from '../editor/types'
 import type {
   AppConfig,
+  CuttingPreset,
   DetectedSheet,
   ImportBatch,
   LayerPreset,
@@ -161,6 +162,7 @@ export const api = {
     name?: string | null
     sheet_w?: number | null
     sheet_h?: number | null
+    preset_id?: number | null
     auto_arrange?: boolean
   }) => request<{ id: number }>('/nesting/jobs', json('POST', payload)),
   layout: (jobId: number) => request<Layout>(`/nesting/jobs/${jobId}/layout`),
@@ -183,6 +185,18 @@ export const api = {
   collisions: (jobId: number) => request<Collision[]>(`/nesting/jobs/${jobId}/collisions`),
   deleteNestingJob: (jobId: number) =>
     request<void>(`/nesting/jobs/${jobId}`, { method: 'DELETE' }),
+
+  // ---- пресеты раскроя ----
+  cuttingPresets: () => request<CuttingPreset[]>('/cutting-presets'),
+  matchCuttingPreset: (materialId: number, thickness: number) =>
+    request<CuttingPreset | null>(
+      `/cutting-presets/match?material_id=${materialId}&thickness=${thickness}`,
+    ),
+  setJobPreset: (jobId: number, presetId: number | null, rearrange = true) =>
+    request<{ preset: PresetSnapshot | null; layout: Record<string, unknown> }>(
+      `/nesting/jobs/${jobId}/preset`,
+      json('PUT', { preset_id: presetId, rearrange }),
+    ),
 
   toolpathPresets: () => request<ToolpathPreset[]>('/toolpath-presets'),
   assignToolpath: (

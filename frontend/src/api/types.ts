@@ -272,3 +272,21 @@ export interface DetectedSheet {
   count: number
   files: string[]
 }
+
+/** Пресет раскроя: словарь ArtCAM, но на материал, а не на траекторию. */
+export interface CuttingPreset {
+  id: number
+  slug: string
+  name: string
+  applies_to: { thickness?: number; material_regex?: string; include_offcuts?: boolean }
+  placement: Record<string, number | string | boolean>
+  depth: Record<string, number>
+  strategy: Record<string, unknown>
+  tools: Record<string, unknown>
+  order: string[]
+  safety: Record<string, unknown>
+  post: Record<string, unknown>
+  is_default: boolean
+  is_builtin: boolean
+  last_utilization: number | null
+}

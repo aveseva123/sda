@@ -6,7 +6,7 @@ import ObjectsPanel from '../components/editor/ObjectsPanel'
 import PropertiesPanel from '../components/editor/PropertiesPanel'
 import type { Collision, Layout, Selection, ToolpathPreset } from '../editor/types'
 import { emptySelection } from '../editor/types'
-import type { Material } from '../api/types'
+import type { CuttingPreset, Material } from '../api/types'
 import { useLoader } from '../lib/hooks'
 
 interface JobRow {
@@ -26,6 +26,7 @@ export default function EditorPage() {
   const [layout, setLayout] = useState<Layout | null>(null)
   const [collisions, setCollisions] = useState<Collision[]>([])
   const [presets, setPresets] = useState<ToolpathPreset[]>([])
+  const [cuttingPresets, setCuttingPresets] = useState<CuttingPreset[]>([])
   const [selection, setSelection] = useState<Selection>(emptySelection)
   const [focusedPartId, setFocusedPartId] = useState<number | null>(null)
   const [showToolpaths, setShowToolpaths] = useState(true)
@@ -35,7 +36,14 @@ export default function EditorPage() {
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState({ material_id: '', thickness: '' })
 
-  const gap = 10
+  // Зазор между деталями — не константа интерфейса, а параметр пресета:
+  // диаметр фрезы контура плюс мостик. Прилипание на холсте обязано
+  // совпадать с тем, по чему считалась раскладка.
+  const gap = useMemo(() => {
+    const params = layout?.job.preset_snapshot?.layout
+    if (!params) return 10
+    return (params.kerf ?? 8) + (params.part_gap ?? 0)
+  }, [layout])
 
   const loadJobs = useCallback(async () => {
     const rows = await api.nestingJobs()
@@ -51,6 +59,7 @@ export default function EditorPage() {
 
   useEffect(() => {
     api.toolpathPresets().then(setPresets).catch(() => undefined)
+    api.cuttingPresets().then(setCuttingPresets).catch(() => undefined)
     loadJobs().catch((err: Error) => setError(err.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -105,6 +114,29 @@ export default function EditorPage() {
         `Разложено на ${result.sheets} лист(ах), КПД ${(result.utilization * 100).toFixed(1)}%` +
           (result.unplaced ? `, не размещено: ${result.unplaced}` : '') +
           (keepPinned ? '. Закреплённые детали не двигались.' : '.'),
+      )
+      await loadLayout(jobId)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const changePreset = async (value: string) => {
+    if (jobId === null) return
+    setBusy(true)
+    setError(null)
+    try {
+      // У другого пресета другая фреза и другой зазор — раскладка
+      // пересчитывается сразу, иначе она перестанет соответствовать УП.
+      const result = await api.setJobPreset(jobId, value ? Number(value) : null)
+      setMessage(
+        result.preset
+          ? `Пресет «${result.preset.name}»: фреза контура ⌀${
+              (result.preset.layout.kerf ?? 0)
+            } мм, зазор ${(result.preset.layout.kerf ?? 0) + (result.preset.layout.part_gap ?? 0)} мм.`
+          : 'Пресет снят. Раскладка считается по умолчанию из config/app.yaml.',
       )
       await loadLayout(jobId)
     } catch (err) {
@@ -260,6 +292,20 @@ export default function EditorPage() {
             <option key={job.id} value={job.id}>
               {job.name ?? `Задание ${job.id}`}
               {job.utilization ? ` · КПД ${(job.utilization * 100).toFixed(0)}%` : ''}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={layout?.job.preset?.id ?? ''}
+          disabled={busy || jobId === null}
+          title="Пресет раскроя: фреза, зазор, глубины, порядок обработки"
+          onChange={(event) => changePreset(event.target.value)}
+        >
+          <option value="">— пресет не выбран —</option>
+          {cuttingPresets.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.name}
             </option>
           ))}
         </select>

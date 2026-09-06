@@ -1,0 +1,123 @@
+# Пресеты раскроя.
+#
+# Словарь параметров взят из ArtCAM, которым пользуется заказчик: начальная
+# и конечная глубина, припуск, точность, стратегия «смещение / растр»,
+# попутное и встречное, начальная точка снаружи / внутри, плоскость
+# безопасности, точка возврата.
+#
+# Разница в том, что это НЕ диалог на каждую траекторию, а пресет на
+# материал. Технолог настраивает раскрой ЛДСП 16 один раз, и он сам
+# подбирается по толщине и материалу при импорте; сменить его можно на
+# любом задании.
+#
+# Задания хранят пресет, с которым были посчитаны, — старую УП можно
+# повторить точь-в-точь.
+
+default: ldsp_16
+
+presets:
+  - id: ldsp_16
+    name: "ЛДСП 16 · раскрой"
+    is_default: true
+    # По каким материалам подбирается автоматически.
+    applies_to:
+      thickness: 16.0
+      material_regex: '(?i)лдсп'
+      include_offcuts: true
+
+    # ------------------------------------------------ размещение на листе
+    placement:
+      # Зазор МЕЖДУ КОНТУРАМИ деталей = диаметр фрезы контура + это значение.
+      # Диаметр берётся из tools.OUTER, поэтому здесь только мостик сверх реза.
+      part_gap: 2.0
+      # Отступ от края листа СВЕРХ обрезки кромок, мм. Саму обрезку держит
+      # карточка материала: она описывает конкретную партию листов.
+      sheet_margin: 12.0
+      rotation: quarter       # quarter (0/90) | free
+      respect_grain: true     # не класть деталь поперёк волокна
+      offcuts_first: false    # сначала использовать деловой отход
+      min_offcut: 200.0       # меньший обрезок в склад не идёт, мм
+
+    # -------------------------------------------------- глубина резания
+    depth:
+      # Толщина берётся из материала; здесь — что делать относительно неё.
+      start: 0.0              # начальная глубина, мм
+      end_extra: 0.5          # подрез ниже толщины (в жертвенный стол), мм
+      allowance: 0.0          # припуск, мм
+      step_z: 8.25            # шаг по Z, мм
+      tolerance: 0.01         # точность аппроксимации, мм
+
+    # ------------------------------------------------ стратегия обработки
+    strategy:
+      type: offset            # offset (смещение) | raster (растр)
+      direction: climb        # climb (попутное) | conventional (встречное)
+      start_point: inside     # начальная точка контура: inside | outside
+      ramp: false             # наклонное врезание
+      lead: {type: arc, radius: 6.0}
+      compensation: cam       # cam (считаем сами) | g41g42 (стойкой)
+      tabs: none              # none | threshold (по порогу)
+
+    # ---------------------------------------------- фрезы по типам траекторий
+    # Ключ — тип операции, распознанный по геометрии вектора.
+    tools:
+      OUTER:  {slot: T2, name: "Компрес. ⌀8",  diameter: 8.0}
+      INNER:  {slot: T4, name: "Спиральная ⌀6", diameter: 6.0}
+      POCKET: {slot: T4, name: "Спиральная ⌀6", diameter: 6.0}
+      GROOVE: {slot: T1, name: "Пазовая ⌀4",   diameter: 4.0}
+      DRILL:
+        - {diameter: 8.0,  slot: T3, name: "Сверло ⌀8"}
+        - {diameter: 15.0, slot: T5, name: "Чашечное ⌀15"}
+
+    # Порядок обработки: сначала мелкое и неглубокое, контур — последним,
+    # иначе отрезанная деталь поедет под фрезой.
+    order: [DRILL, GROOVE, POCKET, INNER, OUTER]
+
+    # ------------------------------------------------- безопасность и нули
+    safety:
+      safe_plane: 40.0        # плоскость безопасности, мм
+      return_point: [0.0, 0.0, 40.0]
+      part_zero: sheet_corner # sheet_corner (угол листа) | center
+
+    # ------------------------------------------------------ постпроцессор
+    post:
+      controller: weihong_ncstudio
+      extension: ".nc"
+      one_file_per_sheet: true
+
+  - id: ldsp_18
+    name: "ЛДСП 18 · раскрой"
+    applies_to: {thickness: 18.0, material_regex: '(?i)лдсп', include_offcuts: true}
+    placement: {part_gap: 2.0, sheet_margin: 12.0, rotation: quarter,
+                respect_grain: true, offcuts_first: false, min_offcut: 200.0}
+    depth: {start: 0.0, end_extra: 0.5, allowance: 0.0, step_z: 9.25, tolerance: 0.01}
+    strategy: {type: offset, direction: climb, start_point: inside, ramp: false,
+               lead: {type: arc, radius: 6.0}, compensation: cam, tabs: none}
+    tools:
+      OUTER:  {slot: T2, name: "Компрес. ⌀8",  diameter: 8.0}
+      INNER:  {slot: T4, name: "Спиральная ⌀6", diameter: 6.0}
+      POCKET: {slot: T4, name: "Спиральная ⌀6", diameter: 6.0}
+      GROOVE: {slot: T1, name: "Пазовая ⌀4",   diameter: 4.0}
+      DRILL:
+        - {diameter: 8.0,  slot: T3, name: "Сверло ⌀8"}
+        - {diameter: 15.0, slot: T5, name: "Чашечное ⌀15"}
+    order: [DRILL, GROOVE, POCKET, INNER, OUTER]
+    safety: {safe_plane: 40.0, return_point: [0.0, 0.0, 40.0], part_zero: sheet_corner}
+    post: {controller: weihong_ncstudio, extension: ".nc", one_file_per_sheet: true}
+
+  - id: hdf_4_groove
+    name: "Паз 4 мм · ХДФ"
+    applies_to: {thickness: 4.0, material_regex: '(?i)хдф', include_offcuts: false}
+    placement: {part_gap: 2.0, sheet_margin: 10.0, rotation: quarter,
+                respect_grain: false, offcuts_first: true, min_offcut: 150.0}
+    depth: {start: 0.0, end_extra: 0.3, allowance: 0.0, step_z: 4.0, tolerance: 0.01}
+    strategy: {type: offset, direction: climb, start_point: inside, ramp: false,
+               lead: {type: none, radius: 0.0}, compensation: cam, tabs: threshold}
+    tools:
+      OUTER:  {slot: T1, name: "Пазовая ⌀4", diameter: 4.0}
+      INNER:  {slot: T1, name: "Пазовая ⌀4", diameter: 4.0}
+      POCKET: {slot: T1, name: "Пазовая ⌀4", diameter: 4.0}
+      GROOVE: {slot: T1, name: "Пазовая ⌀4", diameter: 4.0}
+      DRILL:  []
+    order: [DRILL, GROOVE, POCKET, INNER, OUTER]
+    safety: {safe_plane: 25.0, return_point: [0.0, 0.0, 25.0], part_zero: sheet_corner}
+    post: {controller: weihong_ncstudio, extension: ".nc", one_file_per_sheet: true}

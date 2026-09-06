@@ -399,6 +399,42 @@ class PartVectorsOut(BaseModel):
     vectors: list[dict]
 
 
+# --------------------------------------------------------- пресеты раскроя
+
+
+class CuttingPresetIn(BaseModel):
+    """Пресет раскроя со словарём ArtCAM, но на материал, а не на траекторию."""
+
+    slug: str
+    name: str
+    applies_to: dict = Field(default_factory=dict)
+    placement: dict = Field(default_factory=dict)
+    depth: dict = Field(default_factory=dict)
+    strategy: dict = Field(default_factory=dict)
+    tools: dict = Field(default_factory=dict)
+    order: list[str] = Field(default_factory=list)
+    safety: dict = Field(default_factory=dict)
+    post: dict = Field(default_factory=dict)
+    is_default: bool = False
+
+
+class CuttingPresetOut(ORMModel):
+    id: int
+    slug: str
+    name: str
+    applies_to: dict
+    placement: dict
+    depth: dict
+    strategy: dict
+    tools: dict
+    order: list
+    safety: dict
+    post: dict
+    is_default: bool
+    is_builtin: bool
+    last_utilization: float | None
+
+
 # ------------------------------------------------------------- раскладка
 
 
@@ -408,7 +444,16 @@ class NestingJobIn(BaseModel):
     name: str | None = None
     sheet_w: float | None = Field(default=None, gt=0)
     sheet_h: float | None = Field(default=None, gt=0)
+    # Не указан — подберётся по паре «материал + толщина».
+    preset_id: int | None = None
     auto_arrange: bool = True
+
+
+class JobPresetIn(BaseModel):
+    """Смена пресета на задании. ``null`` — снять пресет."""
+
+    preset_id: int | None = None
+    rearrange: bool = True
 
 
 class NestingJobOut(ORMModel):
@@ -418,6 +463,7 @@ class NestingJobOut(ORMModel):
     thickness: float
     status: str
     version: int
+    preset_id: int | None
     utilization: float | None
     params: dict | None
     created_at: datetime

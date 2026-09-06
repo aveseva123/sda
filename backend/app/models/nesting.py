@@ -31,6 +31,13 @@ class NestingJob(Base, TimestampMixin):
         ForeignKey("materials.id", ondelete="RESTRICT"), nullable=False
     )
     thickness: Mapped[float] = mapped_column(Float, nullable=False)
+    # Пресет раскроя, с которым задание было посчитано. Хранится ссылкой и
+    # копией параметров: пресет могут потом поправить, а старая УП должна
+    # повторяться точь-в-точь.
+    preset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cutting_presets.id", ondelete="SET NULL")
+    )
+    preset_snapshot: Mapped[dict | None] = mapped_column(JSONType)
     params: Mapped[dict | None] = mapped_column(JSONType)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=JobStatus.DRAFT)
     # Любая перегенерация создаёт новую версию, старая остаётся доступной.

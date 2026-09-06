@@ -78,6 +78,40 @@ export interface JobView {
   status: string
   utilization: number | null
   params: Record<string, unknown> | null
+  /** Пресет раскроя, которым посчитано задание. */
+  preset: CuttingPresetCard | null
+  /** Снимок параметров пресета: по нему задание повторяется точь-в-точь. */
+  preset_snapshot: PresetSnapshot | null
+}
+
+/** Карточка пресета — то, что видно в панели задания. */
+export interface CuttingPresetCard {
+  id: number
+  slug: string
+  name: string
+  thickness: number | null
+  is_default: boolean
+  is_builtin: boolean
+  tool: string | null
+  tool_diameter: number | null
+  step_z: number | null
+  strategy: string | null
+  direction: string | null
+  order: string[]
+}
+
+export interface PresetSnapshot {
+  slug: string
+  name: string
+  placement: Record<string, number | string | boolean>
+  depth: Record<string, number>
+  strategy: Record<string, unknown>
+  tools: Record<string, unknown>
+  order: string[]
+  safety: Record<string, unknown>
+  post: Record<string, unknown>
+  /** Параметры раскладки: рез, мостик, отступ от края. */
+  layout: { kerf?: number; part_gap?: number; sheet_margin?: number; rotation_step?: number }
 }
 
 export interface Layout {

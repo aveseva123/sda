@@ -5,7 +5,13 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.models import NestingJob
 from app.nesting import service
-from app.schemas import CollisionOut, MoveRequest, NestingJobIn, NestingJobOut
+from app.schemas import (
+    CollisionOut,
+    JobPresetIn,
+    MoveRequest,
+    NestingJobIn,
+    NestingJobOut,
+)
 
 router = APIRouter(prefix="/nesting", tags=["Раскрой"])
 
@@ -48,6 +54,22 @@ def arrange(
         return service.arrange(db, _require(db, job_id), keep_pinned=keep_pinned)
     except service.NestingError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@router.put("/jobs/{job_id}/preset", response_model=dict)
+def set_preset(job_id: int, payload: JobPresetIn, db: Session = Depends(get_db)) -> dict:
+    """Смена пресета раскроя на задании.
+
+    По умолчанию раскладка сразу пересчитывается: у другого пресета другой
+    зазор и другие отступы, и старая раскладка ему уже не соответствует.
+    """
+    job = _require(db, job_id)
+    try:
+        service.set_preset(db, job, payload.preset_id)
+        result = service.arrange(db, job) if payload.rearrange else {}
+    except service.NestingError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"preset": job.preset_snapshot, "layout": result}
 
 
 @router.post("/jobs/{job_id}/move", response_model=dict)

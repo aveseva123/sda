@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    cutting,
     imports,
     materials,
     nesting,
@@ -55,6 +56,7 @@ for router in (
     stock.router,
     nesting.router,
     toolpaths.router,
+    cutting.router,
     presets.router,
 ):
     app.include_router(router, prefix=settings.api_prefix)

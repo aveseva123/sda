@@ -1,3 +1,4 @@
+from app.models.cutting import CuttingPreset  # noqa: F401
 from app.models.enums import (  # noqa: F401
     DxfSource,
     FileStatus,
@@ -25,6 +26,7 @@ from app.models.stock import StockItem, StockMovement  # noqa: F401
 from app.models.toolpath import PartToolpath, ToolpathPreset  # noqa: F401
 
 __all__ = [
+    "CuttingPreset",
     "DxfSource",
     "FileStatus",
     "GrainMode",

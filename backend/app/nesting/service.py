@@ -14,7 +14,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.colors import part_style
+from app.cutting import service as cutting
 from app.models import (
+    CuttingPreset,
     ImportFile,
     JobStatus,
     Material,
@@ -54,12 +56,25 @@ def create_job(
     name: str | None = None,
     sheet_w: float | None = None,
     sheet_h: float | None = None,
+    preset_id: int | None = None,
     auto_arrange: bool = True,
 ) -> NestingJob:
-    """Создаёт задание и, если попросили, сразу раскладывает детали."""
+    """Создаёт задание и, если попросили, сразу раскладывает детали.
+
+    Пресет раскроя подбирается по паре «материал + толщина», если его не
+    указали явно. Если подходящего пресета нет, задание остаётся без него —
+    ничего не выдумываем молча, технолог выберет пресет руками.
+    """
     material = db.get(Material, material_id)
     if material is None:
         raise NestingError("Материал не найден")
+
+    if preset_id is None:
+        preset = cutting.preset_for(db, material=material, thickness=thickness)
+    else:
+        preset = db.get(CuttingPreset, preset_id)
+        if preset is None:
+            raise NestingError("Пресет раскроя не найден")
 
     job = NestingJob(
         name=name or f"{material.name} {thickness:g} мм",
@@ -71,11 +86,44 @@ def create_job(
             "sheet_h": sheet_h or material.sheet_h,
         },
     )
+    _apply_preset(job, preset)
     db.add(job)
     db.flush()
 
     if auto_arrange:
         arrange(db, job)
+    return job
+
+
+def _apply_preset(job: NestingJob, preset: CuttingPreset | None) -> None:
+    """Записывает в задание пресет и снимок его параметров раскладки."""
+    job.preset_id = preset.id if preset else None
+    if preset is None:
+        job.preset_snapshot = None
+        return
+    job.preset_snapshot = {
+        "slug": preset.slug,
+        "name": preset.name,
+        "placement": preset.placement or {},
+        "depth": preset.depth or {},
+        "strategy": preset.strategy or {},
+        "tools": preset.tools or {},
+        "order": list(preset.order or []),
+        "safety": preset.safety or {},
+        "post": preset.post or {},
+        # Параметры раскладки считаются один раз и остаются в задании:
+        # правка пресета не должна незаметно менять уже посчитанный раскрой.
+        "layout": cutting.placement_params(preset),
+    }
+
+
+def set_preset(db: Session, job: NestingJob, preset_id: int | None) -> NestingJob:
+    """Смена пресета на задании. Раскладку пересчитывает вызывающий."""
+    preset = db.get(CuttingPreset, preset_id) if preset_id is not None else None
+    if preset_id is not None and preset is None:
+        raise NestingError("Пресет раскроя не найден")
+    _apply_preset(job, preset)
+    db.flush()
     return job
 
 
@@ -105,6 +153,11 @@ def arrange(db: Session, job: NestingJob, *, keep_pinned: bool = True) -> dict:
     params = job.params or {}
     sheet_w = float(params.get("sheet_w") or material.sheet_w)
     sheet_h = float(params.get("sheet_h") or material.sheet_h)
+
+    # Раскладка идёт по снимку пресета, а не по текущему конфигу: задание
+    # обязано пересчитываться так же, как считалось в первый раз.
+    layout_params = dict((job.preset_snapshot or {}).get("layout") or {})
+    respect_grain = layout_params.pop("respect_grain", None)
 
     pairs = job_instances(db, job)
     if not pairs:
@@ -146,7 +199,8 @@ def arrange(db: Session, job: NestingJob, *, keep_pinned: bool = True) -> dict:
             material.trim_bottom,
             material.trim_top,
         ),
-        has_grain=material.has_grain,
+        has_grain=material.has_grain and respect_grain is not False,
+        params=layout_params,
     )
 
     # Листы задания приводятся к результату раскладки.
@@ -192,6 +246,11 @@ def arrange(db: Session, job: NestingJob, *, keep_pinned: bool = True) -> dict:
 
     job.utilization = result.utilization
     job.status = JobStatus.DONE
+    # Карточка пресета показывает КИМ последнего задания, посчитанного им.
+    if job.preset_id:
+        preset = db.get(CuttingPreset, job.preset_id)
+        if preset is not None:
+            preset.last_utilization = result.utilization
     db.flush()
 
     return {
@@ -295,6 +354,10 @@ def layout_payload(db: Session, job: NestingJob) -> dict:
             "status": job.status,
             "utilization": job.utilization,
             "params": job.params,
+            "preset": cutting.summary(
+                db.get(CuttingPreset, job.preset_id) if job.preset_id else None
+            ),
+            "preset_snapshot": job.preset_snapshot,
         },
         "sheets": [
             {
@@ -397,7 +460,12 @@ def collisions(db: Session, job: NestingJob) -> list[dict]:
     """
     from app.core.config_files import app_config
 
-    cfg = app_config().get("nesting", {}) or {}
+    # Зазор проверяется тот же, с которым задание считалось: иначе ручная
+    # правка «краснела» бы по чужим правилам.
+    cfg = {
+        **(app_config().get("nesting", {}) or {}),
+        **((job.preset_snapshot or {}).get("layout") or {}),
+    }
     gap = float(cfg.get("kerf", 8.0)) + float(cfg.get("part_gap", 0.0))
 
     material = db.get(Material, job.material_id)

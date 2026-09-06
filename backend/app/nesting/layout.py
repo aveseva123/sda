@@ -88,13 +88,20 @@ class LayoutResult:
         return round(used / total, 4) if total else 0.0
 
 
-def allowed_rotations(grain: str, has_grain: bool) -> list[float]:
+def allowed_rotations(
+    grain: str, has_grain: bool, cfg: dict | None = None
+) -> list[float]:
     """Какие повороты допустимы для детали.
 
     У текстурного материала деталь нельзя класть поперёк волокна, поэтому
     остаются только 0° и 180°.
     """
-    cfg = nesting_config()
+    cfg = nesting_config() if cfg is None else cfg
+    if cfg.get("rotations"):
+        fixed = [float(a) for a in cfg["rotations"]]
+        if has_grain and grain != GrainMode.NONE:
+            return [a for a in fixed if int(a) % 180 == 0] or [0.0]
+        return fixed
     if has_grain and grain != GrainMode.NONE:
         return [float(a) for a in cfg.get("grain_rotations", [0, 180])]
     step = int(cfg.get("rotation_step", 90)) or 90
@@ -148,12 +155,15 @@ def pack(
     trim: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0),
     has_grain: bool = False,
     max_sheets: int | None = None,
+    params: dict | None = None,
 ) -> LayoutResult:
     """Укладывает детали по листам одного формата.
 
     ``trim`` — обрезка кромок листа (лево, право, низ, верх).
+    ``params`` — параметры пресета раскроя, перекрывающие config/app.yaml:
+    именно так задание считается тем же самым при повторе старой УП.
     """
-    cfg = nesting_config()
+    cfg = {**nesting_config(), **(params or {})}
     gap = float(cfg.get("kerf", 8.0)) + float(cfg.get("part_gap", 0.0))
     margin = float(cfg.get("sheet_margin", 0.0))
 
@@ -194,7 +204,7 @@ def pack(
     for piece in movable:
         placed = False
         for plan in result.sheets:
-            if _place_on(plan, piece, sizes, gap, has_grain):
+            if _place_on(plan, piece, sizes, gap, has_grain, cfg):
                 placed = True
                 break
         if placed:
@@ -206,7 +216,7 @@ def pack(
 
         plan = SheetPlan(len(result.sheets), usable_w, usable_h, offset_x, offset_y)
         result.sheets.append(plan)
-        if not _place_on(plan, piece, sizes, gap, has_grain):
+        if not _place_on(plan, piece, sizes, gap, has_grain, cfg):
             # Не влезает даже в пустой лист — деталь больше листа.
             result.sheets.pop()
             result.unplaced.append(piece.instance_id)
@@ -220,9 +230,14 @@ def pack(
 
 
 def _place_on(
-    plan: SheetPlan, piece: Piece, sizes: dict, gap: float, has_grain: bool
+    plan: SheetPlan,
+    piece: Piece,
+    sizes: dict,
+    gap: float,
+    has_grain: bool,
+    cfg: dict | None = None,
 ) -> bool:
-    for rotation in allowed_rotations(piece.grain, has_grain):
+    for rotation in allowed_rotations(piece.grain, has_grain, cfg):
         w, h = piece.size(rotation)
         for x, y in _candidate_points(plan, sizes, gap):
             if _fits(plan, sizes, x, y, w, h, gap):
