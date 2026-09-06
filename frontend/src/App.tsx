@@ -5,6 +5,8 @@ import ImportPage from './pages/ImportPage'
 import MaterialsPage from './pages/MaterialsPage'
 import PartsPage from './pages/PartsPage'
 import PendingPage from './pages/PendingPage'
+import PresetsPage from './pages/PresetsPage'
+import ToolsPage from './pages/ToolsPage'
 import FilesPage from './pages/FilesPage'
 import StockPage from './pages/StockPage'
 import { IS_DEMO } from './api/demo'
@@ -27,6 +29,8 @@ const ICONS: Record<string, JSX.Element> = {
   parts: <path d="M2.5 5.5 8 2.5l5.5 3v5L8 13.5l-5.5-3z" />,
   pending: <path d="M8 2.5 14.5 13.5h-13zM8 6.5v3M8 11.4v.2" />,
   materials: <path d="M2.5 5.5 8 2.5l5.5 3-5.5 3zM2.5 8.5 8 11.5l5.5-3" />,
+  tools: <path d="M8 2.5v6M5.5 8.5h5l-1 5h-3zM6.5 2.5h3" />,
+  presets: <path d="M3 4.5h10M3 8h10M3 11.5h10" />,
   stock: <path d="M2.5 13.5 13.5 2.5M2.5 8.5v5h5" />,
 }
 
@@ -68,6 +72,12 @@ export default function App() {
             <span>Требуют уточнения</span>
             {pending > 0 && <span className="badge warn">{pending}</span>}
           </NavItem>
+          <NavItem to="/tools" icon="tools">
+            Библиотека фрез
+          </NavItem>
+          <NavItem to="/presets" icon="presets">
+            Пресеты раскроя
+          </NavItem>
           <NavItem to="/materials" icon="materials">
             Материалы
           </NavItem>
@@ -101,6 +111,8 @@ export default function App() {
           <Route path="/files" element={<FilesPage />} />
           <Route path="/parts" element={<PartsPage />} />
           <Route path="/pending" element={<PendingPage />} />
+          <Route path="/tools" element={<ToolsPage />} />
+          <Route path="/presets" element={<PresetsPage />} />
           <Route path="/materials" element={<MaterialsPage />} />
           <Route path="/stock" element={<StockPage />} />
         </Routes>

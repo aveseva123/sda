@@ -181,17 +181,26 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     )
     ctx.setLineDash([])
 
+    // Подпись листа пишется только если помещается над ним: на общем виде
+    // подписи соседних листов иначе наезжают друг на друга.
     ctx.font = '500 11px "IBM Plex Mono", ui-monospace, monospace'
-    ctx.fillStyle = DIM_INK
     const title = `Лист ${sheet.index + 1} · ${sheet.w.toFixed(0)} × ${sheet.h.toFixed(0)}`
-    ctx.fillText(title, topLeft[0], topLeft[1] - 8)
-    if (sheet.utilization) {
+    const percent = sheet.utilization
+      ? `${(sheet.utilization * 100).toFixed(1)} %`.replace('.', ',')
+      : ''
+    const titleWidth = ctx.measureText(title).width
+    const fullWidth = titleWidth + (percent ? ctx.measureText(percent).width + 10 : 0)
+
+    if (fullWidth <= w) {
+      ctx.fillStyle = DIM_INK
+      ctx.fillText(title, topLeft[0], topLeft[1] - 8)
+      if (percent) {
+        ctx.fillStyle = '#69717D'
+        ctx.fillText(percent, topLeft[0] + titleWidth + 10, topLeft[1] - 8)
+      }
+    } else if (percent && ctx.measureText(percent).width <= w) {
       ctx.fillStyle = '#69717D'
-      ctx.fillText(
-        `${(sheet.utilization * 100).toFixed(1)} %`.replace('.', ','),
-        topLeft[0] + ctx.measureText(title).width + 10,
-        topLeft[1] - 8,
-      )
+      ctx.fillText(percent, topLeft[0], topLeft[1] - 8)
     }
   }
 

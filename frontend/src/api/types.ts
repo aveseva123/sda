@@ -292,3 +292,92 @@ export interface CuttingPreset {
   is_builtin: boolean
   last_utilization: number | null
 }
+
+/** Карточка файла в диалоге добавления: что платформа предлагает. */
+export interface FileCard {
+  file_id: number
+  filename: string
+  relpath: string
+  order_name: string | null
+  product_name: string | null
+  part_name: string | null
+  qty: number
+  thickness: number | null
+  thickness_source: string
+  detected_thicknesses: number[]
+  parts: number
+  detected_source: string
+  warnings: string[]
+}
+
+export interface IntakeResult {
+  batch_id: number
+  files: FileCard[]
+}
+
+/** Решение оператора по файлу. */
+export interface FileDecision {
+  relpath: string
+  thickness: number
+  material_id?: number | null
+  order_name?: string | null
+  product_name?: string | null
+  grain?: string
+}
+
+export interface ChecklistItem {
+  key: string
+  title: string
+  done: boolean
+}
+
+export interface ToolMode {
+  material: string
+  rpm: number
+  feed: number
+  step_z: number
+}
+
+export interface ToolResource {
+  used: number
+  limit: number | null
+  unit: string
+  ratio: number | null
+  low: boolean
+}
+
+export interface Tool {
+  id: number
+  slot: number | null
+  name: string
+  type: string
+  diameter: number
+  flute_length: number | null
+  total_length: number | null
+  flutes: number | null
+  shank: number | null
+  article: string | null
+  rpm: number
+  feed: number
+  plunge_feed: number
+  step_down: number
+  min_radius: number
+  resource: ToolResource
+  modes: ToolMode[]
+  usage: string[]
+  is_builtin: boolean
+}
+
+export interface MagazineSlot {
+  slot: number
+  tool_id: number | null
+  name: string | null
+  diameter: number | null
+  low: boolean
+}
+
+export interface ToolLibrary {
+  magazine: MagazineSlot[]
+  slots: number
+  tools: Tool[]
+}

@@ -4,10 +4,18 @@ import { api } from '../api/client'
 import AlignBar from '../components/editor/AlignBar'
 import BufferPanel from '../components/editor/BufferPanel'
 import CanvasStage, { type Move, type StageHandle } from '../components/editor/CanvasStage'
+import IntakeDialog from '../components/editor/IntakeDialog'
+import JobFlow from '../components/editor/JobFlow'
 import PropertiesPanel from '../components/editor/PropertiesPanel'
 import type { Collision, Layout, Selection, ToolpathPreset } from '../editor/types'
 import { emptySelection } from '../editor/types'
-import type { CuttingPreset, Material, SourceFile } from '../api/types'
+import type {
+  CuttingPreset,
+  FileDecision,
+  IntakeResult,
+  Material,
+  SourceFile,
+} from '../api/types'
 import { useLoader } from '../lib/hooks'
 
 interface JobRow {
@@ -37,7 +45,9 @@ export default function EditorPage() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [creating, setCreating] = useState({ material_id: '', thickness: '' })
+  const [creating, setCreating] = useState({ material_id: '', thickness: '', operator: '' })
+  // Файлы разбираются до создания деталей: сначала оператор отвечает в диалоге.
+  const [intake, setIntake] = useState<IntakeResult | null>(null)
 
   // Зазор между деталями — не константа интерфейса, а параметр пресета:
   // диаметр фрезы контура плюс мостик. Прилипание на холсте обязано
@@ -157,6 +167,7 @@ export default function EditorPage() {
       const created = await api.createNestingJob({
         material_id: Number(creating.material_id),
         thickness: Number(creating.thickness),
+        operator: creating.operator.trim() || null,
       })
       await loadJobs()
       setJobId(created.id)
@@ -188,18 +199,76 @@ export default function EditorPage() {
   }
 
   const dropFiles = async (files: File[]) => {
+    if (jobId === null) {
+      setError('Сначала заведите раскрой: материал, толщина, оператор.')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
-      const batch = await api.upload(files, `Из редактора ${new Date().toLocaleString('ru')}`)
-      const processed = await api.processBatch(batch.id, {})
-      const stats = processed.stats ?? {}
+      // Первый шаг: файлы разобраны, деталей ещё нет. Что с ними делать,
+      // решает оператор в диалоге.
+      setIntake(await api.addFiles(jobId, files))
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const confirmFiles = async (decisions: FileDecision[]) => {
+    if (jobId === null || !intake) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await api.confirmFiles(jobId, intake.batch_id, decisions)
+      setIntake(null)
       setMessage(
-        `Загружено файлов: ${stats.files_total ?? files.length}. ` +
-          `Разобрано: ${stats.parsed ?? 0}, требуют уточнения: ${stats.needs_clarification ?? 0}. ` +
-          'Нажмите «Разложить», чтобы новые детали встали на листы.',
+        [`Добавлено деталей: ${result.added}.`, ...result.warnings].join('\n'),
       )
-      if (jobId !== null) await loadLayout(jobId)
+      await loadLayout(jobId)
+      await loadJobs()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const takeJob = async (operator: string) => {
+    if (jobId === null) return
+    setBusy(true)
+    setError(null)
+    try {
+      await api.takeJob(jobId, operator)
+      await loadLayout(jobId)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const checkItem = async (key: string, done: boolean) => {
+    if (jobId === null || !layout) return
+    const items: Record<string, boolean> = {}
+    for (const item of layout.job.checklist) items[item.key] = item.key === key ? done : item.done
+    try {
+      await api.setChecklist(jobId, items)
+      await loadLayout(jobId)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  const finishJob = async () => {
+    if (jobId === null) return
+    setBusy(true)
+    setError(null)
+    try {
+      await api.finishJob(jobId)
+      setMessage('Раскрой завершён. Лист закрыт по чеклисту.')
+      await loadLayout(jobId)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -284,12 +353,13 @@ export default function EditorPage() {
   // Легенда: какие файлы лежат на листах этого задания и сколько от каждого.
   const legend = useMemo(() => {
     if (!layout) return []
-    const counts = new Map<number, { color: string; name: string; count: number }>()
+    const counts = new Map<number, { id: number; color: string; name: string; count: number }>()
     for (const instance of layout.instances) {
       if (instance.sheet_index === null) continue
       const part = layout.parts[String(instance.part_id)]
       if (!part?.source_file_id) continue
       const row = counts.get(part.source_file_id) ?? {
+        id: part.source_file_id,
         color: part.style?.fill ?? '#9AA3AF',
         name: part.source_file ?? `Файл ${part.source_file_id}`,
         count: 0,
@@ -348,6 +418,11 @@ export default function EditorPage() {
         </select>
 
         <div className="spacer">
+          {job?.operator && (
+            <span className="chip" title="Кто ведёт этот лист">
+              {job.stage === 'finished' ? '✓' : '●'} <b>{job.operator}</b>
+            </span>
+          )}
           <span className="chip" title="Полезная площадь по всем листам задания">
             КИМ{' '}
             <b>
@@ -376,7 +451,11 @@ export default function EditorPage() {
 
       {(error || message) && (
         <div className={`notice ${error ? 'error' : 'ok'} editor-notice`}>
-          {error ?? message}
+          <div className="notice-lines">
+            {(error ?? message ?? '').split('\n').map((line, index) => (
+              <div key={index}>{line}</div>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => {
@@ -410,22 +489,38 @@ export default function EditorPage() {
             </div>
           )}
 
-          {!layout && (
+          {layout ? (
+            <JobFlow
+              layout={layout}
+              busy={busy}
+              onTake={takeJob}
+              onCheck={checkItem}
+              onFinish={finishJob}
+            />
+          ) : (
             <div style={{ padding: '10px 12px', borderTop: '1px solid var(--line)' }}>
               <div className="lbl" style={{ marginBottom: 8 }}>
-                Новое задание
+                Новый раскрой
               </div>
               <div className="small muted" style={{ marginBottom: 8 }}>
-                Раскрой идёт по паре «материал + толщина»: разные толщины никогда не
-                попадают на один лист.
+                Работа начинается отсюда: материал, толщина, оператор. Файлы
+                добавляются в уже заведённый раскрой — хоть из Базиса, хоть
+                откуда.
               </div>
               <label className="field">
-                Материал
+                Материал и толщина
                 <select
                   value={creating.material_id}
-                  onChange={(event) =>
-                    setCreating({ material_id: event.target.value, thickness: '' })
-                  }
+                  onChange={(event) => {
+                    const material = (materials ?? []).find(
+                      (m) => String(m.id) === event.target.value,
+                    )
+                    setCreating((prev) => ({
+                      ...prev,
+                      material_id: event.target.value,
+                      thickness: material ? String(material.thickness) : '',
+                    }))
+                  }}
                 >
                   <option value="">— выберите —</option>
                   {(materials ?? []).map((material) => (
@@ -435,6 +530,16 @@ export default function EditorPage() {
                   ))}
                 </select>
               </label>
+              <label className="field" style={{ marginTop: 8 }}>
+                Оператор
+                <input
+                  placeholder="кто ведёт лист"
+                  value={creating.operator}
+                  onChange={(event) =>
+                    setCreating((prev) => ({ ...prev, operator: event.target.value }))
+                  }
+                />
+              </label>
               <button
                 type="button"
                 className="primary"
@@ -442,7 +547,7 @@ export default function EditorPage() {
                 disabled={!creating.material_id || !creating.thickness}
                 onClick={createJob}
               >
-                Создать задание
+                Создать раскрой
               </button>
             </div>
           )}
@@ -467,7 +572,7 @@ export default function EditorPage() {
             />
           ) : (
             <div className="stage empty">
-              Создайте задание на раскрой — и детали лягут на листы.
+              Заведите раскрой слева, потом перетащите сюда DXF.
             </div>
           )}
 
@@ -501,7 +606,7 @@ export default function EditorPage() {
             <div className="legend">
               <div className="lbl">Файлы на листе</div>
               {legend.map((row) => (
-                <div className="legend-row" key={row.name}>
+                <div className="legend-row" key={row.id}>
                   <span className="swatch" style={{ background: row.color }} />
                   <span className="mono ellipsis grow">{row.name}</span>
                   <span className="mono" style={{ color: 'var(--ink-3)' }}>
@@ -542,6 +647,18 @@ export default function EditorPage() {
           )}
         </aside>
       </div>
+
+      {intake && layout && (
+        <IntakeDialog
+          cards={intake.files}
+          materials={materials ?? []}
+          jobThickness={layout.job.thickness}
+          jobMaterialId={layout.job.material_id}
+          busy={busy}
+          onCancel={() => setIntake(null)}
+          onConfirm={confirmFiles}
+        />
+      )}
 
       <input
         ref={filePicker}

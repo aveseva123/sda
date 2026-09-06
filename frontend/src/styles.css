@@ -423,8 +423,19 @@ canvas.preview {
 .editor-notice {
   margin: 8px 12px 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
+  flex: none;
+}
+
+/* Предупреждений может быть много — полоса не должна отжимать рабочее поле. */
+.notice-lines {
+  flex: 1;
+  max-height: 92px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .editor-notice button {
@@ -448,7 +459,12 @@ canvas.preview {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
+
+/* Блок работы с листом всегда виден снизу: чеклист не должен уезжать под
+ * строку подсказок. */
+.editor-side > .sec { flex: none; }
 
 .editor-side.left { border-right: 1px solid var(--line); }
 .editor-side.right { border-left: 1px solid var(--line); }
@@ -801,3 +817,146 @@ canvas.preview {
   font-size: 11.5px;
   border-top: 1px solid var(--line);
 }
+
+/* ------------------------------------------------ диалог добавления файлов */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 10, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  padding: 24px;
+}
+
+.modal {
+  width: min(760px, 100%);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-head b { font-size: 14px; }
+.modal-head button { margin-left: auto; }
+
+.modal-body {
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
+
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.intake-card {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--sunken);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.intake-card.off { opacity: 0.5; }
+
+.intake-head { display: flex; align-items: center; gap: 8px; }
+.intake-head b { font-size: 12.5px; }
+
+.intake-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.intake-grid input, .intake-grid select { width: 100%; }
+
+.intake-note { font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
+
+/* ------------------------------------------------------- чеклист закрытия */
+
+.checklist { display: flex; flex-direction: column; gap: 2px; }
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+
+.check-row:hover { background: #1b2028; }
+.check-row.done { color: var(--ink); }
+
+/* ------------------------------------------------- библиотеки и справочники */
+
+.magazine {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.slot {
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--sunken);
+  padding: 9px 10px;
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.slot.empty { border-style: dashed; color: var(--ink-3); }
+.slot.low { border-color: #4a3c1a; }
+.slot b { font-family: var(--mono); font-size: 12px; }
+.slot span { font-size: 11px; color: var(--ink-2); line-height: 1.3; }
+
+.bar {
+  height: 4px;
+  border-radius: 2px;
+  background: #22272e;
+  overflow: hidden;
+}
+
+.bar > i { display: block; height: 100%; background: var(--ok); }
+.bar.low > i { background: var(--warn); }
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.list-row:hover { background: #1b2028; }
+.list-row.active { background: #21262e; border-color: var(--line-2); }

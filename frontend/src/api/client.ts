@@ -4,6 +4,9 @@ import type {
   AppConfig,
   CuttingPreset,
   DetectedSheet,
+  FileDecision,
+  IntakeResult,
+  ToolLibrary,
   ImportBatch,
   LayerPreset,
   LayerSummary,
@@ -166,8 +169,43 @@ export const api = {
     sheet_w?: number | null
     sheet_h?: number | null
     preset_id?: number | null
+    operator?: string | null
     auto_arrange?: boolean
   }) => request<{ id: number }>('/nesting/jobs', json('POST', payload)),
+
+  // ---- добавление файлов в раскрой ----
+  addFiles: (jobId: number, files: File[]) => {
+    const form = new FormData()
+    for (const file of files) form.append('files', file, file.name)
+    return request<IntakeResult>(`/nesting/jobs/${jobId}/files`, {
+      method: 'POST',
+      body: form,
+    })
+  },
+  confirmFiles: (jobId: number, batchId: number, files: FileDecision[]) =>
+    request<{ added: number; warnings: string[]; layout?: Record<string, unknown> }>(
+      `/nesting/jobs/${jobId}/files/confirm`,
+      json('POST', { batch_id: batchId, files }),
+    ),
+
+  // ---- работа с листом ----
+  takeJob: (jobId: number, operator: string) =>
+    request<{ stage: string; operator: string }>(
+      `/nesting/jobs/${jobId}/take`,
+      json('POST', { operator }),
+    ),
+  setChecklist: (jobId: number, items: Record<string, boolean>) =>
+    request<{ checklist: Array<{ key: string; title: string; done: boolean }> }>(
+      `/nesting/jobs/${jobId}/checklist`,
+      json('PUT', { items }),
+    ),
+  finishJob: (jobId: number) =>
+    request<{ stage: string }>(`/nesting/jobs/${jobId}/finish`, json('POST', {})),
+
+  // ---- библиотека фрез ----
+  tools: () => request<ToolLibrary>('/tools'),
+  setToolResource: (toolId: number, used: number, limit?: number | null) =>
+    request<unknown>(`/tools/${toolId}/resource`, json('POST', { used, limit })),
   layout: (jobId: number) => request<Layout>(`/nesting/jobs/${jobId}/layout`),
   arrange: (jobId: number, keepPinned = true) =>
     request<{ sheets: number; placed: number; unplaced: number; utilization: number; warnings: string[] }>(

@@ -86,6 +86,11 @@ export interface JobView {
   preset: CuttingPresetCard | null
   /** Снимок параметров пресета: по нему задание повторяется точь-в-точь. */
   preset_snapshot: PresetSnapshot | null
+  /** Кто взял лист в работу. Учётных записей нет — оператор называет себя. */
+  operator: string | null
+  /** planning | in_progress | finished */
+  stage: string
+  checklist: Array<{ key: string; title: string; done: boolean }>
 }
 
 /** Карточка пресета — то, что видно в панели задания. */

@@ -459,11 +459,27 @@ def _process_file(
     # насквозь. Расхождение видно в отчёте о добавлении файлов.
     conflicts: list[dict] = []
     if override.get("thickness") is not None:
+        from app.nesting.intake import snap_thickness
+
         declared = float(override["thickness"])
+        # Глубина в слое пишется с запасом на подрез: «D 16.10» — это лист
+        # 16 мм. Сравнивать надо приведённые значения, иначе платформа кричит
+        # о расхождении там, где его нет.
+        seen: dict[tuple[str, float], int] = {}
         for shape in contours.shapes:
             hint = shape.thickness_hint
-            if hint is not None and abs(hint - declared) > 0.01:
-                conflicts.append({"layer": shape.source_layer, "thickness": hint})
+            if hint is None:
+                continue
+            snapped = snap_thickness(hint)
+            if abs(snapped - declared) <= 0.01:
+                continue
+            key = (shape.source_layer or "", snapped)
+            seen[key] = seen.get(key, 0) + 1
+        # Одно расхождение — одна строка со счётчиком, а не сто одинаковых.
+        conflicts = [
+            {"layer": layer, "thickness": thickness, "parts": count}
+            for (layer, thickness), count in sorted(seen.items())
+        ]
 
     record.resolve_trace = {
         "filename": parsed_name.as_dict(),

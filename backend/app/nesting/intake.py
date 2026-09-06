@@ -22,6 +22,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config_files import app_config
 from app.dxf import build_shapes, read_file
 from app.importer import (
     ImportOptions,
@@ -102,6 +103,21 @@ def analyze(db: Session, job: NestingJob, files: list[IncomingFile]) -> dict:
     return {"batch_id": batch.id, "files": [card.as_dict() for card in cards]}
 
 
+def snap_thickness(value: float) -> float:
+    """Приводит глубину из слоя к известной толщине материала.
+
+    В чертеже глубина пишется с запасом на подрез: «16.10» — это лист 16 мм,
+    а не отдельная толщина. Показывать оператору обе бессмысленно.
+    """
+    cfg = app_config().get("thicknesses", {}) or {}
+    tolerance = float(cfg.get("match_tolerance", 0.5))
+    known = [float(v) for v in cfg.get("known", [])]
+    for candidate in known:
+        if abs(candidate - value) <= tolerance:
+            return candidate
+    return round(value, 1)
+
+
 def _card(record: ImportFile, *, preset_for, job: NestingJob) -> FileCard:
     parsed = parse_filename(record.filename)
     warnings: list[str] = []
@@ -116,7 +132,7 @@ def _card(record: ImportFile, *, preset_for, job: NestingJob) -> FileCard:
         )
         parts = len(contours.shapes)
         found = Counter(
-            round(shape.thickness_hint, 2)
+            snap_thickness(shape.thickness_hint)
             for shape in contours.shapes
             if shape.thickness_hint is not None
         )
@@ -127,9 +143,13 @@ def _card(record: ImportFile, *, preset_for, job: NestingJob) -> FileCard:
     except Exception as exc:  # битый файл не должен ронять диалог
         warnings.append(f"Файл не читается: {type(exc).__name__}: {exc}")
 
-    # Что подставить в поле толщины: сначала чертёж, потом имя файла, потом
-    # толщина самого раскроя — оператор всё равно подтверждает.
-    if len(thicknesses) == 1:
+    # Что подставить в поле толщины. Файл добавляют в конкретный раскрой,
+    # поэтому если его толщина в чертеже есть — предлагается она: скорее
+    # всего оператор принёс файл именно ради этих деталей.
+    matching = [value for value in thicknesses if abs(value - job.thickness) < 0.01]
+    if matching:
+        thickness, source = matching[0], "толщина раскроя найдена в чертеже"
+    elif len(thicknesses) == 1:
         thickness, source = thicknesses[0], "слои чертежа"
     elif parsed.thickness is not None:
         thickness, source = parsed.thickness, "имя файла"
@@ -223,9 +243,11 @@ def confirm(db: Session, job: NestingJob, batch_id: int, decisions: list[dict]) 
             f"он на {job.thickness:g} мм. Заведите для них отдельный раскрой."
         )
     for conflict in conflicts:
+        parts = conflict.get("parts", 1)
         warnings.append(
             f"«{conflict['file']}»: слой «{conflict.get('layer') or '—'}» "
-            f"объявляет глубину {conflict['thickness']:g} мм — проверьте толщину."
+            f"объявляет {conflict['thickness']:g} мм у {parts} дет. — "
+            "проверьте толщину."
         )
 
     return {
