@@ -10,13 +10,24 @@ echo   Способ для случая, когда Docker поставить н
 echo   Всё работает на одном компьютере, база лежит файлом рядом.
 echo.
 
-where python >nul 2>nul
-if errorlevel 1 (
+rem Библиотеки геометрии собраны не под все версии Python. Берём ту, на
+rem которой платформа проверена, а самую свежую — только если выбора нет.
+set PY=
+for %%v in (3.12 3.11 3.13) do (
+  if not defined PY (
+    py -%%v -c "import sys" >nul 2>nul && set "PY=py -%%v"
+  )
+)
+if not defined PY (
+  where python >nul 2>nul && set "PY=python"
+)
+if not defined PY (
   echo   Не найден Python. Установите с https://www.python.org/downloads/
   echo   ОБЯЗАТЕЛЬНО поставьте галочку "Add python.exe to PATH".
   pause
   exit /b 1
 )
+echo   Python: %PY%
 where npm >nul 2>nul
 if errorlevel 1 (
   echo   Не найден Node.js. Установите LTS с https://nodejs.org
@@ -26,10 +37,16 @@ if errorlevel 1 (
 
 if not exist "backend\.venv" (
   echo   Готовлю окружение Python, это пара минут...
-  python -m venv backend\.venv
-  backend\.venv\Scripts\pip install -q -e backend
+  %PY% -m venv backend\.venv
+  backend\.venv\Scripts\python -m pip install -q --upgrade pip
+  backend\.venv\Scripts\pip install -e backend
   if errorlevel 1 (
-    echo   Не удалось поставить библиотеки. Покажите текст выше разработчику.
+    echo.
+    echo   Не удалось поставить библиотеки.
+    echo   Чаще всего помогает установка проверенной версии Python:
+    echo       py install 3.12
+    echo   затем удалите папку backend\.venv и запустите этот файл снова.
+    echo.
     pause
     exit /b 1
   )
