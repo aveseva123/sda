@@ -272,6 +272,11 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
   for (const instance of layout.instances) {
     copies.set(instance.part_id, (copies.get(instance.part_id) ?? 0) + 1)
   }
+  // Вошли внутрь детали — остальные приглушаются, как режим изоляции в
+  // векторном редакторе. Иначе соседние контуры спорят с тем, который сейчас
+  // разбирают, а именно ради него сюда и зашли.
+  const isolating = input.focusedPartId !== null
+
   for (const instance of layout.instances) {
     const part = layout.parts[String(instance.part_id)]
     if (!part) continue
@@ -282,6 +287,9 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     const isFocused = input.focusedPartId === part.id
     const isColliding = collidingInstances.has(instance.id)
     const style = part.style
+
+    ctx.save()
+    if (isolating && !isFocused) ctx.globalAlpha = 0.22
 
     const outline = input.view === 'outline'
 
@@ -343,10 +351,11 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     }
 
     if (instance.pinned) drawPin(ctx, placed, toScreen)
-    if (labelScale) labels.push({ part, instance, placed })
+    if (labelScale && (!isolating || isFocused)) labels.push({ part, instance, placed })
     if (labelScale && part.grain !== 'none') {
       drawGrainArrow(ctx, placed, toScreen, instance.rotation ?? 0)
     }
+    ctx.restore()
     void rotatedSize
   }
 
