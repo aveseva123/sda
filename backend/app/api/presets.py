@@ -61,6 +61,7 @@ def delete_preset(preset_id: int, db: Session = Depends(get_db)) -> None:
     if preset is None:
         raise HTTPException(404, "Пресет не найден")
     db.delete(preset)
+    db.flush()
 
 
 @router.get("/config", response_model=dict)

@@ -93,6 +93,37 @@ def layer_preview(batch_id: int, layer_name: str, db: Session = Depends(get_db))
     }
 
 
+@router.get("/{batch_id}/sheets", response_model=list[dict])
+def detected_sheets(batch_id: int, db: Session = Depends(get_db)) -> list[dict]:
+    """Габариты листов, найденные в чертежах загрузки.
+
+    Размеры берутся со слоя контуров листа, а не выдумываются. Технолог
+    подтверждает их и одним действием заводит формат листа и приход на склад.
+    """
+    batch = _require(db, batch_id)
+    merged: dict[tuple, dict] = {}
+    for record in db.scalars(
+        select(ImportFile).where(ImportFile.batch_id == batch.id)
+    ).all():
+        for sheet in record.detected_sheets or []:
+            key = (round(sheet.get("w", 0), 1), round(sheet.get("h", 0), 1),
+                   sheet.get("thickness"))
+            entry = merged.setdefault(
+                key,
+                {
+                    "w": key[0],
+                    "h": key[1],
+                    "thickness": key[2],
+                    "count": 0,
+                    "files": [],
+                },
+            )
+            entry["count"] += 1
+            if record.filename not in entry["files"]:
+                entry["files"].append(record.filename)
+    return sorted(merged.values(), key=lambda e: (-(e["w"] * e["h"]), e["w"]))
+
+
 @router.post("/{batch_id}/process", response_model=ImportBatchDetail)
 def process(
     batch_id: int, payload: ProcessRequest, db: Session = Depends(get_db)
@@ -117,6 +148,7 @@ def process(
 @router.delete("/{batch_id}", status_code=204)
 def delete_batch(batch_id: int, db: Session = Depends(get_db)) -> None:
     db.delete(_require(db, batch_id))
+    db.flush()
 
 
 def _require(db: Session, batch_id: int) -> ImportBatch:

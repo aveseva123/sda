@@ -161,6 +161,7 @@ class ImportFileOut(ORMModel):
     error: str | None
     part_id: int | None
     resolve_trace: dict | None
+    detected_sheets: list | None = None
 
 
 class ImportBatchOut(ORMModel):
@@ -212,3 +213,119 @@ class LayerPresetOut(ORMModel):
     rules: list
     thickness_from_layer_regex: str | None
     is_builtin: bool
+
+
+# ------------------------------------------------------- форматы листов
+
+
+class SheetFormatIn(BaseModel):
+    w: float = Field(gt=0)
+    h: float = Field(gt=0)
+    price: float | None = None
+
+
+class SheetFormatOut(ORMModel):
+    id: int
+    material_id: int
+    w: float
+    h: float
+    price: float | None
+
+
+# ---------------------------------------------------------------- склад
+
+
+class StockReceiveIn(BaseModel):
+    """Приход на склад."""
+
+    material_id: int
+    w: float = Field(gt=0)
+    h: float = Field(gt=0)
+    qty: int = Field(default=1, ge=1)
+    kind: str = "sheet"
+    location: str | None = None
+    note: str | None = None
+    price: float | None = None
+    actor: str | None = None
+
+
+class OffcutIn(BaseModel):
+    """Обрезок, который технолог решил оставить."""
+
+    w: float = Field(gt=0)
+    h: float = Field(gt=0)
+    note: str | None = None
+    location: str | None = None
+
+
+class StockConsumeIn(BaseModel):
+    """Отметка «лист отрезан»."""
+
+    qty: int = Field(default=1, ge=1)
+    offcuts: list[OffcutIn] = Field(default_factory=list)
+    reason: str | None = None
+    actor: str | None = None
+    sheet_id: int | None = None
+
+
+class StockAdjustIn(BaseModel):
+    new_qty: int = Field(ge=0)
+    reason: str | None = None
+    actor: str | None = None
+
+
+class StockScrapIn(BaseModel):
+    qty: int = Field(default=1, ge=1)
+    reason: str | None = None
+    actor: str | None = None
+
+
+class StockItemOut(ORMModel):
+    id: int
+    material_id: int
+    material_name: str | None = None
+    thickness: float | None = None
+    kind: str
+    w: float
+    h: float
+    qty: int
+    status: str
+    location: str | None
+    note: str | None
+    price: float | None
+    source_item_id: int | None
+    area_m2: float = 0.0
+    # Рекомендация «стоит ли хранить» — для обрезков.
+    verdict: dict | None = None
+
+
+class StockMovementOut(ORMModel):
+    id: int
+    item_id: int
+    kind: str
+    qty: int
+    reason: str | None
+    actor: str | None
+    offcut_id: int | None
+    created_at: datetime
+
+
+class StockSummaryRow(BaseModel):
+    material_id: int
+    material_name: str
+    thickness: float | None
+    sheets: int
+    offcuts: int
+    area_m2: float
+
+
+class StockConsumeResult(BaseModel):
+    item: StockItemOut
+    offcuts: list[StockItemOut]
+
+
+class OffcutJudgeOut(BaseModel):
+    worth_keeping: bool
+    reason: str
+    area_m2: float
+    thresholds: dict

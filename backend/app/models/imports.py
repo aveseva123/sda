@@ -99,6 +99,9 @@ class ImportFile(Base, TimestampMixin):
     raw_layers: Mapped[list | None] = mapped_column(JSONType)
     # Что резолверы нашли и откуда — показывается в очереди уточнений.
     resolve_trace: Mapped[dict | None] = mapped_column(JSONType)
+    # Габариты листов, найденных в чертеже (слой контуров листа). Технолог
+    # подтверждает их и заводит как формат листа на складе.
+    detected_sheets: Mapped[list | None] = mapped_column(JSONType)
     part_id: Mapped[int | None] = mapped_column(ForeignKey("parts.id", ondelete="SET NULL"))
     error: Mapped[str | None] = mapped_column(Text)
 

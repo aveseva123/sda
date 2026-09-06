@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { api } from '../api/client'
 import LayerWizard from '../components/LayerWizard'
-import type { ImportBatch, LayerSummary, Material } from '../api/types'
+import type { DetectedSheet, ImportBatch, LayerSummary, Material } from '../api/types'
 import { batchStatusLabel, dxfSourceLabel, fileStatusLabel, plural } from '../lib/format'
 import { useLoader } from '../lib/hooks'
 
@@ -53,6 +53,8 @@ export default function ImportPage() {
   const [batch, setBatch] = useState<ImportBatch | null>(null)
   const [summary, setSummary] = useState<LayerSummary | null>(null)
   const [defaults, setDefaults] = useState({ project_name: '', material_id: '' })
+  const [sheets, setSheets] = useState<DetectedSheet[]>([])
+  const [sheetNotice, setSheetNotice] = useState<string | null>(null)
 
   const { data: materials } = useLoader<Material[]>(() => api.materials(), [])
 
@@ -64,6 +66,8 @@ export default function ImportPage() {
     try {
       const created = await api.upload(files, `Загрузка ${new Date().toLocaleString('ru')}`)
       setBatch(created)
+      setSheets([])
+      setSheetNotice(null)
       setSummary(await api.layers(created.id))
     } catch (err) {
       setError((err as Error).message)
@@ -94,6 +98,7 @@ export default function ImportPage() {
       })
       setBatch(done)
       setSummary(null)
+      setSheets(await api.detectedSheets(batch.id))
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -274,6 +279,38 @@ export default function ImportPage() {
         </div>
       )}
 
+      {sheets.length > 0 && (
+        <div className="panel">
+          <h3>Листы, найденные в чертеже</h3>
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Габариты прочитаны со слоя контуров листа, а не выдуманы. Подтвердите
+            их — формат добавится в справочник материала, а листы встанут на склад.
+          </p>
+          {sheetNotice && <div className="notice ok">{sheetNotice}</div>}
+          <table>
+            <thead>
+              <tr>
+                <th className="num">Габарит, мм</th>
+                <th className="num">Толщина</th>
+                <th className="num">Листов в чертеже</th>
+                <th>Материал</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {sheets.map((sheet, index) => (
+                <SheetRow
+                  key={index}
+                  sheet={sheet}
+                  materials={materials ?? []}
+                  onDone={setSheetNotice}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {batch && summary && (
         <LayerWizard
           batchId={batch.id}
@@ -283,5 +320,88 @@ export default function ImportPage() {
         />
       )}
     </>
+  )
+}
+
+
+/** Строка найденного листа: завести формат и оприходовать на склад. */
+function SheetRow({
+  sheet,
+  materials,
+  onDone,
+}: {
+  sheet: DetectedSheet
+  materials: Material[]
+  onDone: (message: string) => void
+}) {
+  // По толщине из чертежа подбирается материал: если он один, выбирать нечего.
+  const candidates = materials.filter(
+    (material) => sheet.thickness !== null && Math.abs(material.thickness - sheet.thickness) < 0.01,
+  )
+  const [materialId, setMaterialId] = useState(
+    candidates.length === 1 ? String(candidates[0].id) : '',
+  )
+  const [qty, setQty] = useState('1')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const apply = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const id = Number(materialId)
+      // Формат может уже существовать — это не ошибка сценария.
+      await api.addSheetFormat(id, { w: sheet.w, h: sheet.h }).catch(() => undefined)
+      await api.stockReceive({
+        material_id: id,
+        w: sheet.w,
+        h: sheet.h,
+        qty: Number(qty),
+        note: `из чертежа: ${sheet.files.slice(0, 2).join(', ')}`,
+      })
+      onDone(`Формат ${sheet.w} × ${sheet.h} заведён, ${qty} лист(ов) на складе.`)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <tr>
+      <td className="num">
+        <b>
+          {sheet.w} × {sheet.h}
+        </b>
+      </td>
+      <td className="num">{sheet.thickness !== null ? `${sheet.thickness} мм` : '—'}</td>
+      <td className="num">{sheet.count}</td>
+      <td>
+        <select value={materialId} onChange={(event) => setMaterialId(event.target.value)}>
+          <option value="">— выберите материал —</option>
+          {(candidates.length ? candidates : materials).map((material) => (
+            <option key={material.id} value={material.id}>
+              {material.name} · {material.thickness} мм
+            </option>
+          ))}
+        </select>
+        {error && <div className="small" style={{ color: 'var(--danger)' }}>{error}</div>}
+      </td>
+      <td>
+        <div className="row tight">
+          <input
+            type="number"
+            min={1}
+            style={{ width: 70 }}
+            value={qty}
+            onChange={(event) => setQty(event.target.value)}
+            title="Сколько таких листов оприходовать"
+          />
+          <button type="button" onClick={apply} disabled={!materialId || busy}>
+            Завести и оприходовать
+          </button>
+        </div>
+      </td>
+    </tr>
   )
 }

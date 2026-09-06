@@ -58,6 +58,11 @@ class ResolveContext:
     relpath: str = ""
     layer_names: list[str] = field(default_factory=list)
     texts: list[str] = field(default_factory=list)
+    # Глубина контура детали, взятая из имени слоя (``PERIMETER D 16.00``).
+    # Самый достоверный источник: приходит из конструкторского ПО.
+    # Заполняется на КАЖДУЮ деталь отдельно — в одном чертеже бывают
+    # детали разной толщины.
+    layer_depth: float | None = None
     # thickness_from_layer_regex активного пресета слоёв.
     layer_thickness_regex: str | None = None
     filename_template: str | None = None
@@ -124,7 +129,20 @@ def resolve_thickness(ctx: ResolveContext) -> ThicknessResolution:
         source = ResolveSource.UNRESOLVED
         pattern_name = None
 
-        if step == "layer_map":
+        if step == "layer_depth":
+            source = ResolveSource.LAYER_DEPTH
+            if ctx.layer_depth is None:
+                result.attempts.append(
+                    Attempt(step, False, note="в имени слоя нет глубины обработки")
+                )
+                continue
+            found = (
+                ctx.layer_depth,
+                {"name": "layer_depth", "confidence": 0.98},
+                f"глубина контура {ctx.layer_depth} мм",
+            )
+
+        elif step == "layer_map":
             source = ResolveSource.LAYER_MAP
             if ctx.layer_thickness_regex:
                 found = _search(

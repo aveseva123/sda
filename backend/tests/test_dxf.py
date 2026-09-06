@@ -13,20 +13,35 @@ import pytest
 
 import tests.factories as factories
 from app.dxf import build_shapes, read_file
+from app.dxf.layer_meta import LayerMeta, parse_layer_attributes
 from app.dxf.normalize import canonical_signature, deduplicate, path_length, stitch
 from app.dxf.reader import DxfReadError, _circle_points
 
+# Карта слоёв Базиса по эталонным файлам заказчика.
 BAZIS_MAP = {
-    "ГАБАРИТ": "OUTER",
-    "ПРИСАДКА": "DRILL",
-    "ПАЗ": "GROOVE",
-    "ТЕКСТ": "INFO",
+    "BOARDS": "SHEET",
+    "PERIMETER D 18.00": "OUTER",
+    "HOLES DIAM 8.00 D 18.00": "DRILL",
+    "INSETS D 12.00": "POCKET",
 }
+
+
+def _meta(mapping: dict[str, str]) -> dict[str, LayerMeta]:
+    """Метаданные слоёв так, как их построил бы мастер сопоставления."""
+    return {
+        name: LayerMeta(
+            name=name,
+            semantic=semantic,
+            depth=parse_layer_attributes(name).get("depth"),
+            hole_diameter=parse_layer_attributes(name).get("hole_diameter"),
+        )
+        for name, semantic in mapping.items()
+    }
 
 
 def test_reads_closed_polyline_outline(tmp_path):
     scan = read_file(factories.bazis_part(tmp_path / "p.dxf", width=600, height=400))
-    result = build_shapes(scan.primitives, BAZIS_MAP)
+    result = build_shapes(scan.primitives, BAZIS_MAP, layer_meta=_meta(BAZIS_MAP))
 
     assert len(result.shapes) == 1
     shape = result.shapes[0]
@@ -37,20 +52,53 @@ def test_reads_closed_polyline_outline(tmp_path):
 
 def test_drill_diameters_come_from_circle_geometry(tmp_path):
     scan = read_file(factories.bazis_part(tmp_path / "p.dxf"))
-    shape = build_shapes(scan.primitives, BAZIS_MAP).shapes[0]
+    shape = build_shapes(scan.primitives, BAZIS_MAP, layer_meta=_meta(BAZIS_MAP)).shapes[0]
 
     drills = sorted(op.diameter for op in shape.operations if op.semantic == "DRILL")
-    assert drills == [8.0, 8.0, 35.0]
+    assert drills == [8.0, 8.0, 8.0]
 
 
-def test_text_is_metadata_not_geometry(tmp_path):
-    """TEXT/MTEXT читается как метаданные и не участвует в контурах."""
-    scan = read_file(factories.bazis_part(tmp_path / "p.dxf", thickness_text="Толщина 18"))
-    assert "Толщина 18" in scan.texts
+def test_sheet_layer_is_not_a_part(tmp_path):
+    """Слой BOARDS несёт контур ЛИСТА. Прими его за деталь — и в дереве
+    появится «деталь» 2800×2070, а раскрой поедет."""
+    scan = read_file(factories.bazis_part(tmp_path / "p.dxf", sheet=(2800.0, 2070.0)))
+    result = build_shapes(scan.primitives, BAZIS_MAP, layer_meta=_meta(BAZIS_MAP))
 
-    shape = build_shapes(scan.primitives, BAZIS_MAP).shapes[0]
-    # Текст лежит выше детали; попади он в геометрию — габарит бы вырос.
-    assert shape.width == 400.0
+    assert len(result.shapes) == 1
+    assert result.shapes[0].length == 600.0
+    assert [(s.w, s.h) for s in result.sheets] == [(2800.0, 2070.0)]
+
+
+def test_depth_and_thickness_come_from_layer_name(tmp_path):
+    """Базис пишет глубину обработки в имя слоя — она достовернее правил."""
+    scan = read_file(factories.bazis_part(tmp_path / "p.dxf", thickness=18.0, inset_depth=12.0))
+    shape = build_shapes(scan.primitives, BAZIS_MAP, layer_meta=_meta(BAZIS_MAP)).shapes[0]
+
+    assert shape.thickness_hint == 18.0, "толщина = глубина контура детали"
+    pockets = [op for op in shape.operations if op.semantic == "POCKET"]
+    assert pockets and pockets[0].depth == 12.0, "выборка не насквозь"
+    drills = [op for op in shape.operations if op.semantic == "DRILL"]
+    assert drills and all(op.depth == 18.0 for op in drills), "присадка насквозь"
+
+
+def test_two_sheets_of_different_thickness_in_one_file(tmp_path):
+    """Реальная выгрузка кладёт в один чертёж листы разной толщины."""
+    scan = read_file(
+        factories.bazis_multi_thickness(
+            tmp_path / "m.dxf", first=(18.0, 1000.0, 600.0), second=(4.0, 300.0, 200.0)
+        )
+    )
+    mapping = {
+        "BOARDS": "SHEET",
+        "PERIMETER D 18.00": "OUTER",
+        "PERIMETER D 4.00": "OUTER",
+    }
+    result = build_shapes(scan.primitives, mapping, layer_meta=_meta(mapping))
+
+    assert sorted(s.thickness for s in result.sheets) == [4.0, 18.0]
+    assert sorted(shape.thickness_hint for shape in result.shapes) == [4.0, 18.0]
+    # Каждая деталь знает, на каком листе она лежала.
+    assert {shape.sheet_index for shape in result.shapes} == {0, 1}
 
 
 def test_insert_block_is_expanded(tmp_path):
@@ -149,14 +197,16 @@ def test_broken_file_raises_readable_error(tmp_path):
 
 
 def test_ignored_layers_do_not_affect_geometry(tmp_path):
-    """Слой INFO (рамка, штамп) не должен становиться внешним контуром."""
+    """Слой, помеченный IGNORE, не должен влиять на габарит детали."""
     scan = read_file(factories.bazis_part(tmp_path / "p.dxf", width=600, height=400))
-    mapping = dict(BAZIS_MAP)
-    shape_with_info = build_shapes(scan.primitives, mapping).shapes[0]
+    baseline = build_shapes(scan.primitives, BAZIS_MAP, layer_meta=_meta(BAZIS_MAP)).shapes[0]
 
-    mapping["ТЕКСТ"] = "IGNORE"
-    shape_ignored = build_shapes(scan.primitives, mapping).shapes[0]
-    assert shape_with_info.bbox == shape_ignored.bbox
+    mapping = dict(BAZIS_MAP)
+    mapping["INSETS D 12.00"] = "IGNORE"
+    ignored = build_shapes(scan.primitives, mapping).shapes[0]
+
+    assert baseline.bbox == ignored.bbox
+    assert not [op for op in ignored.operations if op.semantic == "POCKET"]
 
 
 def test_path_length_is_measured_in_mm():

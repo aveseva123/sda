@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -32,7 +32,7 @@ class Material(Base, TimestampMixin):
     trim_bottom: Mapped[float] = mapped_column(Float, nullable=False, default=10.0)
 
     # Ограничение по количеству листов в наличии (None — не ограничено).
-    stock_sheets: Mapped[int | None] = mapped_column()
+    stock_sheets: Mapped[int | None] = mapped_column(Integer)
 
     # Алиасы для распознавания материала в именах файлов и спецификациях.
     aliases: Mapped[list | None] = mapped_column(JSONType)
@@ -60,27 +60,3 @@ class MaterialSheetFormat(Base, TimestampMixin):
     price: Mapped[float | None] = mapped_column(Float)
 
     material: Mapped[Material] = relationship(back_populates="sheet_formats")
-
-
-class Offcut(Base, TimestampMixin):
-    """Деловой отход: полезный обрезок, доступный как виртуальный лист.
-    Предлагается к использованию в следующих заданиях в первую очередь."""
-
-    __tablename__ = "offcuts"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    # use_alter: sheets.offcut_id ссылается обратно на offcuts, поэтому FK
-    # создаётся отдельным ALTER после обеих таблиц.
-    source_sheet_id: Mapped[int | None] = mapped_column(
-        ForeignKey("sheets.id", ondelete="SET NULL", use_alter=True,
-                   name="fk_offcuts_source_sheet_id")
-    )
-    material_id: Mapped[int] = mapped_column(
-        ForeignKey("materials.id", ondelete="CASCADE"), nullable=False
-    )
-    w: Mapped[float] = mapped_column(Float, nullable=False)
-    h: Mapped[float] = mapped_column(Float, nullable=False)
-    # Реальная форма обрезка (может быть не прямоугольной).
-    geometry: Mapped[dict | None] = mapped_column(JSONType)
-    available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    location: Mapped[str | None] = mapped_column(String(200))

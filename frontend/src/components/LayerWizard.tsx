@@ -69,10 +69,16 @@ export default function LayerWizard({ batchId, summary, onApply, busy }: Props) 
     <div className="panel">
       <h3>Мастер сопоставления слоёв</h3>
       <p className="muted small" style={{ marginTop: 0 }}>
-        Источник определён как <b>{dxfSourceLabel(summary.detected_source)}</b>. Назначьте
-        каждому слою технологический смысл — система предзаполнила подсказки по геометрии
-        слоя, а не по его имени. Слой без назначения не режется и отправляет деталь в
-        очередь уточнений.
+        Источник определён как <b>{dxfSourceLabel(summary.detected_source)}</b>
+        {summary.preset_name && (
+          <>
+            , применён пресет <b>{summary.preset_name}</b>
+          </>
+        )}
+        . Назначьте каждому слою технологический смысл. Строки, помеченные
+        «пресет», уже подтверждены ранее; остальные предзаполнены подсказкой по
+        геометрии слоя, а не по его имени. Слой без назначения не режется и
+        отправляет деталь в очередь уточнений.
       </p>
 
       <div className="split">
@@ -81,6 +87,7 @@ export default function LayerWizard({ batchId, summary, onApply, busy }: Props) 
             <tr>
               <th>Слой</th>
               <th className="num">Примитивов</th>
+              <th className="num">Глубина</th>
               <th>Состав</th>
               <th>Семантика</th>
             </tr>
@@ -97,9 +104,23 @@ export default function LayerWizard({ batchId, summary, onApply, busy }: Props) 
               >
                 <td>
                   <b>{layer.name}</b>
-                  <div className="small muted">в {layer.files} файл(ах)</div>
+                  <div className="small muted">
+                    в {layer.files} файл(ах){' '}
+                    {layer.from_preset ? (
+                      <span className="badge ok">пресет</span>
+                    ) : (
+                      <span className="badge plain">геометрия</span>
+                    )}
+                  </div>
                 </td>
                 <td className="num">{layer.count}</td>
+                <td className="num">
+                  {layer.depth !== null ? (
+                    <b>{layer.depth} мм</b>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
                 <td className="small muted">
                   {Object.entries(layer.dxftypes)
                     .map(([type, count]) => `${type}×${count}`)

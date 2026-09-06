@@ -1,8 +1,85 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { api } from '../api/client'
-import type { Material } from '../api/types'
+import type { Material, SheetFormat } from '../api/types'
 import { useLoader } from '../lib/hooks'
+
+/** Типоразмеры листа для материала: задаются здесь, а не зашиты в код. */
+function SheetFormats({ material }: { material: Material }) {
+  const [formats, setFormats] = useState<SheetFormat[]>([])
+  const [draft, setDraft] = useState({ w: '', h: '' })
+  const [error, setError] = useState<string | null>(null)
+
+  const reload = () => {
+    api
+      .sheetFormats(material.id)
+      .then(setFormats)
+      .catch((err: Error) => setError(err.message))
+  }
+
+  useEffect(reload, [material.id])
+
+  const add = async () => {
+    setError(null)
+    try {
+      await api.addSheetFormat(material.id, { w: Number(draft.w), h: Number(draft.h) })
+      setDraft({ w: '', h: '' })
+      reload()
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  const remove = async (formatId: number) => {
+    await api.deleteSheetFormat(material.id, formatId)
+    reload()
+  }
+
+  return (
+    <div>
+      <div className="row tight" style={{ marginBottom: 6 }}>
+        <span className="chip">
+          {material.sheet_w} × {material.sheet_h}
+          <span className="muted">основной</span>
+        </span>
+        {formats.map((format) => (
+          <span className="chip" key={format.id}>
+            {format.w} × {format.h}
+            <button
+              type="button"
+              className="danger"
+              style={{ padding: '0 5px', lineHeight: 1.2 }}
+              onClick={() => remove(format.id)}
+              title="Удалить формат"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="row tight">
+        <input
+          type="number"
+          placeholder="длина"
+          style={{ width: 82 }}
+          value={draft.w}
+          onChange={(event) => setDraft((p) => ({ ...p, w: event.target.value }))}
+        />
+        <input
+          type="number"
+          placeholder="ширина"
+          style={{ width: 82 }}
+          value={draft.h}
+          onChange={(event) => setDraft((p) => ({ ...p, h: event.target.value }))}
+        />
+        <button type="button" onClick={add} disabled={!draft.w || !draft.h}>
+          Добавить формат
+        </button>
+      </div>
+      {error && <div className="small" style={{ color: 'var(--danger)' }}>{error}</div>}
+    </div>
+  )
+}
 
 const EMPTY = {
   name: '',
@@ -70,7 +147,9 @@ export default function MaterialsPage() {
           <p>
             Толщина — часть идентичности материала: раскрой всегда идёт по паре
             «материал + толщина». Список толщин расширяется добавлением материала, ничего
-            не зашито в код. Алиасы помогают распознать материал по имени файла.
+            не зашито в код. Типоразмеры листа задаются здесь же — можно завести
+            несколько форматов на один материал. Алиасы помогают распознать материал
+            по имени файла.
           </p>
         </div>
       </div>
@@ -165,7 +244,7 @@ export default function MaterialsPage() {
             <tr>
               <th>Материал</th>
               <th className="num">Толщина</th>
-              <th className="num">Лист</th>
+              <th>Форматы листа, мм</th>
               <th>Текстура</th>
               <th className="num">Обрезка</th>
               <th className="num">В наличии</th>
@@ -181,8 +260,8 @@ export default function MaterialsPage() {
                   {material.supplier && <div className="small muted">{material.supplier}</div>}
                 </td>
                 <td className="num">{material.thickness} мм</td>
-                <td className="num">
-                  {material.sheet_w} × {material.sheet_h}
+                <td>
+                  <SheetFormats material={material} />
                 </td>
                 <td>
                   {material.has_grain ? (

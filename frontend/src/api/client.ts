@@ -1,12 +1,18 @@
 import type {
   AppConfig,
+  DetectedSheet,
   ImportBatch,
   LayerPreset,
   LayerSummary,
   Material,
+  OffcutVerdict,
   Part,
   PartGeometry,
   Project,
+  SheetFormat,
+  StockItem,
+  StockMovement,
+  StockSummaryRow,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/api'
@@ -47,6 +53,12 @@ export const api = {
   createMaterial: (payload: Partial<Material> & { name: string; thickness: number }) =>
     request<Material>('/materials', json('POST', payload)),
   deleteMaterial: (id: number) => request<void>(`/materials/${id}`, { method: 'DELETE' }),
+  sheetFormats: (materialId: number) =>
+    request<SheetFormat[]>(`/materials/${materialId}/formats`),
+  addSheetFormat: (materialId: number, payload: { w: number; h: number; price?: number | null }) =>
+    request<SheetFormat>(`/materials/${materialId}/formats`, json('POST', payload)),
+  deleteSheetFormat: (materialId: number, formatId: number) =>
+    request<void>(`/materials/${materialId}/formats/${formatId}`, { method: 'DELETE' }),
 
   parts: (params: Record<string, string | number | undefined> = {}) => {
     const query = new URLSearchParams()
@@ -92,6 +104,49 @@ export const api = {
     ),
   processBatch: (batchId: number, payload: Record<string, unknown>) =>
     request<ImportBatch>(`/imports/${batchId}/process`, json('POST', payload)),
+
+  detectedSheets: (batchId: number) =>
+    request<DetectedSheet[]>(`/imports/${batchId}/sheets`),
+
+  stock: (params: { material_id?: number; kind?: string; include_used?: boolean } = {}) => {
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== '') query.set(key, String(value))
+    }
+    const suffix = query.toString() ? `?${query}` : ''
+    return request<StockItem[]>(`/stock${suffix}`)
+  },
+  stockSummary: () => request<StockSummaryRow[]>('/stock/summary'),
+  judgeOffcut: (w: number, h: number) =>
+    request<OffcutVerdict>(`/stock/judge-offcut?w=${w}&h=${h}`),
+  stockReceive: (payload: {
+    material_id: number
+    w: number
+    h: number
+    qty: number
+    kind?: string
+    location?: string | null
+    note?: string | null
+  }) => request<StockItem>('/stock', json('POST', payload)),
+  stockConsume: (
+    itemId: number,
+    payload: {
+      qty: number
+      offcuts: Array<{ w: number; h: number; note?: string | null }>
+      reason?: string | null
+      actor?: string | null
+    },
+  ) =>
+    request<{ item: StockItem; offcuts: StockItem[] }>(
+      `/stock/${itemId}/consume`,
+      json('POST', payload),
+    ),
+  stockScrap: (itemId: number, payload: { qty: number; reason?: string | null }) =>
+    request<StockItem>(`/stock/${itemId}/scrap`, json('POST', payload)),
+  stockAdjust: (itemId: number, payload: { new_qty: number; reason?: string | null }) =>
+    request<StockItem>(`/stock/${itemId}/adjust`, json('POST', payload)),
+  stockMovements: (itemId: number) =>
+    request<StockMovement[]>(`/stock/${itemId}/movements`),
 
   presets: () => request<LayerPreset[]>('/layer-presets'),
   savePreset: (payload: {

@@ -100,6 +100,7 @@ def delete_project(project_id: int, db: Session = Depends(get_db)) -> None:
     if project is None:
         raise HTTPException(404, "Проект не найден")
     db.delete(project)
+    db.flush()
 
 
 @router.get("/palette", response_model=dict)

@@ -34,7 +34,14 @@ class Primitive:
 
     @property
     def diameter(self) -> float | None:
-        return None if self.radius is None else self.radius * 2.0
+        """Диаметр в мм, округлённый до точности платформы.
+
+        В DXF радиус приходит с плавающей точкой (2.0 может лежать как
+        1.999999999999993). Без округления правила глубин, привязанные к
+        ⌀5/⌀8/⌀35, промахиваются мимо диаметра, а на экране появляется
+        «⌀3.999999999999986».
+        """
+        return None if self.radius is None else round(self.radius * 2.0, 4)
 
 
 @dataclass(slots=True)
@@ -72,8 +79,10 @@ class LayerInfo:
 class Operation:
     """Технологическая операция, извлечённая из DXF.
 
-    Глубина здесь НЕ хранится: DXF двумерен. Глубина назначается правилами
-    из ``config/depth_rules.yaml`` на этапе генерации УП.
+    ``depth`` заполняется, если источник пишет глубину в имя слоя
+    (``INSETS D 12.00``). Тогда она достовернее любых правил и имеет
+    приоритет. Если источник глубину не несёт, поле остаётся пустым и
+    глубина берётся из ``config/depth_rules.yaml``.
     """
 
     semantic: str
@@ -83,6 +92,7 @@ class Operation:
     closed: bool = False
     center: Point | None = None
     diameter: float | None = None
+    depth: float | None = None
 
     def as_dict(self) -> dict:
         data: dict = {
@@ -91,6 +101,8 @@ class Operation:
             "layer": self.layer,
             "closed": self.closed,
         }
+        if self.depth is not None:
+            data["depth"] = round(self.depth, 3)
         if self.points:
             data["points"] = [[round(x, 4), round(y, 4)] for x, y in self.points]
         if self.center is not None:
@@ -98,6 +110,37 @@ class Operation:
         if self.diameter is not None:
             data["diameter"] = round(self.diameter, 4)
         return data
+
+
+@dataclass(slots=True)
+class SheetRegion:
+    """Контур листа со слоя SHEET.
+
+    В одном чертеже листов бывает несколько, и они бывают разной толщины —
+    именно так выглядят реальные выгрузки заказчика. Деталь относится к
+    тому листу, внутри которого лежит.
+    """
+
+    index: int
+    bbox: tuple[float, float, float, float]
+    thickness: float | None = None
+
+    @property
+    def w(self) -> float:
+        return round(self.bbox[2] - self.bbox[0], 3)
+
+    @property
+    def h(self) -> float:
+        return round(self.bbox[3] - self.bbox[1], 3)
+
+    def as_dict(self) -> dict:
+        return {
+            "index": self.index,
+            "w": self.w,
+            "h": self.h,
+            "bbox": [round(v, 3) for v in self.bbox],
+            "thickness": self.thickness,
+        }
 
 
 @dataclass(slots=True)
@@ -109,6 +152,12 @@ class PartShape:
     operations: list[Operation] = field(default_factory=list)
     area: float = 0.0
     bbox: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    # Слой, с которого пришёл внешний контур, и его глубина — из них
+    # выводится толщина детали для источников вроде Базиса.
+    source_layer: str | None = None
+    thickness_hint: float | None = None
+    # Индекс листа, на котором деталь лежала в исходном чертеже.
+    sheet_index: int | None = None
 
     @property
     def length(self) -> float:
@@ -131,6 +180,9 @@ class PartShape:
             "bbox": [round(v, 4) for v in self.bbox],
             "length": self.length,
             "width": self.width,
+            "source_layer": self.source_layer,
+            "thickness_hint": self.thickness_hint,
+            "sheet_index": self.sheet_index,
         }
 
 

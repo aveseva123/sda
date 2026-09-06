@@ -61,8 +61,9 @@ class Sheet(Base, TimestampMixin):
     h: Mapped[float] = mapped_column(Float, nullable=False)
     # Раскрой на деловом отходе, а не на целом листе.
     is_offcut: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    offcut_id: Mapped[int | None] = mapped_column(
-        ForeignKey("offcuts.id", ondelete="SET NULL")
+    # Раскрой мог идти по деловому отходу — тогда здесь складская позиция.
+    stock_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("stock_items.id", ondelete="SET NULL")
     )
     utilization: Mapped[float | None] = mapped_column(Float)
 

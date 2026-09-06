@@ -170,6 +170,10 @@ export interface LayerStat {
   circles: number
   texts: number
   circle_diameters: number[]
+  /** Глубина обработки, объявленная в имени слоя (Базис: «PERIMETER D 16.00»). */
+  depth: number | null
+  /** Семантика взята из сохранённого пресета, а не из геометрической догадки. */
+  from_preset: boolean
 }
 
 export interface SemanticInfo {
@@ -181,6 +185,7 @@ export interface SemanticInfo {
 
 export interface LayerSummary {
   detected_source: string
+  preset_name: string | null
   layers: LayerStat[]
   suggestions: Record<string, string>
   semantics: Record<string, SemanticInfo>
@@ -203,4 +208,66 @@ export interface AppConfig {
   filename_templates: Array<{ name: string; title: string; example: string }>
   semantics: Record<string, SemanticInfo>
   depth_rules: Array<Record<string, unknown>>
+}
+
+
+export interface SheetFormat {
+  id: number
+  material_id: number
+  w: number
+  h: number
+  price: number | null
+}
+
+export interface OffcutVerdict {
+  worth_keeping: boolean
+  reason: string
+  area_m2: number
+  thresholds: Record<string, number>
+}
+
+export interface StockItem {
+  id: number
+  material_id: number
+  material_name: string | null
+  thickness: number | null
+  kind: 'sheet' | 'offcut'
+  w: number
+  h: number
+  qty: number
+  status: string
+  location: string | null
+  note: string | null
+  price: number | null
+  source_item_id: number | null
+  area_m2: number
+  verdict: OffcutVerdict | null
+}
+
+export interface StockMovement {
+  id: number
+  item_id: number
+  kind: string
+  qty: number
+  reason: string | null
+  actor: string | null
+  offcut_id: number | null
+  created_at: string
+}
+
+export interface StockSummaryRow {
+  material_id: number
+  material_name: string
+  thickness: number | null
+  sheets: number
+  offcuts: number
+  area_m2: number
+}
+
+export interface DetectedSheet {
+  w: number
+  h: number
+  thickness: number | null
+  count: number
+  files: string[]
 }

@@ -5,6 +5,7 @@ import MaterialsPage from './pages/MaterialsPage'
 import PartsPage from './pages/PartsPage'
 import PendingPage from './pages/PendingPage'
 import ProjectsPage from './pages/ProjectsPage'
+import StockPage from './pages/StockPage'
 import { usePendingCount } from './lib/hooks'
 
 export default function App() {
@@ -33,6 +34,9 @@ export default function App() {
         <NavLink className="nav-link" to="/materials">
           Материалы
         </NavLink>
+        <NavLink className="nav-link" to="/stock">
+          Склад
+        </NavLink>
       </nav>
       <main className="main">
         <Routes>
@@ -42,6 +46,7 @@ export default function App() {
           <Route path="/parts" element={<PartsPage />} />
           <Route path="/pending" element={<PendingPage />} />
           <Route path="/materials" element={<MaterialsPage />} />
+          <Route path="/stock" element={<StockPage />} />
         </Routes>
       </main>
     </div>

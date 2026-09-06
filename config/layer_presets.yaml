@@ -9,6 +9,7 @@
 # Семантики: OUTER, INNER, DRILL, GROOVE, POCKET, MARK, INFO, IGNORE
 
 semantics:
+  SHEET:  {title: "Контур листа",     cut: false, offset: none,    through: false}
   OUTER:  {title: "Внешний контур",   cut: true,  offset: outside, through: true}
   INNER:  {title: "Внутренний вырез", cut: true,  offset: inside,  through: true}
   DRILL:  {title: "Присадка",         cut: true,  offset: none,    through: false}
@@ -18,6 +19,25 @@ semantics:
   INFO:   {title: "Метаданные",       cut: false, offset: none,    through: false}
   IGNORE: {title: "Игнорировать",     cut: false, offset: none,    through: false}
 
+# Извлечение технологических параметров прямо из имени слоя.
+#
+# Подтверждено эталонными файлами заказчика: Базис пишет в имя слоя глубину
+# обработки и диаметр отверстия. Это важнее, чем кажется: DXF двумерен и
+# обычно глубину не несёт, поэтому в ТЗ она задавалась только правилами.
+# Для этого источника глубина есть в файле, и она достовернее правил.
+#
+#   PERIMETER D 16.00          -> глубина 16.00 мм
+#   PERIMETER D 12.000         -> глубина 12.000 мм (бывает три знака)
+#   INSETS D 6.00              -> глубина 6.00 мм
+#   HOLES DIAM 4.00 D 16.00    -> отверстие ⌀4.00 на глубину 16.00 мм
+layer_attributes:
+  depth:
+    # «D» отдельным словом, дальше число. «DIAM» под это не подходит:
+    # после D идёт буква, а не цифра.
+    regex: '(?i)(?:^|[\s_-])D[\s_-]*(?P<value>\d+(?:[.,]\d+)?)'
+  hole_diameter:
+    regex: '(?i)DIAM[\s_-]*(?P<value>\d+(?:[.,]\d+)?)'
+
 # Определение источника по сигнатуре DXF-файла ($ACADVER, комментарии,
 # набор системных переменных, характерные имена блоков).
 source_detection:
@@ -25,7 +45,9 @@ source_detection:
     title: "Базис-Мебельщик"
     signals:
       header_contains: ["BAZIS", "БАЗИС", "Bazis"]
-      layer_name_regex: '(?i)(контур|присадк|паз|деталь|габарит)'
+      # Надёжная подпись: слой BOARDS с контурами листов плюс слои
+      # PERIMETER/CUTOUTS/INSETS/HOLES с глубиной в имени.
+      layer_name_regex: '(?i)^(BOARDS?|PERIMETER|CUTOUTS?|INSETS?|HOLES?)\b'
       weight: 1.0
   - source: fusion
     title: "Autodesk Fusion 360"
@@ -40,17 +62,21 @@ source_detection:
 presets:
   - name: "Базис"
     source: bazis
-    # Сопоставление по regex имени слоя, проверяется по порядку.
+    # Имена слоёв взяты из эталонных файлов заказчика, а не из догадок.
+    # Проверяются по порядку, первое совпадение выигрывает.
     rules:
-      - {regex: '(?i)^(габарит|контур|outer|деталь)', semantic: OUTER}
-      - {regex: '(?i)(вырез|внутр|inner|окно)',       semantic: INNER}
-      - {regex: '(?i)(присадк|сверл|отверст|drill)',  semantic: DRILL}
-      - {regex: '(?i)(паз|groove|четверт)',           semantic: GROOVE}
-      - {regex: '(?i)(выборк|карман|pocket|фрезеров)',semantic: POCKET}
-      - {regex: '(?i)(гравир|маркир|mark)',           semantic: MARK}
-      - {regex: '(?i)(текст|размер|рамк|штамп|info)', semantic: INFO}
-    # Толщина из имени слоя, если Базис её туда пишет.
-    thickness_from_layer_regex: '(?i)(?:^|[_\-\s])(?P<value>\d{1,2})(?:mm|мм)?(?:$|[_\-\s])'
+      # Контур ЛИСТА, а не детали. Даёт габарит листа и не режется.
+      - {regex: '(?i)^BOARDS?$',      semantic: SHEET}
+      - {regex: '(?i)^PERIMETER',     semantic: OUTER}
+      - {regex: '(?i)^CUTOUTS?',      semantic: INNER}
+      - {regex: '(?i)^HOLES?',        semantic: DRILL}
+      - {regex: '(?i)^INSETS?',       semantic: POCKET}
+      - {regex: '(?i)^GROOVES?',      semantic: GROOVE}
+      - {regex: '(?i)^(MARK|ENGRAV)', semantic: MARK}
+      - {regex: '(?i)^(TEXT|INFO|FRAME|DIM)', semantic: INFO}
+    # Толщина берётся не из имени слоя напрямую, а из глубины контура:
+    # см. резолвер layer_depth в config/thickness_rules.yaml.
+    thickness_from_layer_regex: null
 
   - name: "Fusion"
     source: fusion
@@ -60,5 +86,15 @@ presets:
     rules:
       - {regex: '(?i)(drill|hole|отверст)', semantic: DRILL}
       - {regex: '(?i)(groove|slot|паз)',    semantic: GROOVE}
-      - {regex: '.*',                       semantic: OUTER, resolve_nesting_by_area: true}
+      # circles_as_drill: окружность мебельного диаметра (чашка петли ⌀35,
+      # шкант ⌀8 и т.п.) трактуется как присадка, а не как сквозной вырез.
+      # Флаг включается осознанно в мастере слоёв; молча ничего не решается.
+      - {regex: '.*', semantic: OUTER, resolve_nesting_by_area: true, circles_as_drill: true}
     thickness_from_layer_regex: null
+
+# Диаметры, при которых окружность на контурном слое считается присадкой
+# (используется только при включённом circles_as_drill и в подсказках мастера).
+drill_diameters:
+  # ⌀4 подтверждён эталонными файлами: «HOLES DIAM 4.00 D 16.00».
+  values: [4, 5, 6, 8, 10, 12, 15, 20, 26, 35]
+  tolerance: 0.6

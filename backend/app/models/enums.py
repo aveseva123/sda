@@ -4,6 +4,7 @@ from enum import StrEnum
 class LayerSemantic(StrEnum):
     """Технологический смысл слоя DXF."""
 
+    SHEET = "SHEET"      # контур ЛИСТА, а не детали — даёт габарит листа
     OUTER = "OUTER"      # внешний контур
     INNER = "INNER"      # внутренний вырез
     DRILL = "DRILL"      # присадка
@@ -24,6 +25,7 @@ class ResolveSource(StrEnum):
     """Откуда взята толщина/материал. Всегда сохраняется вместе со значением,
     чтобы технолог видел, чему верить."""
 
+    LAYER_DEPTH = "layer_depth"  # глубина обработки из имени слоя
     LAYER_MAP = "layer_map"
     FILENAME = "filename"
     FOLDER = "folder"
@@ -75,3 +77,23 @@ class JobStatus(StrEnum):
     RUNNING = "running"
     DONE = "done"
     FAILED = "failed"
+
+
+class StockKind(StrEnum):
+    SHEET = "sheet"      # целый лист
+    OFFCUT = "offcut"    # деловой отход
+
+
+class StockStatus(StrEnum):
+    AVAILABLE = "available"   # доступен для раскроя
+    RESERVED = "reserved"     # закреплён за заданием
+    USED = "used"             # израсходован
+    SCRAPPED = "scrapped"     # списан в мусор как слишком мелкий
+
+
+class StockMovementKind(StrEnum):
+    RECEIPT = "receipt"       # приход
+    CONSUME = "consume"       # лист ушёл в раскрой
+    OFFCUT = "offcut"         # появился деловой отход
+    SCRAP = "scrap"           # списан в мусор
+    ADJUST = "adjust"         # ручная корректировка остатка

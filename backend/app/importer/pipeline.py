@@ -197,9 +197,14 @@ def layer_summary(db: Session, batch: ImportBatch) -> dict:
                     "circles": 0,
                     "texts": 0,
                     "circle_diameters": [],
+                    "bbox": None,
                 },
             )
             entry["count"] += layer.get("count", 0)
+            # Габарит слоя объединяется по всем файлам: без него подсказки
+            # мастера теряют геометрический признак и слой контуров листа
+            # уже не отличить от сквозного выреза.
+            entry["bbox"] = _merge_bbox(entry["bbox"], layer.get("bbox"))
             entry["files"] += 1
             entry["closed_paths"] += layer.get("closed_paths", 0)
             entry["circles"] += layer.get("circles", 0)
@@ -224,13 +229,28 @@ def layer_summary(db: Session, batch: ImportBatch) -> dict:
             circles=e["circles"],
             texts=e["texts"],
             circle_diameters=e["circle_diameters"],
+            bbox=tuple(e["bbox"]) if e["bbox"] else None,
         )
         for e in merged.values()
     ]
+    # Если для источника уже есть пресет — показываем ЕГО карту, а не
+    # геометрические догадки: пресет точнее, он подтверждён человеком.
+    # Геометрия достраивает только те слои, которых в пресете нет.
+    preset = _preset_resolver(db, batch, ImportOptions())(batch.detected_source)
+    mapping = apply_preset([info.name for info in infos], preset)
+    suggestions = {k: str(v) for k, v in suggest_semantics(infos).items()}
+    suggestions.update({k: str(v) for k, v in mapping.semantic_by_layer.items()})
+
+    for entry in merged.values():
+        meta = mapping.meta.get(entry["name"])
+        entry["depth"] = meta.depth if meta else None
+        entry["from_preset"] = entry["name"] in mapping.semantic_by_layer
+
     return {
         "detected_source": batch.detected_source,
+        "preset_name": mapping.preset_name,
         "layers": sorted(merged.values(), key=lambda e: -e["count"]),
-        "suggestions": {k: str(v) for k, v in suggest_semantics(infos).items()},
+        "suggestions": suggestions,
     }
 
 
@@ -311,58 +331,19 @@ def _process_file(
         if name in options.layer_overrides:
             mapping.unmapped.remove(name)
 
-    contours = build_shapes(scan.primitives, mapping.semantic_by_layer)
+    contours = build_shapes(
+        scan.primitives, mapping.semantic_by_layer, layer_meta=mapping.meta
+    )
     if not contours.shapes:
         record.status = FileStatus.FAILED
         record.error = "; ".join(contours.warnings) or "Замкнутых контуров не найдено"
         return "failed"
 
+    # Габариты листов, найденных в чертеже. Технолог подтверждает их и
+    # заводит как формат листа на складе — размеры не выдумываются.
+    record.detected_sheets = contours.sheets_as_dicts()
+
     spec_row = lookup(spec_index, record.filename)
-
-    thickness_res = resolve_thickness(
-        ResolveContext(
-            filename=record.filename,
-            relpath=record.relpath,
-            layer_names=scan.layer_names(),
-            texts=scan.texts,
-            layer_thickness_regex=mapping.thickness_regex,
-            filename_template=options.filename_template,
-            known_thicknesses=known_thicknesses or [],
-        )
-    )
-
-    thickness = thickness_res.value
-    thickness_source = thickness_res.source
-    thickness_accepted = thickness_res.accepted
-    if spec_row is not None and spec_row.thickness:
-        # Спецификация — самый достоверный источник, она перекрывает эвристики.
-        thickness = float(spec_row.thickness)
-        thickness_source = ResolveSource.SPEC
-        thickness_accepted = True
-
-    material_res = resolve_material(
-        filename=record.filename,
-        relpath=record.relpath,
-        texts=scan.texts,
-        materials=materials,
-        thickness=thickness,
-        batch_default_id=options.material_id,
-    )
-    if spec_row is not None and spec_row.material_name:
-        matched = _material_by_name(materials, spec_row.material_name, thickness)
-        if matched is not None:
-            material_res.material_id = matched.id
-            material_res.material_name = matched.name
-            material_res.source = ResolveSource.SPEC
-            material_res.confidence = 1.0
-            material_res.accepted = True
-            material_res.note = f"из спецификации: «{spec_row.material_name}»"
-        else:
-            material_res.accepted = False
-            material_res.note = (
-                f"материал «{spec_row.material_name}» из спецификации "
-                "отсутствует в справочнике"
-            )
 
     from app.resolve.filename import parse_filename
 
@@ -401,44 +382,54 @@ def _process_file(
         )
     )
 
-    accepted = thickness_accepted and material_res.accepted and not mapping.unmapped
-    status = PartStatus.READY if accepted else PartStatus.NEEDS_CLARIFICATION
-
-    clarification = None
-    if not accepted:
-        clarification = {
-            "thickness": thickness_res.as_dict(),
-            "material": material_res.as_dict(),
-            "unmapped_layers": mapping.unmapped,
-            "geometry_warnings": contours.warnings + scan.warnings,
-        }
-
-    record.resolve_trace = {
-        "thickness": thickness_res.as_dict(),
-        "material": material_res.as_dict(),
-        "filename": parsed_name.as_dict(),
-        "layer_mapping": mapping.as_dict(),
-        "geometry_warnings": contours.warnings + scan.warnings,
-        "spec_matched": spec_row is not None,
-    }
-
     created_any = False
     duplicated = False
+    any_pending = False
+    traces: list[dict] = []
+
     for index, shape in enumerate(contours.shapes):
+        # Толщина определяется НА ДЕТАЛЬ: в одном чертеже спокойно лежат
+        # лист 18 мм и лист 4 мм, и общий на файл ответ был бы неверным.
+        resolved = _resolve_part(
+            record=record,
+            scan=scan,
+            shape=shape,
+            mapping=mapping,
+            options=options,
+            materials=materials,
+            known_thicknesses=known_thicknesses,
+            spec_row=spec_row,
+        )
+        accepted = (
+            resolved["thickness_accepted"]
+            and resolved["material"].accepted
+            and not mapping.unmapped
+        )
+        status = PartStatus.READY if accepted else PartStatus.NEEDS_CLARIFICATION
+        any_pending = any_pending or not accepted
+
+        clarification = None
+        if not accepted:
+            clarification = {
+                "thickness": resolved["thickness_res"].as_dict(),
+                "material": resolved["material"].as_dict(),
+                "unmapped_layers": mapping.unmapped,
+                "geometry_warnings": contours.warnings + scan.warnings,
+            }
+
         name = base_name if len(contours.shapes) == 1 else f"{base_name} ({index + 1})"
-        geometry = shape.as_dict()
         part, is_duplicate = _upsert_part(
             db,
             product=product,
             name=name,
             code=spec_row.code if spec_row else None,
             qty=qty,
-            geometry=geometry,
+            geometry=shape.as_dict(),
             shape=shape,
-            thickness=thickness,
-            thickness_source=thickness_source,
-            thickness_confidence=thickness_res.confidence,
-            material_res=material_res,
+            thickness=resolved["thickness"],
+            thickness_source=resolved["thickness_source"],
+            thickness_confidence=resolved["thickness_res"].confidence,
+            material_res=resolved["material"],
             spec_row=spec_row,
             status=status,
             clarification=clarification,
@@ -447,19 +438,112 @@ def _process_file(
         record.part_id = part.id
         created_any = True
         duplicated = duplicated or is_duplicate
+        if index < 5:  # трассировка нужна для разбора, а не для архива
+            traces.append(
+                {
+                    "part": name,
+                    "sheet_index": shape.sheet_index,
+                    "layer": shape.source_layer,
+                    "thickness": resolved["thickness_res"].as_dict(),
+                    "material": resolved["material"].as_dict(),
+                }
+            )
+
+    record.resolve_trace = {
+        "filename": parsed_name.as_dict(),
+        "layer_mapping": mapping.as_dict(),
+        "sheets": record.detected_sheets,
+        "geometry_warnings": contours.warnings + scan.warnings,
+        "spec_matched": spec_row is not None,
+        "parts": traces,
+        "parts_total": len(contours.shapes),
+    }
 
     if not created_any:
         record.status = FileStatus.FAILED
         return "failed"
 
+    if any_pending:
+        record.status = FileStatus.NEEDS_CLARIFICATION
+        return "needs_clarification"
+
     if duplicated:
         record.status = FileStatus.DUPLICATE
         return "duplicate"
 
-    record.status = (
-        FileStatus.PARSED if status == PartStatus.READY else FileStatus.NEEDS_CLARIFICATION
+    record.status = FileStatus.PARSED
+    return "parsed"
+
+
+
+def _resolve_part(
+    *,
+    record: ImportFile,
+    scan,
+    shape,
+    mapping,
+    options: ImportOptions,
+    materials: list[MaterialRef],
+    known_thicknesses: list[float] | None,
+    spec_row,
+) -> dict:
+    """Определяет толщину и материал ОДНОЙ детали.
+
+    Порядок источников: глубина контура из имени слоя -> общая цепочка
+    резолверов по файлу -> спецификация (перекрывает всё, она достовернее).
+    """
+    thickness_res = resolve_thickness(
+        ResolveContext(
+            filename=record.filename,
+            relpath=record.relpath,
+            layer_names=scan.layer_names(),
+            texts=scan.texts,
+            layer_depth=shape.thickness_hint,
+            layer_thickness_regex=mapping.thickness_regex,
+            filename_template=options.filename_template,
+            known_thicknesses=known_thicknesses or [],
+        )
     )
-    return "parsed" if status == PartStatus.READY else "needs_clarification"
+
+    thickness = thickness_res.value
+    thickness_source = thickness_res.source
+    thickness_accepted = thickness_res.accepted
+    if spec_row is not None and spec_row.thickness:
+        thickness = float(spec_row.thickness)
+        thickness_source = ResolveSource.SPEC
+        thickness_accepted = True
+
+    material_res = resolve_material(
+        filename=record.filename,
+        relpath=record.relpath,
+        texts=scan.texts,
+        materials=materials,
+        thickness=thickness,
+        batch_default_id=options.material_id,
+    )
+    if spec_row is not None and spec_row.material_name:
+        matched = _material_by_name(materials, spec_row.material_name, thickness)
+        if matched is not None:
+            material_res.material_id = matched.id
+            material_res.material_name = matched.name
+            material_res.source = ResolveSource.SPEC
+            material_res.confidence = 1.0
+            material_res.accepted = True
+            material_res.note = f"из спецификации: «{spec_row.material_name}»"
+        else:
+            material_res.accepted = False
+            material_res.note = (
+                f"материал «{spec_row.material_name}» из спецификации "
+                "отсутствует в справочнике"
+            )
+
+    return {
+        "thickness": thickness,
+        "thickness_source": thickness_source,
+        "thickness_accepted": thickness_accepted,
+        "thickness_res": thickness_res,
+        "material": material_res,
+    }
 
 
 def _upsert_part(
@@ -549,6 +633,19 @@ def _make_instances(db: Session, part: Part, qty: int) -> None:
 # --------------------------------------------------------------------------
 # Вспомогательное
 # --------------------------------------------------------------------------
+
+
+def _merge_bbox(current: list | None, incoming: list | None) -> list | None:
+    if not incoming:
+        return current
+    if not current:
+        return list(incoming)
+    return [
+        min(current[0], incoming[0]),
+        min(current[1], incoming[1]),
+        max(current[2], incoming[2]),
+        max(current[3], incoming[3]),
+    ]
 
 
 def _first(*values):

@@ -29,7 +29,11 @@ def _incoming(name: str, data: bytes, relpath: str | None = None) -> IncomingFil
 
 @pytest.fixture
 def bazis_files(tmp_path) -> list[IncomingFile]:
-    """Три толщины вперемешку, по образцу реальной пачки из Базиса."""
+    """Три толщины вперемешку, по образцу реальной пачки из Базиса.
+
+    Толщина сидит в имени слоя (``PERIMETER D 18.00``), как в эталонных
+    файлах заказчика, — имена файлов на неё не влияют.
+    """
     files = []
     for thickness, size in ((18, (600, 400)), (15, (800, 300)), (30, (1200, 500))):
         data = _dxf_bytes(
@@ -38,9 +42,9 @@ def bazis_files(tmp_path) -> list[IncomingFile]:
             f"src_{thickness}.dxf",
             width=size[0],
             height=size[1],
-            thickness_text=f"Толщина {thickness}",
+            thickness=float(thickness),
         )
-        files.append(_incoming(f"Bok_{thickness}.dxf", data))
+        files.append(_incoming(f"Detal-{thickness}.dxf", data))
     return files
 
 
@@ -51,6 +55,7 @@ def test_sorts_parts_by_thickness(db, materials, tmp_storage, bazis_files):
     parts = db.scalars(select(Part)).all()
     assert len(parts) == 3, "ни одна деталь не должна потеряться"
     assert sorted(p.thickness for p in parts) == [15.0, 18.0, 30.0]
+    assert all(p.thickness_source == "layer_depth" for p in parts)
     assert all(p.status == PartStatus.READY for p in parts), [
         (p.name, p.clarification) for p in parts
     ]
@@ -132,10 +137,15 @@ def test_identical_parts_are_deduplicated(db, materials, tmp_storage, tmp_path):
 
 
 def test_zip_upload_is_unpacked(db, materials, tmp_storage, tmp_path):
+    """ZIP с папками: толщина берётся из имени папки.
+
+    Источник намеренно взят без глубины в слоях — иначе выиграл бы он,
+    и резолвер по папке остался бы непроверенным.
+    """
     import io
     import zipfile
 
-    data = _dxf_bytes(tmp_path, factories.bazis_part, "inzip.dxf")
+    data = _dxf_bytes(tmp_path, factories.fusion_part, "inzip.dxf")
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("18mm/Bok.dxf", data)
@@ -149,7 +159,9 @@ def test_zip_upload_is_unpacked(db, materials, tmp_storage, tmp_path):
 
     records = db.scalars(select(ImportFile)).all()
     assert len(records) == 2, "служебные файлы архива не должны попадать в импорт"
-    assert {p.thickness for p in db.scalars(select(Part)).all()} == {18.0, 15.0}
+    parts = db.scalars(select(Part)).all()
+    assert {p.thickness for p in parts} == {18.0, 15.0}
+    assert all(p.thickness_source == "folder" for p in parts)
 
 
 def test_mixed_sources_in_one_batch(db, materials, tmp_storage, tmp_path):
@@ -167,6 +179,7 @@ def test_mixed_sources_in_one_batch(db, materials, tmp_storage, tmp_path):
             f"bazis_{thickness}.dxf",
             width=600 + index * 50,
             height=400,
+            thickness=float(thickness),
         )
         fusion = _dxf_bytes(
             tmp_path,
@@ -226,3 +239,41 @@ def test_same_shape_different_material_is_not_deduplicated(db, materials, tmp_st
     assert len(parts) == 2, "детали разных материалов схлопывать нельзя"
     assert {p.material_id for p in parts} == {materials[0].id, materials[1].id}
     assert all(p.qty == 1 for p in parts)
+
+
+
+def test_one_file_with_two_thicknesses_splits_correctly(db, materials, tmp_storage, tmp_path):
+    """Один чертёж, два листа разной толщины — обе детали получают свою.
+
+    Пока толщина определялась на файл целиком, половина деталей получала
+    чужую: это ровно та потеря принадлежности, ради которой всё затевалось.
+    """
+    data = _dxf_bytes(
+        tmp_path,
+        factories.bazis_multi_thickness,
+        "mixed.dxf",
+        first=(18.0, 1000.0, 600.0),
+        second=(15.0, 300.0, 200.0),
+    )
+    batch = create_batch(db, name="Два листа", files=[_incoming("Raskroy.dxf", data)])
+    stats = process_batch(db, batch, ImportOptions())
+
+    parts = db.scalars(select(Part)).all()
+    assert stats["failed"] == 0
+    assert sorted(p.thickness for p in parts) == [15.0, 18.0]
+    assert all(p.thickness_source == "layer_depth" for p in parts)
+
+
+def test_sheet_sizes_are_detected_from_drawing(db, materials, tmp_storage, tmp_path):
+    """Габариты листа читаются из чертежа и предлагаются для склада."""
+    data = _dxf_bytes(
+        tmp_path, factories.bazis_part, "sheet.dxf", sheet=(2800.0, 2070.0), thickness=18.0
+    )
+    batch = create_batch(db, name="Габариты", files=[_incoming("Detal.dxf", data)])
+    process_batch(db, batch, ImportOptions())
+
+    record = db.scalar(select(ImportFile))
+    assert record.detected_sheets == [
+        {"index": 0, "w": 2800.0, "h": 2070.0, "bbox": [0.0, -2070.0, 2800.0, 0.0],
+         "thickness": 18.0}
+    ]

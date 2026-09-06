@@ -25,28 +25,110 @@ def bazis_part(
     *,
     width: float = 600.0,
     height: float = 400.0,
-    thickness_text: str = "Толщина 18",
+    thickness: float = 18.0,
+    sheet: tuple[float, float] = (2800.0, 2070.0),
+    inset_depth: float = 12.0,
+    drill_diameter: float = 8.0,
 ) -> Path:
-    """Деталь «как из Базиса»: замкнутый габарит, присадка с диаметрами,
-    паз, текстовая аннотация на служебном слое."""
+    """Лист «как из Базиса», по образцу эталонных файлов заказчика.
+
+    Слои устроены так же, как в реальных выгрузках:
+
+      * ``BOARDS`` — контур ЛИСТА, а не детали;
+      * ``PERIMETER D <глубина>`` — контур детали, глубина = толщина;
+      * ``HOLES DIAM <⌀> D <глубина>`` — присадка;
+      * ``INSETS D <глубина>`` — выборка, глубина меньше толщины.
+
+    Ось Y направлена вниз от нуля, как в реальных файлах.
+    """
     doc = _new_doc()
     msp = doc.modelspace()
-    for name in ("ГАБАРИТ", "ПРИСАДКА", "ПАЗ", "ТЕКСТ"):
+
+    perimeter = f"PERIMETER D {thickness:.2f}"
+    holes = f"HOLES DIAM {drill_diameter:.2f} D {thickness:.2f}"
+    insets = f"INSETS D {inset_depth:.2f}"
+    for name in ("BOARDS", perimeter, holes, insets):
         doc.layers.add(name)
 
+    sheet_w, sheet_h = sheet
     msp.add_lwpolyline(
-        [(0, 0), (width, 0), (width, height), (0, height)],
+        [(0, 0), (sheet_w, 0), (sheet_w, -sheet_h), (0, -sheet_h)],
         close=True,
-        dxfattribs={"layer": "ГАБАРИТ"},
+        dxfattribs={"layer": "BOARDS"},
     )
-    # Присадка: конфирмат ⌀8 и чашка петли ⌀35.
-    for x, y, d in ((32, 50, 8.0), (32, height - 50, 8.0), (100, 200, 35.0)):
-        msp.add_circle((x, y), d / 2.0, dxfattribs={"layer": "ПРИСАДКА"})
-    # Паз под ХДФ — открытая линия, замыкать её не нужно.
-    msp.add_line((10, 10), (width - 10, 10), dxfattribs={"layer": "ПАЗ"})
-    msp.add_text(
-        thickness_text, dxfattribs={"layer": "ТЕКСТ"}
-    ).set_placement((10, height + 20))
+
+    x0, y0 = 16.0, -16.0
+    msp.add_lwpolyline(
+        [
+            (x0, y0),
+            (x0 + width, y0),
+            (x0 + width, y0 - height),
+            (x0, y0 - height),
+        ],
+        close=True,
+        dxfattribs={"layer": perimeter},
+    )
+    for dx, dy in ((32.0, -50.0), (32.0, -(height - 50.0)), (width - 32.0, -50.0)):
+        msp.add_circle(
+            (x0 + dx, y0 + dy), drill_diameter / 2.0, dxfattribs={"layer": holes}
+        )
+    msp.add_lwpolyline(
+        [
+            (x0 + 100, y0 - 100),
+            (x0 + 200, y0 - 100),
+            (x0 + 200, y0 - 116),
+            (x0 + 100, y0 - 116),
+        ],
+        close=True,
+        dxfattribs={"layer": insets},
+    )
+
+    doc.saveas(path)
+    return path
+
+
+def bazis_multi_thickness(
+    path: Path,
+    *,
+    first: tuple[float, float, float] = (18.0, 1000.0, 600.0),
+    second: tuple[float, float, float] = (4.0, 300.0, 200.0),
+) -> Path:
+    """Два листа РАЗНОЙ толщины в одном чертеже.
+
+    Так выглядит реальная выгрузка заказчика: лист 18 мм и лист 4 мм рядом.
+    Общий на файл ответ о толщине здесь был бы неверным для половины деталей.
+    """
+    doc = _new_doc()
+    msp = doc.modelspace()
+    doc.layers.add("BOARDS")
+
+    offset = 0.0
+    for thickness, width, height in (first, second):
+        layer = f"PERIMETER D {thickness:.2f}"
+        if layer not in doc.layers:
+            doc.layers.add(layer)
+        sheet_w, sheet_h = width + 100.0, height + 100.0
+        msp.add_lwpolyline(
+            [
+                (0, offset),
+                (sheet_w, offset),
+                (sheet_w, offset - sheet_h),
+                (0, offset - sheet_h),
+            ],
+            close=True,
+            dxfattribs={"layer": "BOARDS"},
+        )
+        msp.add_lwpolyline(
+            [
+                (20, offset - 20),
+                (20 + width, offset - 20),
+                (20 + width, offset - 20 - height),
+                (20, offset - 20 - height),
+            ],
+            close=True,
+            dxfattribs={"layer": layer},
+        )
+        offset -= sheet_h + 40.0
 
     doc.saveas(path)
     return path

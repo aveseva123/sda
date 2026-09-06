@@ -7,6 +7,7 @@ import pytest
 import tests.factories as factories
 from app.core.colors import PROJECT_PALETTE, next_color_index, product_style, project_color
 from app.dxf import read_file
+from app.dxf.layer_meta import parse_layer_attributes
 from app.importer.dedup import geometry_signature
 from app.resolve import (
     MaterialRef,
@@ -74,11 +75,12 @@ def test_unknown_source_goes_to_clarification_with_trace():
     assert result.value is None
     assert not result.accepted
     assert [a.resolver for a in result.attempts] == [
+        "layer_depth",
         "layer_map",
         "filename_token",
         "folder_name",
         "dxf_annotation",
-    ]
+    ], "технолог должен видеть все испробованные источники по порядку"
 
 
 def test_unknown_thickness_is_not_silently_accepted():
@@ -169,27 +171,90 @@ def test_filename_template_mismatch_explains_why():
 
 
 def test_builtin_bazis_preset_maps_layers(tmp_path):
-    scan = read_file(factories.bazis_part(tmp_path / "p.dxf"))
+    scan = read_file(factories.bazis_part(tmp_path / "p.dxf", thickness=18.0))
     mapping = apply_preset(scan.layer_names(), preset_for_source("bazis"))
 
-    assert mapping.semantic_by_layer["ГАБАРИТ"] == "OUTER"
-    assert mapping.semantic_by_layer["ПРИСАДКА"] == "DRILL"
+    assert mapping.semantic_by_layer["BOARDS"] == "SHEET", "BOARDS — лист, не деталь"
+    assert mapping.semantic_by_layer["PERIMETER D 18.00"] == "OUTER"
+    assert mapping.semantic_by_layer["HOLES DIAM 8.00 D 18.00"] == "DRILL"
+    assert mapping.semantic_by_layer["INSETS D 12.00"] == "POCKET"
     assert mapping.unmapped == []
+
+
+def test_preset_extracts_depth_and_diameter_from_layer_name(tmp_path):
+    """Глубина обработки и диаметр отверстия приходят из имени слоя."""
+    scan = read_file(factories.bazis_part(tmp_path / "p.dxf", thickness=18.0))
+    mapping = apply_preset(scan.layer_names(), preset_for_source("bazis"))
+
+    assert mapping.depth_of("PERIMETER D 18.00") == 18.0
+    assert mapping.depth_of("INSETS D 12.00") == 12.0
+    assert mapping.meta["HOLES DIAM 8.00 D 18.00"].hole_diameter == 8.0
+    assert mapping.depth_of("BOARDS") is None
+
+
+@pytest.mark.parametrize(
+    ("layer", "depth", "diameter"),
+    [
+        ("PERIMETER D 16.00", 16.0, None),
+        ("PERIMETER D 12.000", 12.0, None),   # бывает три знака после запятой
+        ("PERIMETER D 16.10", 16.1, None),    # подрез
+        ("INSETS D 6.00", 6.0, None),
+        ("HOLES DIAM 4.00 D 16.00", 16.0, 4.0),
+        ("HOLES DIAM 240.00 D 18.00", 18.0, 240.0),
+        ("BOARDS", None, None),
+        ("0", None, None),
+    ],
+)
+def test_layer_attributes_parsing(layer, depth, diameter):
+    """DIAM не должен приниматься за глубину: после D там буква, а не цифра."""
+    attributes = parse_layer_attributes(layer)
+    assert attributes.get("depth") == depth
+    assert attributes.get("hole_diameter") == diameter
 
 
 def test_suggestions_come_from_geometry_not_layer_names(tmp_path):
     """Подсказки мастера должны работать и там, где имена слоёв бессмысленны."""
-    scan = read_file(factories.bazis_part(tmp_path / "p.dxf"))
+    scan = read_file(factories.bazis_part(tmp_path / "p.dxf", thickness=18.0))
     suggestions = suggest_semantics(scan.layers)
 
-    assert suggestions["ПРИСАДКА"] == "DRILL"   # только окружности мебельных ⌀
-    assert suggestions["ТЕКСТ"] == "INFO"       # только текст
-    assert suggestions["ГАБАРИТ"] == "OUTER"    # самый крупный замкнутый контур
+    # Только окружности мебельных диаметров -> присадка.
+    assert suggestions["HOLES DIAM 8.00 D 18.00"] == "DRILL"
+    # Самый крупный контур без глубины в имени -> контур листа.
+    assert suggestions["BOARDS"] == "SHEET"
 
 
 def test_unmapped_layer_is_reported():
-    mapping = apply_preset(["ГАБАРИТ", "НЕПОНЯТНЫЙ_СЛОЙ"], preset_for_source("bazis"))
+    mapping = apply_preset(
+        ["BOARDS", "НЕПОНЯТНЫЙ_СЛОЙ"], preset_for_source("bazis")
+    )
     assert mapping.unmapped == ["НЕПОНЯТНЫЙ_СЛОЙ"]
+
+
+def test_thickness_from_layer_depth_beats_filename():
+    """Глубина контура — самый достоверный источник толщины.
+
+    В имени файла может стоять что угодно; в имени слоя стоит то, что
+    заложил конструктор.
+    """
+    result = resolve_thickness(
+        ResolveContext(
+            filename="Bok_15.dxf",
+            layer_depth=18.0,
+            known_thicknesses=KNOWN,
+        )
+    )
+    assert result.value == 18.0
+    assert result.source == "layer_depth"
+    assert result.accepted
+
+
+def test_overcut_depth_snaps_to_sheet_thickness():
+    """«PERIMETER D 16.10» — это подрез 0.1 мм на листе 16 мм."""
+    result = resolve_thickness(
+        ResolveContext(filename="x.dxf", layer_depth=16.1, known_thicknesses=[16.0])
+    )
+    assert result.value == 16.0
+    assert result.known and result.accepted
 
 
 # --------------------------------------------------------------- цвета

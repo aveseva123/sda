@@ -16,13 +16,18 @@ from app.models import LayerPreset, Material, Tool
 from app.models.enums import ToolType
 from app.resolve import builtin_presets
 
+# Толщины 16, 12, 18 и 4 мм взяты из эталонных файлов заказчика: именно они
+# встречаются в его выгрузках. Названия и цены — заглушки, их надо заменить
+# реальным справочником цеха.
 MATERIALS = [
     # name, thickness, has_grain, sheet_w, sheet_h, aliases
     ("ЛДСП Белый", 18.0, False, 2800.0, 2070.0, ["ldsp", "белый", "white"]),
     ("ЛДСП Дуб Сонома", 18.0, True, 2800.0, 2070.0, ["дуб", "сонома", "oak"]),
+    ("ЛДСП Белый", 16.0, False, 2800.0, 2070.0, ["ldsp16"]),
     ("ЛДСП Белый", 15.0, False, 2800.0, 2070.0, ["ldsp15"]),
+    ("ЛДСП Белый", 12.0, False, 2800.0, 2070.0, ["ldsp12"]),
     ("МДФ", 30.0, False, 2800.0, 2070.0, ["мдф", "mdf"]),
-    ("ХДФ", 3.0, False, 2800.0, 2070.0, ["хдф", "hdf"]),
+    ("ХДФ", 4.0, False, 2800.0, 2070.0, ["хдф", "hdf"]),
 ]
 
 TOOLS = [

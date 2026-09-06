@@ -24,14 +24,14 @@ def client(db, tmp_storage):
 @pytest.fixture
 def dxf_18(tmp_path) -> bytes:
     path = tmp_path / "b18.dxf"
-    factories.bazis_part(path, width=600, height=400)
+    factories.bazis_part(path, width=600, height=400, thickness=18.0)
     return path.read_bytes()
 
 
 @pytest.fixture
 def dxf_15(tmp_path) -> bytes:
     path = tmp_path / "b15.dxf"
-    factories.bazis_part(path, width=800, height=300)
+    factories.bazis_part(path, width=800, height=300, thickness=15.0)
     return path.read_bytes()
 
 
@@ -67,13 +67,13 @@ def test_full_import_flow(client, materials, dxf_18, dxf_15):
 
     layers = client.get(f"/api/imports/{batch['id']}/layers").json()
     names = {layer["name"] for layer in layers["layers"]}
-    assert {"ГАБАРИТ", "ПРИСАДКА", "ПАЗ", "ТЕКСТ"} <= names
+    assert {"BOARDS", "PERIMETER D 18.00", "HOLES DIAM 8.00 D 18.00"} <= names
     # Мастер предлагает семантику по геометрии, а не по зашитым именам.
-    assert layers["suggestions"]["ПРИСАДКА"] == "DRILL"
-    assert layers["suggestions"]["ТЕКСТ"] == "INFO"
+    assert layers["suggestions"]["HOLES DIAM 8.00 D 18.00"] == "DRILL"
+    assert layers["suggestions"]["BOARDS"] == "SHEET"
 
     preview = client.get(
-        f"/api/imports/{batch['id']}/layers/ПРИСАДКА/preview"
+        f"/api/imports/{batch['id']}/layers/HOLES DIAM 8.00 D 18.00/preview"
     ).json()
     assert len(preview["paths"]) == 3, "в превью должны попасть три окружности присадки"
 
@@ -87,7 +87,11 @@ def test_full_import_flow(client, materials, dxf_18, dxf_15):
 
     parts = client.get("/api/parts").json()
     assert sorted(p["thickness"] for p in parts) == [15.0, 18.0]
+    assert all(p["thickness_source"] == "layer_depth" for p in parts)
     assert all(p["style"]["fill"].startswith("#") for p in parts)
+
+    sheets = client.get(f"/api/imports/{batch['id']}/sheets").json()
+    assert sheets and sheets[0]["w"] == 2800.0 and sheets[0]["h"] == 2070.0
 
     geometry = client.get(f"/api/parts/{parts[0]['id']}/geometry").json()
     assert geometry["geometry"]["outer"], "геометрия должна сохраниться для карты раскроя"
@@ -137,10 +141,10 @@ def test_layer_preset_is_saved_and_reused(client, materials, dxf_18):
             "name": "Мой Базис",
             "source": "bazis",
             "rules": [
-                {"layer": "ГАБАРИТ", "semantic": "OUTER"},
-                {"layer": "ПРИСАДКА", "semantic": "DRILL"},
-                {"layer": "ПАЗ", "semantic": "GROOVE"},
-                {"layer": "ТЕКСТ", "semantic": "INFO"},
+                {"layer": "BOARDS", "semantic": "SHEET"},
+                {"layer": "PERIMETER D 18.00", "semantic": "OUTER"},
+                {"layer": "HOLES DIAM 8.00 D 18.00", "semantic": "DRILL"},
+                {"layer": "INSETS D 12.00", "semantic": "POCKET"},
             ],
             "thickness_from_layer_regex": None,
         },
@@ -158,11 +162,16 @@ def test_layer_preset_is_saved_and_reused(client, materials, dxf_18):
     assert processed["layer_preset_id"] == preset_id
 
 
-def test_zip_with_folders_keeps_thickness_from_folder(client, materials, dxf_18):
+def test_zip_with_folders_keeps_thickness_from_folder(client, materials, tmp_path):
+    # Источник без глубины в слоях: иначе выиграл бы он, а не имя папки.
+    path = tmp_path / "plain.dxf"
+    factories.fusion_part(path)
+    plain = path.read_bytes()
+
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
-        archive.writestr("18mm/Bok.dxf", dxf_18)
-        archive.writestr("15mm/Polka.dxf", dxf_18)
+        archive.writestr("18mm/Bok.dxf", plain)
+        archive.writestr("15mm/Polka.dxf", plain)
 
     upload = client.post(
         "/api/imports",

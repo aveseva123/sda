@@ -7,6 +7,9 @@ from app.models.enums import (  # noqa: F401
     LayerSemantic,
     PartStatus,
     ResolveSource,
+    StockKind,
+    StockMovementKind,
+    StockStatus,
     ToolType,
 )
 from app.models.imports import (  # noqa: F401
@@ -15,9 +18,10 @@ from app.models.imports import (  # noqa: F401
     LayerPreset,
     SpecRow,
 )
-from app.models.material import Material, MaterialSheetFormat, Offcut  # noqa: F401
+from app.models.material import Material, MaterialSheetFormat  # noqa: F401
 from app.models.nesting import NcProgram, NestingJob, Sheet, Tool  # noqa: F401
 from app.models.project import Part, PartInstance, Product, Project  # noqa: F401
+from app.models.stock import StockItem, StockMovement  # noqa: F401
 
 __all__ = [
     "DxfSource",
@@ -33,7 +37,6 @@ __all__ = [
     "MaterialSheetFormat",
     "NcProgram",
     "NestingJob",
-    "Offcut",
     "Part",
     "PartInstance",
     "PartStatus",
@@ -42,6 +45,11 @@ __all__ = [
     "ResolveSource",
     "Sheet",
     "SpecRow",
+    "StockItem",
+    "StockKind",
+    "StockMovement",
+    "StockMovementKind",
+    "StockStatus",
     "Tool",
     "ToolType",
 ]
