@@ -1,3 +1,4 @@
+import { IS_DEMO, demoRequest } from './demo'
 import type { Collision, Layout, PresetSnapshot, ToolpathPreset } from '../editor/types'
 import type {
   AppConfig,
@@ -21,6 +22,8 @@ import type {
 const BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Демо-сборка отвечает снимком настоящих данных: сервера рядом нет.
+  if (IS_DEMO) return demoRequest<T>(path, init)
   const response = await fetch(`${BASE}${path}`, init)
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`

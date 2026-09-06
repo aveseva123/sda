@@ -7,6 +7,7 @@ import PartsPage from './pages/PartsPage'
 import PendingPage from './pages/PendingPage'
 import FilesPage from './pages/FilesPage'
 import StockPage from './pages/StockPage'
+import { IS_DEMO } from './api/demo'
 import { usePendingCount } from './lib/hooks'
 
 /** Логотип: лист с вырезанной деталью — то, чем платформа занимается. */
@@ -75,14 +76,26 @@ export default function App() {
           </NavItem>
         </nav>
         <div className="sidebar-foot">
-          Локальная сеть цеха
-          <br />
-          без входа и учётных записей
+          {IS_DEMO ? (
+            <>
+              <b style={{ color: 'var(--warn)' }}>Демонстрация интерфейса</b>
+              <br />
+              данные настоящие, но заморожены: раскрой не пересчитывается,
+              импорт и склад недоступны
+            </>
+          ) : (
+            <>
+              Локальная сеть цеха
+              <br />
+              без входа и учётных записей
+            </>
+          )}
         </div>
       </aside>
       <main className="main">
         <Routes>
-          <Route path="/" element={<Navigate to="/import" replace />} />
+          {/* Демо открывают, чтобы посмотреть раскрой, — с него и начинаем. */}
+          <Route path="/" element={<Navigate to={IS_DEMO ? '/editor' : '/import'} replace />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/editor" element={<EditorPage />} />
           <Route path="/files" element={<FilesPage />} />

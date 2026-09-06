@@ -152,9 +152,19 @@ export default function PropertiesPanel({
   const groups = useMemo(() => {
     const map = new Map<string, { title: string; semantic: string; targets: string[]; sample: VectorView }>()
     for (const vector of part?.vectors ?? []) {
-      const key = `${vector.title}|${vector.preset_id ?? '—'}|${vector.enabled}`
+      // «Выборка 1…14» — это одна и та же операция с номерами: в группу их
+      // сводит не название, а тип, глубина, диаметр и назначенная стратегия.
+      const title = vector.title.replace(/\s\d+$/, '')
+      const key = [
+        title,
+        vector.semantic,
+        vector.diameter ?? '',
+        vector.depth ?? '',
+        vector.preset_id ?? '—',
+        vector.enabled,
+      ].join('|')
       const row = map.get(key) ?? {
-        title: vector.title,
+        title,
         semantic: vector.semantic,
         targets: [],
         sample: vector,

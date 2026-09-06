@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, HashRouter } from 'react-router-dom'
 
 // Шрифты кладутся в сборку, а не тянутся из сети: цех работает в
 // локальной сети без интернета, и внешний CDN там просто не ответит.
@@ -16,12 +16,17 @@ import '@fontsource/ibm-plex-mono/latin-400.css'
 import '@fontsource/ibm-plex-mono/latin-500.css'
 
 import App from './App'
+import { IS_DEMO } from './api/demo'
 import './styles.css'
+
+// Демо открывают как один файл — там нет сервера, который отдаст /editor по
+// прямой ссылке, поэтому маршруты живут в адресе после решётки.
+const Router = IS_DEMO ? HashRouter : BrowserRouter
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <Router>
       <App />
-    </BrowserRouter>
+    </Router>
   </React.StrictMode>,
 )
