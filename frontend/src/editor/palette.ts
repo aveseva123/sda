@@ -95,17 +95,17 @@ function toRgb(color: string): [number, number, number] | null {
  * операцией.
  */
 const OPERATION_FALLBACK: Record<string, string> = {
-  OUTER: '#111827',
-  INNER: '#374151',
-  POCKET: '#0891b2',
-  GROOVE: '#7c3aed',
-  DRILL: '#b91c1c',
-  MARK: '#65a30d',
+  OUTER: '#101418',
+  INNER: '#3f4a57',
+  POCKET: '#0f6c8c',
+  GROOVE: '#6425c4',
+  DRILL: '#be1414',
+  MARK: '#46700d',
 }
 
 export function operationColor(semantic: string): string {
   const key = semantic.toUpperCase()
-  const fallback = OPERATION_FALLBACK[key] ?? '#6b7280'
+  const fallback = OPERATION_FALLBACK[key] ?? '#5a646f'
   return themeColor(`--op-${key.toLowerCase()}`, fallback)
 }
 
@@ -136,12 +136,12 @@ export interface VectorStyle {
 }
 
 const VECTOR_STYLES: Record<string, Omit<VectorStyle, 'color'>> = {
-  OUTER: { width: 1.6, dash: [] },
-  INNER: { width: 1.4, dash: [] },
-  POCKET: { width: 1.3, dash: [7, 3] },
-  GROOVE: { width: 1.3, dash: [4, 3] },
-  DRILL: { width: 1.3, dash: [] },
-  MARK: { width: 1, dash: [1, 3] },
+  OUTER: { width: 1.8, dash: [] },
+  INNER: { width: 1.5, dash: [] },
+  POCKET: { width: 1.5, dash: [7, 3] },
+  GROOVE: { width: 1.5, dash: [4, 3] },
+  DRILL: { width: 1.4, dash: [] },
+  MARK: { width: 1.2, dash: [1, 3] },
 }
 
 export function vectorStyle(semantic: string): VectorStyle {
@@ -151,19 +151,61 @@ export function vectorStyle(semantic: string): VectorStyle {
 }
 
 /**
- * Оттенок цвета файла для листа ВНУТРИ этого файла.
+ * Цвета детали по файлу: бледная заливка и плотная обводка.
+ *
+ * Сервер раздаёт файлам палитру Окабэ–Ито — она различима при дальтонизме за
+ * счёт РАЗНОЙ светлоты, а не только тона. Но светлота базовых цветов гуляет
+ * широко, и на светлом листе это давало разный визуальный вес при равной
+ * смысловой важности: фиолетовые и терракотовые детали лезли вперёд, а
+ * оранжевые и голубые почти сливались с листом. Именно так и получается каша.
+ *
+ * Заливки сжаты в узкую полосу светлоты, а цветность ограничена сверху:
+ * порядок светлот сохраняется как второй канал различия, но разброс веса
+ * уходит. Выравнивать светлоту в одну точку нельзя — тогда сине-фиолетовый,
+ * синий и голубой при дейтеранопии становятся одним цветом.
+ *
+ * Обводка — тот же тон, но тёмный: каждая деталь читается как объект даже
+ * без фона, и она же рисует штриховку листа.
+ */
+const FILE_TONES: Record<string, { fill: string; edge: string }> = {
+  '#7D82C5': { fill: '#D6D6FF', edge: '#575F9E' },
+  '#23AC74': { fill: '#B5E9CC', edge: '#007A4E' },
+  '#9D3725': { fill: '#F9C0B2', edge: '#932E1E' },
+  '#861CB4': { fill: '#E0C2EA', edge: '#71368B' },
+  '#0072B2': { fill: '#B4D5FF', edge: '#005E93' },
+  '#E69F00': { fill: '#FDDEB6', edge: '#996906' },
+  '#CC79A7': { fill: '#FFCFE8', edge: '#9C4D7B' },
+  '#56B4E9': { fill: '#C5E6FF', edge: '#0079A7' },
+  '#D55E00': { fill: '#FECEB3', edge: '#9C4A13' },
+  '#3B7C70': { fill: '#9DE0D2', edge: '#22655A' },
+  '#7A8C00': { fill: '#DFE6B4', edge: '#5C6A00' },
+  '#1A6E9E': { fill: '#BFDCEF', edge: '#155B82' },
+}
+
+/**
+ * Сдвиг оттенка по номеру листа ВНУТРИ файла.
  *
  * Файл на три листа даёт три оттенка одного цвета — вместе со штриховкой это
- * отвечает на вопрос «с какого листа исходника приехала деталь». Сервер считает
- * оттенок осветлением к белому: на тёмном холсте это добавляет контраст, на
- * светлом — уводит цвет в фон, и деталь пропадает. Направление выбирается по
- * яркости листа.
+ * отвечает на вопрос «с какого листа исходника приехала деталь». Шаги мелкие:
+ * заливки специально сведены в узкую полосу светлоты, и крупный сдвиг вывел
+ * бы их обратно в разнобой. Основную работу делает штриховка.
  */
-const SHEET_SHADE_STEPS = [0, 0.14, -0.14, 0.26, -0.24, 0.38, -0.34, 0.48]
+const SHEET_SHADE_STEPS = [0, -0.07, 0.07, -0.13, 0.12, -0.19, 0.17, -0.24]
 
-export function sheetShade(base: string, sheetIndex: number): string {
+export function fileColors(
+  base: string,
+  sheetIndex = 0,
+): { fill: string; edge: string } {
+  const key = base.toUpperCase()
+  const tone =
+    FILE_TONES[key] ??
+    // Цвет не из палитры — технолог задал свой. Приводим к той же логике:
+    // бледная заливка примешиванием к листу, тёмная обводка затемнением.
+    {
+      fill: mix(base, themeColor('--sheet-fill', '#f8f9f7'), 0.74),
+      edge: shade(base, -0.3),
+    }
   const step = SHEET_SHADE_STEPS[sheetIndex % SHEET_SHADE_STEPS.length]
-  if (step === 0) return base
-  const onLight = luminance(themeColor('--sheet-fill', '#0d1013')) > 0.4
-  return shade(base, onLight ? -step : step)
+  if (step === 0) return tone
+  return { fill: shade(tone.fill, step), edge: tone.edge }
 }

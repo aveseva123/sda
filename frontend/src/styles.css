@@ -1,102 +1,126 @@
-/* Тема «Нестор»: тёмный цех, светлые детали.
+/* Тема «Нестор»: светлый цех.
  *
- * Палитра и типографика взяты из макета: холст почти чёрный, панели на тон
- * светлее, цвета файлов — те же, что раздаёт сервер (app/core/colors.py).
- * Тёмный фон здесь не украшение: на нём читаются цветные детали, а глаз
- * технолога не выжигается за смену у станка.
+ * Цех — светлое помещение, часто с солнцем в окно, и монитор там обычно
+ * дешёвый с яркостью на максимуме. На такой матрице разницу между двумя
+ * близкими фонами глаз не поймает, а границу — поймает: поэтому иерархия
+ * панелей держится на линиях, а не на оттенках заливки.
+ *
+ * Чистого белого на больших площадях нет: панели занимают полэкрана, и белый
+ * под прямым светом бликует и утомляет за смену. Белый достаётся мелким
+ * элементам — кнопкам и всплывающим панелям, — где работает как «подъём».
+ *
+ * Рабочее поле сделано серым «столом», а лист — светлой «страницей», как в
+ * векторном редакторе: край листа виден сам по себе, а не одной тонкой
+ * линией, и при отдалении не растворяется. Где кончается материал — главный
+ * вопрос раскроя, он не должен зависеть от вглядывания.
+ *
+ * Цвета файлов раздаёт сервер (app/core/colors.py), цвета типов операций
+ * живут здесь. Числа контраста в комментариях посчитаны по WCAG.
  */
 
 :root {
-  /* Фон приложения. Рабочее поле держит свой --canvas-bg: на светлой теме
-     они разойдутся, и раньше один токен обслуживал оба смысла. */
-  --app-bg: #0a0c0f;
-  --surface: #14171c;
-  --raised: #1a1e24;
-  --sunken: #0f1216;
-  --line: #22272e;
-  --line-2: #2e353e;
-  --line-3: #3b434e;
+  color-scheme: light;
 
-  --ink: #e8eaed;
-  --ink-2: #9aa3af;
-  /* 4,8:1 к поверхности панели: прежний #69717d давал 3,7:1 —
-     подписи полей и шапки таблиц в цеху приходилось угадывать. */
-  --ink-3: #7c848f;
+  /* Поверхности. --raised белый: он для мелкого, что должно «подниматься». */
+  --app-bg: #e8ebef;
+  --surface: #f4f6f8;
+  --raised: #ffffff;
+  --sunken: #e9ecf0;
+
+  /* Границы. На дешёвой матрице с задранной яркостью именно они держат
+     иерархию, а не разница фонов. --line-3 — рамка полей ввода: 3,3:1, ровно
+     под требование к границам интерактивных элементов. */
+  --line: #d4dae1;
+  --line-2: #b9c1cb;
+  --line-3: #7f8996;
+
+  /* Текст. Не чистый чёрный: на околобелом фоне он даёт «звон» краёв мелкого
+     шрифта. 16,3:1 / 7,4:1 / 5,6:1 к панели. */
+  --ink: #16191d;
+  --ink-2: #47515f;
+  --ink-3: #59636f;
 
   --pA: #7d82c5;
   --pB: #23ac74;
   --pC: #9d3725;
   --pD: #861cb4;
 
-  --warn: #d9a441;
-  --warn-bg: #1a1710;
-  --ok: #4e9c6b;
-  --ok-bg: #101a14;
-  --danger: #d9694a;
-  --danger-bg: #1c1210;
-  --accent: #7d82c5;
+  /* Семантика. Различается не только тоном, но и светлотой: на плохой матрице
+     и при солнце в экран зелёный и охра сближаются по тону. Янтарный из
+     тёмной темы (#d9a441) на светлом давал 2,0:1 и как текст нечитаем —
+     предупреждение ушло в тёмную охру, «жёлтость» осталась в фоне плашки. */
+  --warn: #7a4e00;
+  --warn-bg: #fbf1d9;
+  --warn-line: #e2c078;
+  --ok: #0f7a3d;
+  --ok-bg: #e6f5ec;
+  --ok-line: #a9d8bc;
+  --danger: #b42318;
+  --danger-bg: #fdebe8;
+  --danger-line: #f2b5ac;
+
+  /* Акцент — затемнённый фирменный: прежний #7d82c5 на белом даёт 3,4:1,
+     под кольцо фокуса проходит, под текст и подпись кнопки нет. */
+  --accent: #3e45a8;
+  --accent-ink: #ffffff;
 
   /* Рабочее поле. Холст рисуется на canvas, где CSS-переменные сами не
      работают, — их читает editor/palette.ts. Тема остаётся в одном файле. */
-  --canvas-bg: #0a0c0f;
-  --canvas-grid: #1a1f26;
-  --sheet-fill: #0d1013;
-  --sheet-edge: #2e353e;
-  --sheet-trim: #333a44;
-  --rest-fill: #232a32;
-  --part-edge: rgba(226, 231, 238, 0.62);
-  --canvas-ink: #f2f4f6;
-  --canvas-ink-2: #aeb6c0;
-  --canvas-ink-3: #7c848f;
-  --canvas-plate: rgba(10, 12, 15, 0.72);
-  --canvas-select: #ffffff;   /* выделенная деталь и её маркеры */
-  --canvas-hover: rgba(255, 255, 255, 0.5); /* деталь под курсором */
-  --canvas-pin: #f2f4f6;      /* значок закрепления */
-  --canvas-danger: #d9694a;   /* наложение деталей */
-  --canvas-guide: #e11d48;    /* линия привязки при перетаскивании */
-  --canvas-grain: rgba(142, 151, 162, 0.75);
+  --canvas-bg: #c9cfd7;      /* стол: лист на нём читается как страница */
+  --canvas-grid: #b0b8c2;    /* точки сетки видны, но не рябят */
+  --sheet-fill: #f8f9f7;     /* лист светлее любой заливки детали */
+  --sheet-edge: #7f8996;     /* единственная линия, которую видно с трёх метров */
+  --sheet-trim: #a3acb8;
+  --sheet-trim-fill: #dfe3e6;
+  --rest-fill: #c6e6d6;      /* деловой обрезок — единственная «хорошая» зона */
+  --rest-line: #4e8c6e;
+  --part-edge: #5a646f;      /* контур в режиме заливки нейтральный */
+  --canvas-ink: #16191d;
+  --canvas-ink-2: #47515f;
+  --canvas-ink-3: #5e6976;
+  --canvas-plate: rgba(255, 255, 255, 0.88);
+  --canvas-select: #3e45a8;  /* выделенная деталь и её маркеры */
+  --canvas-hover: #3e45a8;   /* деталь под курсором: тоньше и без ручек */
+  --canvas-pin: #47515f;     /* значок закрепления */
+  --canvas-danger: #d92d20;  /* наложение деталей */
+  --canvas-guide: #1668d6;   /* привязка: синий пунктир, как во всех CAD */
+  --canvas-grain: #7c8794;
 
   /* Цвет закреплён за ТИПОМ операции: его оператор и читает на карте.
      Пресет траектории цвет типа не подменяет — иначе два пресета одного типа
-     выглядели бы разной операцией. */
-  --op-outer: #111827;
-  --op-inner: #374151;
-  --op-pocket: #0891b2;
-  --op-groove: #7c3aed;
-  --op-drill: #b91c1c;
-  --op-mark: #65a30d;
-  --preview-fill: #dbeafe;
+     выглядели бы разной операцией. Контрасты посчитаны и к листу, и к самой
+     светлой заливке детали: линия обязана читаться на обоих. */
+  --op-outer: #101418;   /* насквозь по краю — самая тёмная и толстая линия */
+  --op-inner: #3f4a57;   /* насквозь внутри детали */
+  --op-pocket: #0f6c8c;  /* прежний #0891b2 давал 3,5:1 и пропадал под солнцем */
+  --op-groove: #6425c4;  /* углублён: на дешёвой матрице фиолетовый уходил в синий */
+  --op-drill: #be1414;
+  --op-mark: #46700d;    /* прежний #65a30d — 2,9:1, гравировка была невидимой */
+  --op-skip: #8a94a1;    /* «не обрабатывать»: слабее всех, но не невидимо */
+  --preview-fill: #e3e7ee;
 
   --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
 
   /* Состояния. Раньше их держали полтора десятка почти одинаковых серых
-     литералов, разбросанных по правилам: #1b2028, #1d222a, #21262e, #191d23,
-     #15191f — на глаз одно и то же, а при смене темы каждый пришлось бы
-     искать отдельно. Осталось четыре, у каждого своя роль. */
-  --hover: #1b2028;          /* наведение на строку списка или таблицы */
-  --selected: #21262e;       /* выбранная строка, активный пункт меню */
-  --raised-hover: #262c35;   /* наведение на кнопку и на фишку над холстом */
-  --raised-on: #2a313a;      /* нажатая кнопка-переключатель */
-  --track: #22272e;          /* дорожка полосы ресурса */
-  --drop-bg: #171b28;        /* поле, готовое принять файл */
+     литералов, разбросанных по правилам. Осталось четыре, у каждого своя
+     роль. --selected уведён в акцентный тон: активный пункт меню читается
+     цветом, а не только светлотой. */
+  --hover: #edeff2;
+  --selected: #e0e4f5;
+  --raised-hover: #f0f2f5;
+  --raised-on: #e3e7ec;
+  --track: #dde1e6;
+  --drop-bg: #e7ecfa;
 
-  /* Главная кнопка. На тёмной теме она светлая, на светлой станет цветной —
-     поэтому у неё свои токены, а не «белый». */
-  --primary-bg: #e8eaed;
-  --primary-ink: #0c0e11;
-  --primary-hover: #ffffff;
-  --primary-active: #c9ced6;
-  --accent-ink: #ffffff;
+  /* Главная кнопка — заливка акцентом с белой подписью, 8,0:1. */
+  --primary-bg: #3e45a8;
+  --primary-ink: #ffffff;
+  --primary-hover: #333a93;
+  --primary-active: #2b3180;
 
-  /* Границы плашек и бейджей: у каждого состояния своя, иначе на светлом
-     фоне они все превратятся в одинаковую серую рамку. */
-  --warn-line: #4a3d1c;
-  --ok-line: #1f3a2a;
-  --danger-line: #4a2a22;
-
-  --link: #c4cbd4;
-  --link-hover: #ffffff;
+  --link: #2e4fc0;
+  --link-hover: #1e3899;
 
   --bg: var(--app-bg);
   --panel: var(--surface);
@@ -105,7 +129,10 @@
   --text: var(--ink);
   --muted: var(--ink-2);
   --radius: 6px;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  /* Тени на светлом — не чёрная дымка, а два слабых слоя с холодным подмесом:
+     чёрный с большой альфой даёт грязь. */
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
+  --shadow-modal: 0 16px 48px rgba(16, 24, 40, 0.18);
 }
 
 * { box-sizing: border-box; }
@@ -454,7 +481,7 @@ canvas.preview {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 -2px 14px rgba(16, 24, 40, 0.1);
 }
 
 .stat-grid { display: flex; gap: 20px; flex-wrap: wrap; }
@@ -760,7 +787,7 @@ canvas.preview {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  background: rgba(10, 12, 15, 0.8);
+  background: rgba(255, 255, 255, 0.92);
   pointer-events: none;
   color: var(--ink);
 }
@@ -777,7 +804,7 @@ canvas.preview {
   pointer-events: none;
 }
 
-.stage-chips .chip { background: rgba(20, 23, 28, 0.9); pointer-events: auto; }
+.stage-chips .chip { background: rgba(255, 255, 255, 0.94); pointer-events: auto; }
 .stage-chips .chip { height: 28px; }
 .stage-chips .chip button {
   min-width: 24px;
@@ -808,7 +835,7 @@ canvas.preview {
   padding: 7px 13px;
   border-radius: 16px;
   border: 1px solid var(--line-2);
-  background: rgba(20, 23, 28, 0.96);
+  background: rgba(255, 255, 255, 0.96);
   font-size: 12px;
   color: var(--ink);
   box-shadow: var(--shadow);
@@ -851,7 +878,7 @@ canvas.preview {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: rgba(20, 23, 28, 0.94);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .legend-head {
@@ -928,7 +955,7 @@ canvas.preview {
   padding: 0 8px;
   border: 1px solid var(--line-2);
   border-radius: 9px;
-  background: rgba(26, 30, 36, 0.97);
+  background: rgba(255, 255, 255, 0.97);
 }
 
 .align-bar .tool {
@@ -1120,7 +1147,7 @@ canvas.preview {
   border: 1px solid var(--line-2);
   border-radius: 10px;
   background: var(--surface);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1163,7 +1190,7 @@ canvas.preview {
   padding: 0;
   border-radius: 50%;
   border: 1px solid var(--line-2);
-  background: rgba(20, 23, 28, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   color: var(--ink-2);
   font-size: 13px;
   line-height: 1;
@@ -1176,7 +1203,7 @@ canvas.preview {
   padding: 11px 12px 12px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: rgba(20, 23, 28, 0.96);
+  background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--shadow);
 }
 
@@ -1205,7 +1232,7 @@ canvas.preview {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(6, 8, 10, 0.72);
+  background: rgba(24, 28, 34, 0.42);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1221,7 +1248,7 @@ canvas.preview {
   background: var(--surface);
   border: 1px solid var(--line-2);
   border-radius: 10px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-modal);
 }
 
 .modal-head {

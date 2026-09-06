@@ -45,8 +45,8 @@ export default function ShapeCanvas({
   const ref = useRef<HTMLCanvasElement>(null)
   // Цвета превью — из темы: раньше здесь стояли светлые литералы, оставшиеся
   // от первой версии, и превью слоя рисовалось тёмно-синим по почти чёрному.
-  const shapeFill = fill ?? themeColor('--preview-fill', '#dbeafe')
-  const shapeStroke = stroke ?? themeColor('--op-outer', '#111827')
+  const shapeFill = fill ?? themeColor('--preview-fill', '#e3e7ee')
+  const shapeStroke = stroke ?? themeColor('--op-outer', '#101418')
 
   useEffect(() => {
     const canvas = ref.current
@@ -78,7 +78,7 @@ export default function ShapeCanvas({
 
     const points = everything.flat()
     if (!points.length) {
-      ctx.fillStyle = themeColor('--canvas-ink-3', '#7c848f')
+      ctx.fillStyle = themeColor('--canvas-ink-3', '#5e6976')
       ctx.font = '13px sans-serif'
       ctx.fillText('нет геометрии', 12, 24)
       return
@@ -123,7 +123,7 @@ export default function ShapeCanvas({
       ctx.lineWidth = 1.5
       ctx.stroke()
 
-      ctx.fillStyle = themeColor('--sheet-fill', '#ffffff')
+      ctx.fillStyle = themeColor('--sheet-fill', '#f8f9f7')
       for (const ring of inners) {
         if (ring.length < 3) continue
         trace(ring, true)
@@ -156,7 +156,7 @@ export default function ShapeCanvas({
     }
 
     if (label) {
-      ctx.fillStyle = themeColor('--canvas-ink-2', '#374151')
+      ctx.fillStyle = themeColor('--canvas-ink-2', '#47515f')
       ctx.font = '11px ui-monospace, monospace'
       ctx.fillText(label, 8, 14)
     }

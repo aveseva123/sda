@@ -60,10 +60,26 @@ function LineSample({ semantic }: { semantic: string }) {
 
 function SheetSample({ kind }: { kind: 'edge' | 'trim' | 'rest' }) {
   const stroke =
-    kind === 'rest' ? 'var(--sheet-edge)' : kind === 'trim' ? 'var(--sheet-trim)' : 'var(--sheet-edge)'
+    kind === 'rest'
+      ? 'var(--rest-line)'
+      : kind === 'trim'
+        ? 'var(--sheet-trim)'
+        : 'var(--sheet-edge)'
   return (
     <svg width="22" height="10" viewBox="0 0 22 10" aria-hidden style={{ flex: 'none' }}>
-      {kind === 'rest' && <rect x="1" y="1.5" width="20" height="7" fill="var(--rest-fill)" />}
+      {kind === 'trim' && <rect x="1" y="1.5" width="20" height="7" fill="var(--sheet-trim-fill)" />}
+      {kind === 'rest' && (
+        <>
+          <rect x="1" y="1.5" width="20" height="7" fill="var(--rest-fill)" />
+          <path
+            d="M2 8.5 8 1.5M8 8.5 14 1.5M14 8.5 20 1.5"
+            stroke="var(--rest-line)"
+            strokeOpacity="0.4"
+            strokeWidth="1"
+            fill="none"
+          />
+        </>
+      )}
       <rect
         x="1.5"
         y="1.5"

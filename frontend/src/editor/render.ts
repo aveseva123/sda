@@ -7,9 +7,8 @@ import {
 } from './geometry'
 import {
   alpha as alphaOf,
-  luminance,
   operationColor,
-  sheetShade,
+  fileColors,
   themeColor,
   vectorStyle,
 } from './palette'
@@ -60,67 +59,52 @@ export interface RenderInput {
  */
 const ink = (name: string, fallback: string) => themeColor(name, fallback)
 
-const CANVAS_BG = () => ink('--canvas-bg', '#0A0C0F')
-const GRID_DOT = () => ink('--canvas-grid', '#1A1F26')
-const SHEET_FILL = () => ink('--sheet-fill', '#0D1013')
-const SHEET_STROKE = () => ink('--sheet-edge', '#2E353E')
-const TRIM_STROKE = () => ink('--sheet-trim', '#333A44')
-const REST_FILL = () => ink('--rest-fill', '#232A32')
-const LABEL_INK = () => ink('--canvas-ink', '#F2F4F6')
-const DIM_INK = () => ink('--canvas-ink-2', '#AEB6C0')
-const FAINT_INK = () => ink('--canvas-ink-3', '#69717D')
+const CANVAS_BG = () => ink('--canvas-bg', '#C9CFD7')
+const GRID_DOT = () => ink('--canvas-grid', '#B0B8C2')
+const SHEET_FILL = () => ink('--sheet-fill', '#F8F9F7')
+const SHEET_STROKE = () => ink('--sheet-edge', '#7F8996')
+const TRIM_STROKE = () => ink('--sheet-trim', '#A3ACB8')
+const TRIM_FILL = () => ink('--sheet-trim-fill', '#DFE3E6')
+const REST_LINE = () => ink('--rest-line', '#4E8C6E')
+const REST_FILL = () => ink('--rest-fill', '#C6E6D6')
+const LABEL_INK = () => ink('--canvas-ink', '#16191D')
+const DIM_INK = () => ink('--canvas-ink-2', '#47515F')
+const FAINT_INK = () => ink('--canvas-ink-3', '#5E6976')
 /**
  * Белым на холсте были обозначены пять разных вещей: выделенная деталь, её
  * угловые маркеры, подсветка под курсором, выбранный вектор внутри детали,
  * значок закрепления и рамка резинового выделения. Всё это разные смыслы, и
  * на светлом фоне белый вдобавок не виден вовсе.
  */
-const SELECT = () => ink('--canvas-select', '#FFFFFF')
-const HOVER_INK = () => ink('--canvas-hover', 'rgba(255,255,255,0.5)')
-const PIN_INK = () => ink('--canvas-pin', '#F2F4F6')
-const DANGER = () => ink('--canvas-danger', '#D9694A')
-const PART_EDGE = () => ink('--part-edge', 'rgba(226,231,238,0.62)')
-const LABEL_PLATE = () => ink('--canvas-plate', 'rgba(10,12,15,0.72)')
-const GUIDE = () => ink('--canvas-guide', '#e11d48')
-const GRAIN_INK = () => ink('--canvas-grain', 'rgba(142,151,162,0.75)')
-
-/** Заливка детали: цвет файла с прозрачностью — контур остаётся главным. */
-function tint(hex: string, alpha: number): string {
-  return alphaOf(hex, alpha)
-}
-
-/**
- * Насколько плотной должна быть заливка детали.
- *
- * Прозрачность подбиралась под чёрный холст: цвет файла на 30 % поверх почти
- * чёрного даёт различимое пятно. Поверх светлого листа те же 30 % — это едва
- * заметный налёт, а сотня деталей превращается в белое поле. Плотность
- * выбирается по яркости листа, а не зашивается под одну тему.
- */
-function fillWeights(): { flat: number; base: number; ink: number } {
-  return luminance(SHEET_FILL()) > 0.4
-    ? { flat: 0.5, base: 0.36, ink: 0.72 }
-    : { flat: 0.3, base: 0.22, ink: 0.44 }
-}
+const SELECT = () => ink('--canvas-select', '#3E45A8')
+const HOVER_INK = () => ink('--canvas-hover', '#3E45A8')
+const PIN_INK = () => ink('--canvas-pin', '#47515F')
+/** Подложка под тёмной линией: делает её видимой на любом фоне. */
+const HALO = 'rgba(255,255,255,0.9)'
+const DANGER = () => ink('--canvas-danger', '#D92D20')
+const PART_EDGE = () => ink('--part-edge', '#5A646F')
+const LABEL_PLATE = () => ink('--canvas-plate', 'rgba(255,255,255,0.88)')
+const GUIDE = () => ink('--canvas-guide', '#1668D6')
+const GRAIN_INK = () => ink('--canvas-grain', '#7C8794')
 
 const patternCache = new Map<string, CanvasPattern | null>()
 
 /**
  * Заливка детали: цвет закреплён за файлом, штриховка — за листом внутри
- * файла. Штрих — тот же цвет, но плотнее: принадлежность читается и цветом,
- * и рисунком.
+ * файла. Штрих рисуется цветом ОБВОДКИ по бледной заливке, а не той же
+ * краской с другой прозрачностью: полупрозрачный штрих был подобран под
+ * чёрный холст, на светлом листе он почти исчезал.
  */
 function hatch(
   ctx: CanvasRenderingContext2D,
   fill: string,
+  edge: string,
   pattern: string,
 ): CanvasPattern | string {
-  const weight = fillWeights()
-  if (pattern === 'solid') return tint(fill, weight.flat)
-  // Ключ кеша включает плотность: при смене темы старые плитки не годятся.
-  const key = `${pattern}|${fill}|${weight.base}`
+  if (pattern === 'solid') return fill
+  const key = `${pattern}|${fill}|${edge}`
   const cached = patternCache.get(key)
-  if (cached !== undefined) return cached ?? tint(fill, weight.flat)
+  if (cached !== undefined) return cached ?? fill
 
   const size = 10
   const tile = document.createElement('canvas')
@@ -129,12 +113,12 @@ function hatch(
   const tctx = tile.getContext('2d')
   if (!tctx) {
     patternCache.set(key, null)
-    return tint(fill, weight.flat)
+    return fill
   }
-  tctx.fillStyle = tint(fill, weight.base)
+  tctx.fillStyle = fill
   tctx.fillRect(0, 0, size, size)
-  tctx.strokeStyle = tint(fill, weight.ink)
-  tctx.fillStyle = tint(fill, weight.ink)
+  tctx.strokeStyle = alphaOf(edge, 0.55)
+  tctx.fillStyle = alphaOf(edge, 0.55)
   tctx.lineWidth = 1.1
   tctx.beginPath()
   switch (pattern) {
@@ -176,7 +160,7 @@ function hatch(
   tctx.stroke()
   const made = ctx.createPattern(tile, 'repeat')
   patternCache.set(key, made)
-  return made ?? tint(fill, weight.flat)
+  return made ?? fill
 }
 
 /**
@@ -189,6 +173,48 @@ function hatch(
  * остаток, плашка подписи, рамка выделения. Контур детали — произвольная
  * ломаная, её округлять нельзя, это исказило бы геометрию.
  */
+let restPatternCache: { key: string; pattern: CanvasPattern | null } | null = null
+
+/**
+ * Заливка остатка листа: цвет плюс редкая диагональ.
+ *
+ * Зелёный сам по себе не годится — он занят и как цвет файла, и на карте
+ * рядом лежат зелёные детали. Полоса остатка отличается фактурой: это не
+ * деталь, а свободное место, и путать их нельзя, потому что одно уезжает на
+ * склад, а другое на станок.
+ */
+function restFill(ctx: CanvasRenderingContext2D): CanvasPattern | string {
+  const fill = REST_FILL()
+  const line = REST_LINE()
+  const key = `${fill}|${line}`
+  if (restPatternCache?.key === key) return restPatternCache.pattern ?? fill
+
+  const size = 14
+  const tile = document.createElement('canvas')
+  tile.width = size
+  tile.height = size
+  const tctx = tile.getContext('2d')
+  if (!tctx) {
+    restPatternCache = { key, pattern: null }
+    return fill
+  }
+  tctx.fillStyle = fill
+  tctx.fillRect(0, 0, size, size)
+  tctx.strokeStyle = alphaOf(line, 0.3)
+  tctx.lineWidth = 1
+  tctx.beginPath()
+  tctx.moveTo(0, size)
+  tctx.lineTo(size, 0)
+  tctx.moveTo(-1, 1)
+  tctx.lineTo(1, -1)
+  tctx.moveTo(size - 1, size + 1)
+  tctx.lineTo(size + 1, size - 1)
+  tctx.stroke()
+  const made = ctx.createPattern(tile, 'repeat')
+  restPatternCache = { key, pattern: made }
+  return made ?? fill
+}
+
 function crispRect(
   x: number,
   y: number,
@@ -241,23 +267,31 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     ctx.fillStyle = SHEET_FILL()
     ctx.fillRect(...sheetBox)
     ctx.strokeStyle = SHEET_STROKE()
-    ctx.lineWidth = 1
+    ctx.lineWidth = 1.5
     ctx.strokeRect(...sheetBox)
 
-    // Полезная область: то, что осталось после обрезки кромок листа.
+    // Полезная область: то, что осталось после обрезки кромок листа. Полоса
+    // обрезки залита, а не только обведена: пунктир на светлом читается как
+    // «какая-то рамка», а заливка сразу говорит «сюда деталь не встанет».
     const inset = toScreen([ox + sheet.trim.left, oy + sheet.h - sheet.trim.top])
+    const usable = crispRect(
+      inset[0],
+      inset[1],
+      (sheet.w - sheet.trim.left - sheet.trim.right) * viewport.scale,
+      (sheet.h - sheet.trim.top - sheet.trim.bottom) * viewport.scale,
+      1,
+    )
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(...sheetBox)
+    ctx.rect(...usable)
+    ctx.fillStyle = TRIM_FILL()
+    ctx.fill('evenodd')
+    ctx.restore()
     ctx.setLineDash([5, 4])
     ctx.strokeStyle = TRIM_STROKE()
     ctx.lineWidth = 1
-    ctx.strokeRect(
-      ...crispRect(
-        inset[0],
-        inset[1],
-        (sheet.w - sheet.trim.left - sheet.trim.right) * viewport.scale,
-        (sheet.h - sheet.trim.top - sheet.trim.bottom) * viewport.scale,
-        1,
-      ),
-    )
+    ctx.strokeRect(...usable)
     ctx.setLineDash([])
 
     // Подпись листа пишется только если помещается над ним: на общем виде
@@ -314,10 +348,10 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     const isFocused = input.focusedPartId === part.id
     const isColliding = collidingInstances.has(instance.id)
     const style = part.style
-    // Оттенок по листу внутри файла считается здесь: сервер сдвигает его к
-    // белому, что верно только для тёмного холста.
-    const fileColor = style
-      ? sheetShade(style.base ?? style.fill, part.source_sheet_index ?? 0)
+    // Заливка и обводка по цвету файла считаются здесь: сервер отдаёт цвет
+    // как есть, а как из него сделать читаемую на этом фоне пару, знает тема.
+    const tone = style
+      ? fileColors(style.base ?? style.fill, part.source_sheet_index ?? 0)
       : null
 
     ctx.save()
@@ -328,7 +362,9 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     if (!outline) {
       tracePath(ctx, placed.outer, toScreen, true)
       ctx.fillStyle =
-        style && fileColor ? hatch(ctx, fileColor, style.pattern) : alphaOf(PART_EDGE(), 0.2)
+        style && tone
+          ? hatch(ctx, tone.fill, tone.edge, style.pattern)
+          : alphaOf(PART_EDGE(), 0.2)
       ctx.fill()
 
       // Вырезы «прорезают» деталь до листа.
@@ -358,13 +394,13 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     ctx.strokeStyle = isColliding
       ? DANGER()
       : outline
-        ? fileColor ?? PART_EDGE()
+        ? tone?.edge ?? PART_EDGE()
         : PART_EDGE()
-    ctx.lineWidth = isColliding ? 2.8 : vectorStyle('OUTER').width
+    ctx.lineWidth = isColliding ? 3 : vectorStyle('OUTER').width
     ctx.stroke()
 
     if (isColliding) {
-      ctx.fillStyle = alphaOf(DANGER(), 0.18)
+      ctx.fillStyle = alphaOf(DANGER(), 0.16)
       tracePath(ctx, placed.outer, toScreen, true)
       ctx.fill()
     }
@@ -376,8 +412,9 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
 
     if (input.hoveredInstance === instance.id && !isSelected) {
       tracePath(ctx, placed.outer, toScreen, true)
-      // Подсветка под курсором: слабее выделения, иначе непонятно, что уже
-      // выбрано, а что просто под мышью.
+      // Подсветка под курсором отличается от выделения структурой — нет
+      // рамки и ручек, — а не бледностью: полупрозрачный акцент на светлом
+      // просто сереет и читается как «выключено».
       ctx.strokeStyle = HOVER_INK()
       ctx.lineWidth = 2
       ctx.stroke()
@@ -588,9 +625,10 @@ function drawOperations(
     const selected = selectedVectors.has(vectorKey(part.id, op.target))
     const enabled = vector?.enabled !== false
 
-    // Ширина фрезы: видно, что реально снимет инструмент.
+    // Ширина фрезы: видно, что реально снимет инструмент. Рисуется ДО самой
+    // линии, иначе след закрывает вектор, который он поясняет.
     if (input.showToolpaths && preset?.tool_diameter && enabled) {
-      ctx.strokeStyle = alphaOf(color, 0.25)
+      ctx.strokeStyle = alphaOf(color, 0.32)
       ctx.lineWidth = Math.max(preset.tool_diameter * input.viewport.scale, 1)
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
@@ -629,18 +667,22 @@ function drawOperations(
   // Контуры детали как выбираемые векторы — только внутри выбранной детали.
   if (!isFocused) return
   const outerSelected = selectedVectors.has(vectorKey(part.id, 'outer'))
-  if (outerSelected) {
-    tracePath(ctx, placed.outer, toScreen, true)
+  // Выбранный вектор — тоже по схеме «гало плюс акцент»: без гало выбранный
+  // чёрный контур сквозного реза визуально не отличается от невыбранного.
+  const markSelected = (points: Point[]) => {
+    tracePath(ctx, points, toScreen, true)
+    ctx.strokeStyle = HALO
+    ctx.lineWidth = 5
+    ctx.stroke()
+    tracePath(ctx, points, toScreen, true)
     ctx.strokeStyle = SELECT()
-    ctx.lineWidth = 3.5
+    ctx.lineWidth = 3
     ctx.stroke()
   }
+  if (outerSelected) markSelected(placed.outer)
   placed.inners.forEach((ring, index) => {
     if (!selectedVectors.has(vectorKey(part.id, `inner:${index}`))) return
-    tracePath(ctx, ring, toScreen, true)
-    ctx.strokeStyle = SELECT()
-    ctx.lineWidth = 3.5
-    ctx.stroke()
+    markSelected(ring)
   })
 
   // Вошли внутрь детали — показываем, как её обойдёт фреза: направление,
@@ -802,9 +844,13 @@ function drawPin(
 ): void {
   const [, , maxX, maxY] = placed.bbox
   const s = toScreen([maxX, maxY])
-  ctx.fillStyle = PIN_INK()
   ctx.beginPath()
-  ctx.arc(s[0] - 6, s[1] + 6, 3.2, 0, Math.PI * 2)
+  ctx.arc(s[0] - 6, s[1] + 6, 4.2, 0, Math.PI * 2)
+  ctx.fillStyle = HALO
+  ctx.fill()
+  ctx.beginPath()
+  ctx.arc(s[0] - 6, s[1] + 6, 3, 0, Math.PI * 2)
+  ctx.fillStyle = PIN_INK()
   ctx.fill()
 }
 
@@ -867,20 +913,20 @@ function drawRest(
     const w = width * viewport.scale
     const h = height * viewport.scale
 
+    // Полупрозрачность здесь была рассчитана на тёмный холст; на светлом она
+    // стирала зону до неразличимой. Цвет кладётся как есть.
     const restBox = crispRect(corner[0], corner[1], w, h, 1)
-    ctx.fillStyle = REST_FILL()
-    ctx.globalAlpha = 0.5
+    ctx.fillStyle = restFill(ctx)
     ctx.fillRect(...restBox)
-    ctx.globalAlpha = 1
     ctx.setLineDash([5, 4])
-    ctx.strokeStyle = SHEET_STROKE()
+    ctx.strokeStyle = REST_LINE()
     ctx.lineWidth = 1
     ctx.strokeRect(...restBox)
     ctx.setLineDash([])
 
     if (h > 16 && w > 150) {
       const keep = height >= minOffcut && width >= minOffcut
-      ctx.fillStyle = keep ? DIM_INK() : FAINT_INK()
+      ctx.fillStyle = keep ? REST_LINE() : FAINT_INK()
       ctx.font = '400 11px \'IBM Plex Mono\', ui-monospace, monospace'
       ctx.textAlign = 'center'
       ctx.fillText(
@@ -911,22 +957,33 @@ function drawSelection(
   const h = b[1] - a[1] + pad * 2
 
   const box = crispRect(x, y, w, h, 1)
+  // Белое гало под тёмной линией: белое само по себе на светлом листе не
+  // видно, а как подложка работает и на бледной заливке детали, и на сером
+  // столе, и поверх чёрного контура сквозного реза.
+  ctx.strokeStyle = HALO
+  ctx.lineWidth = 3.5
+  ctx.strokeRect(...box)
   ctx.strokeStyle = SELECT()
-  ctx.lineWidth = 1
+  ctx.lineWidth = 1.5
   ctx.strokeRect(...box)
 
-  // Угловые маркеры — по той же сетке, что и рамка, иначе они «плывут»
-  // относительно неё на пол-пикселя.
+  // Угловые маркеры — полые, как в векторных редакторах: они не закрашивают
+  // геометрию под собой. По той же пиксельной сетке, что и рамка.
   const [bx, by, bw, bh] = box
-  ctx.fillStyle = SELECT()
-  const s = 5
+  const s = 6
   for (const [cx, cy] of [
     [bx, by],
     [bx + bw, by],
     [bx, by + bh],
     [bx + bw, by + bh],
   ]) {
-    ctx.fillRect(Math.round(cx - s / 2), Math.round(cy - s / 2), s, s)
+    const hx = Math.round(cx - s / 2) + 0.5
+    const hy = Math.round(cy - s / 2) + 0.5
+    ctx.fillStyle = HALO
+    ctx.fillRect(hx, hy, s, s)
+    ctx.strokeStyle = SELECT()
+    ctx.lineWidth = 1.5
+    ctx.strokeRect(hx, hy, s, s)
   }
 }
 
@@ -968,7 +1025,7 @@ function drawMarquee(ctx: CanvasRenderingContext2D, input: RenderInput): void {
   const w = Math.abs(m.x1 - m.x0)
   const h = Math.abs(m.y1 - m.y0)
   const box = crispRect(x, y, w, h, 1)
-  ctx.fillStyle = alphaOf(SELECT(), 0.08)
+  ctx.fillStyle = alphaOf(SELECT(), 0.1)
   ctx.fillRect(...box)
   ctx.strokeStyle = SELECT()
   ctx.lineWidth = 1
