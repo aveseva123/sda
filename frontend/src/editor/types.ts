@@ -42,7 +42,7 @@ export interface PartView {
   source_file: string | null
   /** Номер листа ВНУТРИ исходного файла: им размечается штриховка. */
   source_sheet_index: number
-  style: { fill: string; pattern: string; stroke: string; text: string } | null
+  style: { base?: string; fill: string; pattern: string; stroke: string; text: string } | null
   length: number | null
   width: number | null
   thickness: number | null

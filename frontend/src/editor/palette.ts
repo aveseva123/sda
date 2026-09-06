@@ -149,3 +149,21 @@ export function vectorStyle(semantic: string): VectorStyle {
   const shape = VECTOR_STYLES[key] ?? { width: 1.3, dash: [2, 2] }
   return { color: operationColor(key), ...shape }
 }
+
+/**
+ * Оттенок цвета файла для листа ВНУТРИ этого файла.
+ *
+ * Файл на три листа даёт три оттенка одного цвета — вместе со штриховкой это
+ * отвечает на вопрос «с какого листа исходника приехала деталь». Сервер считает
+ * оттенок осветлением к белому: на тёмном холсте это добавляет контраст, на
+ * светлом — уводит цвет в фон, и деталь пропадает. Направление выбирается по
+ * яркости листа.
+ */
+const SHEET_SHADE_STEPS = [0, 0.14, -0.14, 0.26, -0.24, 0.38, -0.34, 0.48]
+
+export function sheetShade(base: string, sheetIndex: number): string {
+  const step = SHEET_SHADE_STEPS[sheetIndex % SHEET_SHADE_STEPS.length]
+  if (step === 0) return base
+  const onLight = luminance(themeColor('--sheet-fill', '#0d1013')) > 0.4
+  return shade(base, onLight ? -step : step)
+}

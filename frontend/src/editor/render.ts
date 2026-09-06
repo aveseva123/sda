@@ -5,7 +5,14 @@ import {
   rotatedSize,
   sheetOrigin,
 } from './geometry'
-import { alpha as alphaOf, luminance, operationColor, themeColor, vectorStyle } from './palette'
+import {
+  alpha as alphaOf,
+  luminance,
+  operationColor,
+  sheetShade,
+  themeColor,
+  vectorStyle,
+} from './palette'
 import type { Collision, Layout, Selection, ToolpathPreset } from './types'
 import { vectorKey } from './types'
 
@@ -307,6 +314,11 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     const isFocused = input.focusedPartId === part.id
     const isColliding = collidingInstances.has(instance.id)
     const style = part.style
+    // Оттенок по листу внутри файла считается здесь: сервер сдвигает его к
+    // белому, что верно только для тёмного холста.
+    const fileColor = style
+      ? sheetShade(style.base ?? style.fill, part.source_sheet_index ?? 0)
+      : null
 
     ctx.save()
     if (isolating && !isFocused) ctx.globalAlpha = 0.22
@@ -315,9 +327,8 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
 
     if (!outline) {
       tracePath(ctx, placed.outer, toScreen, true)
-      ctx.fillStyle = style
-        ? hatch(ctx, style.fill, style.pattern)
-        : alphaOf(PART_EDGE(), 0.2)
+      ctx.fillStyle =
+        style && fileColor ? hatch(ctx, fileColor, style.pattern) : alphaOf(PART_EDGE(), 0.2)
       ctx.fill()
 
       // Вырезы «прорезают» деталь до листа.
@@ -347,7 +358,7 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     ctx.strokeStyle = isColliding
       ? DANGER()
       : outline
-        ? style?.fill ?? PART_EDGE()
+        ? fileColor ?? PART_EDGE()
         : PART_EDGE()
     ctx.lineWidth = isColliding ? 2.8 : vectorStyle('OUTER').width
     ctx.stroke()

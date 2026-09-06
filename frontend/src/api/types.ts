@@ -18,6 +18,9 @@ export interface Material {
 }
 
 export interface Style {
+  /** Цвет файла без оттенка по листу: оттенок считает клиент, он знает тему. */
+  base: string
+  /** Цвет с оттенком, посчитанный сервером, — для стикеров и печати. */
   fill: string
   pattern: string
   stroke: string
