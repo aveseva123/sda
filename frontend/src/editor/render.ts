@@ -512,6 +512,27 @@ function decoratePath(
   }
 }
 
+/** Самый крупный размер операции на экране, в пикселях. */
+function operationExtent(
+  op: PlacedPart['operations'][number],
+  scale: number,
+): number {
+  if (op.diameter) return op.diameter * scale
+  const points = op.points
+  if (!points?.length) return 0
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const [x, y] of points) {
+    if (x < minX) minX = x
+    if (x > maxX) maxX = x
+    if (y < minY) minY = y
+    if (y > maxY) maxY = y
+  }
+  return Math.max(maxX - minX, maxY - minY) * scale
+}
+
 function drawOperations(
   ctx: CanvasRenderingContext2D,
   input: RenderInput,
@@ -530,7 +551,15 @@ function drawOperations(
   ctx.save()
   ctx.globalAlpha = zoomInk
 
+  // Порог видимости. На общем виде (0,17 пикселя на миллиметр) отверстие ⌀8
+  // — это полтора пикселя: сотня деталей даёт семьсот красных точек, которые
+  // ничего не сообщают и мешают увидеть саму раскладку. Операция рисуется,
+  // только когда её видно как операцию, а не как пятно. Паз длиной 500 мм при
+  // том же масштабе — это 85 пикселей, он остаётся.
+  const MIN_OP_PX = 3.5
+
   for (const op of placed.operations) {
+    if (operationExtent(op, input.viewport.scale) < MIN_OP_PX) continue
     const vector = byTarget.get(op.target)
     const preset = vector?.preset_id ? input.presets.get(vector.preset_id) : undefined
     // Цвет — по ТИПУ операции, а не по пресету: оператор читает на карте

@@ -13,6 +13,8 @@ interface FileRow {
 interface Props {
   layout: Layout
   files: FileRow[]
+  /** Текущий масштаб, пикселей на миллиметр: по нему видно, что уже скрыто. */
+  scale: number
 }
 
 /**
@@ -85,7 +87,7 @@ function SheetSample({ kind }: { kind: 'edge' | 'trim' | 'rest' }) {
  * которые на этом листе действительно есть, — иначе она превращается в
  * справочник, который перестают читать.
  */
-export default function MapLegend({ layout, files }: Props) {
+export default function MapLegend({ layout, files, scale }: Props) {
   const [open, setOpen] = useState(() => {
     try {
       return window.localStorage.getItem('nestor.legend') !== 'closed'
@@ -105,19 +107,43 @@ export default function MapLegend({ layout, files }: Props) {
     })
   }
 
-  // Типы операций, которые реально есть на этом листе.
+  // Типы операций, которые реально есть на этом листе, и самый крупный
+  // размер каждого: по нему видно, скрыт ли тип на текущем масштабе.
   const present = useMemo(() => {
-    const kinds = new Set<string>()
+    const biggest = new Map<string, number>()
+    const note = (kind: string, size: number) =>
+      biggest.set(kind, Math.max(biggest.get(kind) ?? 0, size))
     for (const instance of layout.instances) {
       if (instance.sheet_index === null) continue
       const part = layout.parts[String(instance.part_id)]
       if (!part?.geometry) continue
-      kinds.add('OUTER')
-      if (part.geometry.inners?.length) kinds.add('INNER')
-      for (const op of part.geometry.operations ?? []) kinds.add(op.semantic)
+      note('OUTER', Infinity)
+      if (part.geometry.inners?.length) note('INNER', Infinity)
+      for (const op of part.geometry.operations ?? []) {
+        if (op.diameter) {
+          note(op.semantic, op.diameter)
+          continue
+        }
+        const points = op.points ?? []
+        let minX = Infinity
+        let minY = Infinity
+        let maxX = -Infinity
+        let maxY = -Infinity
+        for (const [x, y] of points) {
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+        }
+        note(op.semantic, points.length ? Math.max(maxX - minX, maxY - minY) : 0)
+      }
     }
-    return LINES.filter((line) => kinds.has(line.semantic))
-  }, [layout])
+    return LINES.filter((line) => biggest.has(line.semantic)).map((line) => ({
+      ...line,
+      // Тот же порог, что и на холсте (render.ts, MIN_OP_PX).
+      hidden: (biggest.get(line.semantic) ?? 0) * scale < 3.5,
+    }))
+  }, [layout, scale])
 
   const hasRest = layout.sheets.length > 0
 
@@ -137,9 +163,18 @@ export default function MapLegend({ layout, files }: Props) {
                 Сплошная — насквозь, штриховая — на глубину, кружок — отверстие.
               </div>
               {present.map((line) => (
-                <div className="legend-row" key={line.semantic} title={line.means}>
+                <div
+                  className={`legend-row${line.hidden ? ' faded' : ''}`}
+                  key={line.semantic}
+                  title={
+                    line.hidden
+                      ? `${line.means}. Не видно при этом масштабе — приблизьте.`
+                      : line.means
+                  }
+                >
                   <LineSample semantic={line.semantic} />
                   <span className="grow">{line.title}</span>
+                  {line.hidden && <span className="legend-count">приблизьте</span>}
                 </div>
               ))}
             </>

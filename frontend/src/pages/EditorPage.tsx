@@ -811,7 +811,7 @@ export default function EditorPage() {
           </div>
           )}
 
-          {layout && <MapLegend layout={layout} files={legend} />}
+          {layout && <MapLegend layout={layout} files={legend} scale={scale} />}
 
           {layout && (
             <AlignBar
