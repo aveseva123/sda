@@ -47,6 +47,9 @@ export default function AlignBar({ layout, selection, onMove, onCompact, busy }:
   }
 
   const enough = boxes.length >= 2 && !busy
+  const pinnedCount = layout.instances.filter(
+    (instance) => selection.instances.includes(instance.id) && instance.pinned,
+  ).length
   const bySheet = () => {
     const map = new Map<number, Box[]>()
     for (const box of boxes) map.set(box.sheet, [...(map.get(box.sheet) ?? []), box])
@@ -245,7 +248,7 @@ export default function AlignBar({ layout, selection, onMove, onCompact, busy }:
       <button
         type="button"
         className="tool"
-        title="Открепить"
+        title="Открепить: пересчёт сможет двигать выделенные детали"
         disabled={!some}
         onClick={() => pin(false)}
       >
@@ -254,6 +257,13 @@ export default function AlignBar({ layout, selection, onMove, onCompact, busy }:
           <path d="M2.5 13.5 13.5 2.5" />
         </svg>
       </button>
+      {/* Сколько из выделенного закреплено — иначе состояние читается только
+          по тому, что «Уплотнить» ничего не двигает. */}
+      {some && (
+        <span className="pin-count mono" title="Закреплено из выделенного">
+          {pinnedCount}/{boxes.length || selection.instances.length}
+        </span>
+      )}
 
       <div className="sep" />
 

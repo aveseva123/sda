@@ -847,38 +847,53 @@ function ToolLibrarySection({
   const [form, setForm] = useState<Tool | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
+  const [saved, setSaved] = useState<string | null>(null)
 
   const tools = library?.tools ?? []
+  const dirty = useMemo(() => {
+    if (!form || openId === null) return false
+    const source = tools.find((tool) => tool.id === openId)
+    return Boolean(source) && JSON.stringify(source) !== JSON.stringify(form)
+  }, [form, openId, tools])
+
   const open = (tool: Tool) => {
+    // Несохранённые режимы соседней фрезы пропадали молча.
+    if (dirty && tool.id !== openId && !window.confirm('Правки фрезы не сохранены. Уйти?')) {
+      return
+    }
     setOpenId(tool.id === openId ? null : tool.id)
     setForm(structuredClone(tool))
+    setSaved(null)
   }
 
-  const save = async () => {
-    if (!form) return
+  const save = async (override?: Tool) => {
+    const source = override ?? form
+    if (!source) return
     setBusy(true)
     setFailure(null)
     try {
-      await api.updateTool(form.id, {
-        name: form.name,
-        type: form.type,
-        diameter: form.diameter,
-        slot: form.slot,
-        flute_length: form.flute_length,
-        total_length: form.total_length,
-        flutes: form.flutes,
-        shank: form.shank,
-        article: form.article,
-        rpm: form.rpm,
-        feed: form.feed,
-        plunge_feed: form.plunge_feed,
-        step_down: form.step_down,
-        resource_used: form.resource.used,
-        resource_limit: form.resource.limit,
-        resource_unit: form.resource.unit,
-        modes: form.modes,
+      await api.updateTool(source.id, {
+        name: source.name,
+        type: source.type,
+        diameter: source.diameter,
+        slot: source.slot,
+        flute_length: source.flute_length,
+        total_length: source.total_length,
+        flutes: source.flutes,
+        shank: source.shank,
+        article: source.article,
+        rpm: source.rpm,
+        feed: source.feed,
+        plunge_feed: source.plunge_feed,
+        step_down: source.step_down,
+        resource_used: source.resource.used,
+        resource_limit: source.resource.limit,
+        resource_unit: source.resource.unit,
+        modes: source.modes,
       })
-      setOpenId(null)
+      setForm(structuredClone(source))
+      // Раньше карточка просто закрывалась, и было непонятно, записалось ли.
+      setSaved(`«${source.name}» сохранена.`)
       onChanged()
     } catch (err) {
       setFailure((err as Error).message)
@@ -904,25 +919,33 @@ function ToolLibrarySection({
             key={slot.slot}
           >
             <b>T{slot.slot}</b>
-            <span>{slot.tool_id ? `${slot.name}\n⌀${num(slot.diameter, 1)}` : 'свободен'}</span>
+            {slot.tool_id ? (
+              <span>
+                {slot.name}
+                <em>⌀ {num(slot.diameter, 1)} мм</em>
+              </span>
+            ) : (
+              <span>свободен</span>
+            )}
           </div>
         ))}
       </div>
 
       {failure && <div className="notice error">{failure}</div>}
+      {saved && <div className="notice ok">{saved}</div>}
 
       <table>
         <thead>
           <tr>
-            <th>T</th>
+            <th>Гнездо</th>
             <th>Фреза</th>
             <th>Тип</th>
-            <th className="num">⌀</th>
-            <th className="num">L реза</th>
-            <th className="num">Обороты</th>
-            <th className="num">Подача</th>
-            <th className="num">Шаг Z</th>
-            <th>Ресурс</th>
+            <th className="num">⌀, мм</th>
+            <th className="num">Длина реза, мм</th>
+            <th className="num">Обороты, об/мин</th>
+            <th className="num">Подача, мм/мин</th>
+            <th className="num">Шаг Z, мм</th>
+            <th>Наработка</th>
             <th />
           </tr>
         </thead>
@@ -1099,17 +1122,19 @@ function ToolLibrarySection({
             </label>
           </div>
           <div className="row tight">
-            <button type="button" className="primary" disabled={busy} onClick={save}>
+            <button type="button" className="primary" disabled={busy} onClick={() => save()}>
               Сохранить фрезу
             </button>
             <button
               type="button"
               disabled={busy}
-              onClick={() =>
-                setForm({ ...form, resource: { ...form.resource, used: 0 } })
-              }
+              title="Обнулить наработку и сразу записать это"
+              // Кнопка только правила черновик: наработка возвращалась при
+              // любом переоткрытии карточки, потому что на сервер ничего не
+              // уходило. Замена фрезы — событие, а не намерение.
+              onClick={() => save({ ...form, resource: { ...form.resource, used: 0 } })}
             >
-              Фреза заменена — обнулить ресурс
+              Фреза заменена — обнулить наработку
             </button>
           </div>
           {form.usage.length > 0 && (

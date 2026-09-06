@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import type { Collision, Layout, Selection, ToolpathPreset, VectorView } from '../../editor/types'
 import { vectorKey } from '../../editor/types'
+import { rotatedSize } from '../../editor/geometry'
 import type { Move } from './CanvasStage'
 
 interface Props {
@@ -149,6 +150,16 @@ const TOOL_LABEL: Record<string, string> = {
   saw: 'пила',
 }
 
+/** Типы траекторий по-русски: коды DRILL / GROOVE / OUTER оператору ничего
+ *  не говорят, а в подсказке о порядке обработки стояли именно они. */
+const SEMANTIC_TITLE: Record<string, string> = {
+  DRILL: 'присадка',
+  GROOVE: 'паз',
+  POCKET: 'выборка',
+  INNER: 'внутренний вырез',
+  OUTER: 'контур',
+}
+
 const GRAIN_LABEL: Record<string, string> = {
   none: '—',
   along: '↔',
@@ -284,8 +295,9 @@ export default function PropertiesPanel({
   // Деталь без листа не размещена: показывать её координаты нулями — врать.
   const placed = single ? single.sheet_index !== null && single.x !== null : false
   const rotation = single?.rotation ?? 0
-  const width = Math.abs(rotation % 180) === 90 ? part.width : part.length
-  const height = Math.abs(rotation % 180) === 90 ? part.length : part.width
+  // Габарит на листе — из геометрии: «длина × ширина» не помнят, как деталь
+  // лежит, и у вертикальной стойки поменяли бы стороны местами.
+  const [width, height] = rotatedSize(part, rotation)
 
   const vectors: VectorView[] = part.vectors
   const active = vectors.find((v) => v.target === activeTarget) ?? null
@@ -409,7 +421,9 @@ export default function PropertiesPanel({
             <span
               className="mono"
               style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--ink-3)' }}
-              title={`Порядок обработки из пресета: ${order.join(' → ')}`}
+              title={`Порядок обработки из шаблона: ${order
+                .map((key) => SEMANTIC_TITLE[key] ?? key)
+                .join(' → ')}`}
             >
               контур последним
             </span>

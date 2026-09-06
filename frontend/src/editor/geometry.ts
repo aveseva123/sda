@@ -76,10 +76,26 @@ export function localGeometry(geometry: PartGeometryData): LocalGeometry {
   return local
 }
 
-/** Габарит детали с учётом поворота: при 90° стороны меняются местами. */
+/**
+ * Габарит детали на листе с учётом поворота.
+ *
+ * Берётся из геометрии, а не из «длина × ширина»: последние — это больший и
+ * меньший размеры, они не помнят, как деталь лежит на чертеже. Для стойки
+ * 1954×630, стоящей вертикально, они дали бы горизонтальный габарит, и
+ * выравнивание раскидало бы детали мимо их настоящих краёв.
+ */
 export function rotatedSize(part: PartView, rotation: number): [number, number] {
-  const w = part.length ?? 0
-  const h = part.width ?? 0
+  let w = part.length ?? 0
+  let h = part.width ?? 0
+  const bbox = part.geometry?.bbox
+  if (bbox && bbox.length === 4) {
+    const dx = bbox[2] - bbox[0]
+    const dy = bbox[3] - bbox[1]
+    if (dx > 0 && dy > 0) {
+      w = dx
+      h = dy
+    }
+  }
   return Math.abs(rotation % 180) === 90 ? [h, w] : [w, h]
 }
 

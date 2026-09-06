@@ -24,6 +24,30 @@ import type {
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
+/**
+ * Отказ сервера человеческим текстом.
+ *
+ * FastAPI на неверное поле отвечает списком объектов, и он попадал на экран
+ * сырым JSON: `[{"type":"missing","loc":["body","files",0,"relpath"]...`.
+ * Оператору нужно знать, какое поле не заполнено, а не как называется
+ * валидатор.
+ */
+function readable(detail: unknown): string {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const lines = detail.map((item) => {
+      const row = item as { msg?: string; loc?: unknown[] }
+      const where = (row.loc ?? [])
+        .filter((part) => part !== 'body' && typeof part !== 'number')
+        .join(' → ')
+      const what = row.msg ?? 'значение не подходит'
+      return where ? `«${where}»: ${what}` : what
+    })
+    return `Не принято сервером — ${lines.join('; ')}`
+  }
+  return JSON.stringify(detail)
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Демо-сборка отвечает снимком настоящих данных: сервера рядом нет.
   if (IS_DEMO) return demoRequest<T>(path, init)
@@ -32,7 +56,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let detail = `${response.status} ${response.statusText}`
     try {
       const body = await response.json()
-      if (body?.detail) detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)
+      if (body?.detail) detail = readable(body.detail)
     } catch {
       /* тело не JSON — оставляем текст статуса */
     }
