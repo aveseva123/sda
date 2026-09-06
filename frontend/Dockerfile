@@ -1,7 +1,9 @@
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+# Ставим ровно то, что зафиксировано в lock-файле: сборка в цеху должна дать
+# те же версии, что проверены здесь.
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 ARG VITE_API_BASE=/api
 ENV VITE_API_BASE=$VITE_API_BASE

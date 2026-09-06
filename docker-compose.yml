@@ -1,6 +1,7 @@
 # Разворачивается на локальном сервере в цеху, интернет не требуется.
 services:
   db:
+    restart: unless-stopped
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-sda}
@@ -17,6 +18,7 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -25,6 +27,7 @@ services:
       retries: 20
 
   api:
+    restart: unless-stopped
     build:
       context: ./backend
     environment:
@@ -45,6 +48,7 @@ services:
       - "${API_PORT:-8000}:8000"
 
   worker:
+    restart: unless-stopped
     build:
       context: ./backend
     environment:
@@ -61,6 +65,7 @@ services:
     command: rq worker --url redis://redis:6379/0 nesting import
 
   web:
+    restart: unless-stopped
     build:
       context: ./frontend
       args:
