@@ -381,6 +381,118 @@ function tracePath(
   if (close) ctx.closePath()
 }
 
+
+/** Длина ломаной в экранных пикселях. */
+function screenLength(points: Point[], toScreen: (p: Point) => Point): number {
+  let total = 0
+  for (let i = 1; i < points.length; i += 1) {
+    const a = toScreen(points[i - 1])
+    const b = toScreen(points[i])
+    total += Math.hypot(b[0] - a[0], b[1] - a[1])
+  }
+  return total
+}
+
+/** Точка на ломаной по доле её длины и направление в ней. */
+function alongPath(
+  points: Point[],
+  toScreen: (p: Point) => Point,
+  fraction: number,
+): { at: Point; angle: number } | null {
+  const total = screenLength(points, toScreen)
+  if (total <= 0) return null
+  let target = total * fraction
+  for (let i = 1; i < points.length; i += 1) {
+    const a = toScreen(points[i - 1])
+    const b = toScreen(points[i])
+    const seg = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (seg <= 0) continue
+    if (target <= seg) {
+      const t = target / seg
+      return {
+        at: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+        angle: Math.atan2(b[1] - a[1], b[0] - a[0]),
+      }
+    }
+    target -= seg
+  }
+  return null
+}
+
+/** Стрелка обхода: треугольник остриём по направлению движения фрезы. */
+function drawArrow(
+  ctx: CanvasRenderingContext2D,
+  at: Point,
+  angle: number,
+  color: string,
+  size = 7,
+): void {
+  ctx.save()
+  ctx.translate(at[0], at[1])
+  ctx.rotate(angle)
+  ctx.beginPath()
+  ctx.moveTo(size * 0.6, 0)
+  ctx.lineTo(-size * 0.4, size * 0.42)
+  ctx.lineTo(-size * 0.4, -size * 0.42)
+  ctx.closePath()
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.restore()
+}
+
+/**
+ * Разметка контура: направление обхода, точка входа и узлы.
+ *
+ * Показывается только у детали, внутрь которой вошли, — как isolation mode в
+ * векторных редакторах. Рисовать это у всех сразу нельзя: на листе сотня
+ * деталей, и стрелки превратятся в шум.
+ *
+ * Направление обхода — не украшение: от него зависит, попутное фрезерование
+ * или встречное, а значит скол на лицевой стороне детали.
+ */
+function decoratePath(
+  ctx: CanvasRenderingContext2D,
+  points: Point[],
+  toScreen: (p: Point) => Point,
+  color: string,
+  options: { nodes: boolean; closed: boolean },
+): void {
+  if (points.length < 2) return
+  const total = screenLength(points, toScreen)
+  if (total < 40) return
+
+  // Одна стрелка на каждые двести пикселей длины, но не больше четырёх:
+  // дальше они перестают читаться как направление и становятся пунктиром.
+  const count = Math.max(1, Math.min(4, Math.round(total / 200)))
+  for (let i = 0; i < count; i += 1) {
+    const spot = alongPath(points, toScreen, (i + 0.5) / count)
+    if (spot) drawArrow(ctx, spot.at, spot.angle, color)
+  }
+
+  // Точка входа: с неё фреза начнёт и на ней же оставит след врезания.
+  const start = toScreen(points[0])
+  ctx.beginPath()
+  ctx.arc(start[0], start[1], 3.5, 0, Math.PI * 2)
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.strokeStyle = SHEET_FILL()
+  ctx.lineWidth = 1.5
+  ctx.stroke()
+
+  if (!options.nodes || points.length > 400) return
+  ctx.fillStyle = SHEET_FILL()
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1
+  const last = options.closed ? points.length - 1 : points.length
+  for (let i = 0; i < last; i += 1) {
+    const [x, y] = toScreen(points[i])
+    ctx.beginPath()
+    ctx.rect(Math.round(x) - 2.5, Math.round(y) - 2.5, 5, 5)
+    ctx.fill()
+    ctx.stroke()
+  }
+}
+
 function drawOperations(
   ctx: CanvasRenderingContext2D,
   input: RenderInput,
@@ -460,6 +572,22 @@ function drawOperations(
     ctx.lineWidth = 3.5
     ctx.stroke()
   })
+
+  // Вошли внутрь детали — показываем, как её обойдёт фреза: направление,
+  // точку входа и узлы контура. Узлы только вблизи: на общем виде они
+  // сливаются в сплошную линию и мешают.
+  const nodes = input.viewport.scale > 0.5
+  decoratePath(ctx, placed.outer, toScreen, operationColor('OUTER'), { nodes, closed: true })
+  for (const ring of placed.inners) {
+    decoratePath(ctx, ring, toScreen, operationColor('INNER'), { nodes, closed: true })
+  }
+  for (const op of placed.operations) {
+    if (!op.points?.length) continue
+    decoratePath(ctx, op.points, toScreen, operationColor(op.semantic), {
+      nodes: false,
+      closed: false,
+    })
+  }
 }
 
 /**
