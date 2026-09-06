@@ -1,14 +1,14 @@
 from pathlib import PurePosixPath
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.importer import ImportOptions, IncomingFile, create_batch, layer_summary
 from app.importer import process_batch as run_process
 from app.importer.pipeline import max_upload_bytes
-from app.models import ImportBatch, ImportFile
+from app.models import ImportBatch, ImportFile, Part, PartInstance
 from app.schemas import ImportBatchDetail, ImportBatchOut, ImportFileOut, ProcessRequest
 
 router = APIRouter(prefix="/imports", tags=["Импорт"])
@@ -145,8 +145,33 @@ def process(
 
 
 @router.delete("/{batch_id}", status_code=204)
-def delete_batch(batch_id: int, db: Session = Depends(get_db)) -> None:
-    db.delete(_require(db, batch_id))
+def delete_batch(
+    batch_id: int,
+    force: bool = Query(default=False, description="удалить вместе с деталями"),
+    db: Session = Depends(get_db),
+) -> None:
+    """Удаление загрузки.
+
+    За загрузкой тянутся файлы, а за ними — детали и их экземпляры на листах.
+    Удалить пачку, из которой уже разложены детали, можно только осознанно:
+    иначе раскрой на экране разъедется с тем, что лежит у станка.
+    """
+    batch = _require(db, batch_id)
+    placed = db.scalar(
+        select(func.count())
+        .select_from(PartInstance)
+        .join(Part, Part.id == PartInstance.part_id)
+        .join(ImportFile, ImportFile.id == Part.source_file_id)
+        .where(ImportFile.batch_id == batch_id, PartInstance.sheet_id.is_not(None))
+    )
+    if placed and not force:
+        raise HTTPException(
+            409,
+            f"Из этой загрузки уже разложено деталей на листах: {placed}. "
+            "Удаление уничтожит их вместе с раскроем. Если это осознанно — "
+            "повторите с параметром force=true.",
+        )
+    db.delete(batch)
     db.flush()
 
 

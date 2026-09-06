@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.models import Material, MaterialSheetFormat
+from app.models import Material, MaterialSheetFormat, Part, StockItem
 from app.schemas import MaterialIn, MaterialOut, SheetFormatIn, SheetFormatOut
 
 router = APIRouter(prefix="/materials", tags=["Материалы"])
@@ -44,9 +44,33 @@ def update_material(
 
 @router.delete("/{material_id}", status_code=204)
 def delete_material(material_id: int, db: Session = Depends(get_db)) -> None:
+    """Удаление материала.
+
+    За материалом тянутся склад и журнал движений — база удалит их каскадом,
+    молча и без возврата. Поэтому материал, на котором что-то висит, не
+    удаляется: сначала спишите остатки и разберитесь с деталями.
+    """
     material = db.get(Material, material_id)
     if material is None:
         raise HTTPException(404, "Материал не найден")
+
+    stock = db.scalar(
+        select(func.count()).select_from(StockItem).where(
+            StockItem.material_id == material_id
+        )
+    )
+    parts = db.scalar(
+        select(func.count()).select_from(Part).where(Part.material_id == material_id)
+    )
+    if stock or parts:
+        raise HTTPException(
+            409,
+            f"«{material.name}» {material.thickness:g} мм удалить нельзя: "
+            f"на складе позиций — {stock or 0}, деталей с этим материалом — "
+            f"{parts or 0}. Вместе с материалом исчезли бы склад и журнал "
+            "движений.",
+        )
+
     db.delete(material)
     db.flush()
 

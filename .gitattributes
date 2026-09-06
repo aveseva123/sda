@@ -7,3 +7,6 @@
 *.dxf -text
 *.nc -text
 *.tap -text
+
+# Батники Windows обязаны быть с CRLF: с LF cmd спотыкается на них.
+*.bat text eol=crlf
