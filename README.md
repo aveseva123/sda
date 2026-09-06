@@ -142,13 +142,37 @@ docker compose exec api python -m app.scripts.seed
 
 Миграции применяются автоматически при старте контейнера `api`.
 
+### Посмотреть интерфейс без Postgres
+
+Самый быстрый способ открыть вёрстку — база в одном файле SQLite и демо-данные
+из эталонных DXF заказчика. Так интерфейс открывается сразу с деталями на
+листах, а не пустым.
+
+```bash
+cd backend
+python -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"
+
+# демо-база: материалы, импорт эталонных DXF, посчитанный раскрой
+DATABASE_URL="sqlite+pysqlite:///./demo.db" python scripts/demo_seed.py
+DATABASE_URL="sqlite+pysqlite:///./demo.db" uvicorn app.main:app --port 8000
+
+# во втором терминале
+cd frontend
+npm install && npm run dev
+```
+
+Интерфейс — <http://localhost:5173>, раздел «Раскрой». Демо-база (`demo.db`)
+и её хранилище (`.demo-storage/`) в репозиторий не попадают: это черновик для
+разработки, в цеху база всё равно Postgres.
+
 ### Разработка без Docker
 
 ```bash
 cd backend
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-alembic upgrade head
+alembic upgrade head          # нужен Postgres: JSONB и alter-таблицы
 uvicorn app.main:app --reload
 
 cd ../frontend
