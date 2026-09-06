@@ -329,3 +329,118 @@ class OffcutJudgeOut(BaseModel):
     reason: str
     area_m2: float
     thresholds: dict
+
+
+# ----------------------------------------------------------- траектории
+
+
+class ToolpathPresetIn(BaseModel):
+    slug: str
+    name: str
+    semantic: str | None = None
+    side: str = "outside"
+    tool_id: int | None = None
+    tool_diameter: float | None = None
+    tool_type: str | None = None
+    depth: dict = Field(default_factory=dict)
+    step_down: float | None = None
+    finish_pass: bool = False
+    finish_allowance: float | None = None
+    direction: str = "climb"
+    lead: dict | None = None
+    tabs: str = "auto"
+    params: dict | None = None
+    color: str = "#111827"
+
+
+class ToolpathPresetOut(ORMModel):
+    id: int
+    slug: str
+    name: str
+    semantic: str | None
+    side: str
+    tool_id: int | None
+    tool_diameter: float | None
+    tool_type: str | None
+    depth: dict
+    step_down: float | None
+    finish_pass: bool
+    finish_allowance: float | None
+    direction: str
+    lead: dict | None
+    tabs: str
+    params: dict | None
+    color: str
+    is_builtin: bool
+
+
+class ToolpathAssignIn(BaseModel):
+    """Назначение пресета на выбранные векторы детали."""
+
+    targets: list[str] = Field(min_length=1)
+    preset_id: int
+    overrides: dict | None = None
+    enabled: bool = True
+
+
+class ToolpathAssignmentOut(ORMModel):
+    id: int
+    part_id: int
+    target: str
+    preset_id: int
+    overrides: dict | None
+    enabled: bool
+    assigned_manually: bool
+
+
+class PartVectorsOut(BaseModel):
+    part_id: int
+    part_name: str
+    vectors: list[dict]
+
+
+# ------------------------------------------------------------- раскладка
+
+
+class NestingJobIn(BaseModel):
+    material_id: int
+    thickness: float = Field(gt=0)
+    name: str | None = None
+    sheet_w: float | None = Field(default=None, gt=0)
+    sheet_h: float | None = Field(default=None, gt=0)
+    auto_arrange: bool = True
+
+
+class NestingJobOut(ORMModel):
+    id: int
+    name: str | None
+    material_id: int
+    thickness: float
+    status: str
+    version: int
+    utilization: float | None
+    params: dict | None
+    created_at: datetime
+
+
+class InstanceMoveIn(BaseModel):
+    """Перемещение детали на холсте."""
+
+    instance_id: int
+    sheet_index: int | None = None
+    x: float | None = None
+    y: float | None = None
+    rotation: float | None = None
+    # Ручная правка фиксирует деталь: пересчёт её не двигает.
+    pinned: bool = True
+
+
+class MoveRequest(BaseModel):
+    moves: list[InstanceMoveIn] = Field(min_length=1)
+
+
+class CollisionOut(BaseModel):
+    kind: str
+    instance_ids: list[int]
+    sheet_index: int
+    message: str

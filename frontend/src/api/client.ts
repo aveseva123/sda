@@ -1,3 +1,4 @@
+import type { Collision, Layout, ToolpathPreset } from '../editor/types'
 import type {
   AppConfig,
   DetectedSheet,
@@ -147,6 +148,45 @@ export const api = {
     request<StockItem>(`/stock/${itemId}/adjust`, json('POST', payload)),
   stockMovements: (itemId: number) =>
     request<StockMovement[]>(`/stock/${itemId}/movements`),
+
+  // ---- раскрой и редактор ----
+  nestingJobs: () => request<Array<{ id: number; name: string | null; thickness: number; material_id: number; utilization: number | null }>>('/nesting/jobs'),
+  createNestingJob: (payload: {
+    material_id: number
+    thickness: number
+    name?: string | null
+    sheet_w?: number | null
+    sheet_h?: number | null
+    auto_arrange?: boolean
+  }) => request<{ id: number }>('/nesting/jobs', json('POST', payload)),
+  layout: (jobId: number) => request<Layout>(`/nesting/jobs/${jobId}/layout`),
+  arrange: (jobId: number, keepPinned = true) =>
+    request<{ sheets: number; placed: number; unplaced: number; utilization: number; warnings: string[] }>(
+      `/nesting/jobs/${jobId}/arrange?keep_pinned=${keepPinned}`,
+      json('POST', {}),
+    ),
+  moveInstances: (
+    jobId: number,
+    moves: Array<{
+      instance_id: number
+      sheet_index?: number | null
+      x?: number | null
+      y?: number | null
+      rotation?: number | null
+      pinned?: boolean
+    }>,
+  ) => request<{ updated: number; utilization: number }>(`/nesting/jobs/${jobId}/move`, json('POST', { moves })),
+  collisions: (jobId: number) => request<Collision[]>(`/nesting/jobs/${jobId}/collisions`),
+  deleteNestingJob: (jobId: number) =>
+    request<void>(`/nesting/jobs/${jobId}`, { method: 'DELETE' }),
+
+  toolpathPresets: () => request<ToolpathPreset[]>('/toolpath-presets'),
+  assignToolpath: (
+    partId: number,
+    payload: { targets: string[]; preset_id: number; enabled?: boolean },
+  ) => request<unknown>(`/parts/${partId}/toolpaths`, json('POST', payload)),
+  autoAssignToolpaths: (partId: number) =>
+    request<{ assigned: number }>(`/parts/${partId}/toolpaths/auto`, json('POST', {})),
 
   presets: () => request<LayerPreset[]>('/layer-presets'),
   savePreset: (payload: {

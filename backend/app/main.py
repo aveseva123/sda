@@ -11,7 +11,16 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import imports, materials, parts, presets, projects, stock
+from app.api import (
+    imports,
+    materials,
+    nesting,
+    parts,
+    presets,
+    projects,
+    stock,
+    toolpaths,
+)
 from app.core.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -44,6 +53,8 @@ for router in (
     materials.router,
     imports.router,
     stock.router,
+    nesting.router,
+    toolpaths.router,
     presets.router,
 ):
     app.include_router(router, prefix=settings.api_prefix)

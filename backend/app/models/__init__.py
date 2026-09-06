@@ -22,6 +22,7 @@ from app.models.material import Material, MaterialSheetFormat  # noqa: F401
 from app.models.nesting import NcProgram, NestingJob, Sheet, Tool  # noqa: F401
 from app.models.project import Part, PartInstance, Product, Project  # noqa: F401
 from app.models.stock import StockItem, StockMovement  # noqa: F401
+from app.models.toolpath import PartToolpath, ToolpathPreset  # noqa: F401
 
 __all__ = [
     "DxfSource",
@@ -39,6 +40,7 @@ __all__ = [
     "NestingJob",
     "Part",
     "PartInstance",
+    "PartToolpath",
     "PartStatus",
     "Product",
     "Project",
@@ -52,4 +54,5 @@ __all__ = [
     "StockStatus",
     "Tool",
     "ToolType",
+    "ToolpathPreset",
 ]

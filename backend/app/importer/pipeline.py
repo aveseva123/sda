@@ -52,6 +52,7 @@ from app.resolve import (
     resolve_thickness,
     suggest_semantics,
 )
+from app.toolpath import service as toolpath_service
 
 log = logging.getLogger(__name__)
 
@@ -267,6 +268,9 @@ def process_batch(db: Session, batch: ImportBatch, options: ImportOptions) -> di
     db.flush()
 
     preset_for = _preset_resolver(db, batch, options)
+    # Пресеты траекторий из конфига должны существовать до того, как
+    # появятся детали: иначе назначать будет нечего.
+    toolpath_service.sync_presets(db)
     materials = _material_refs(db)
     known_thicknesses = sorted({m.thickness for m in materials}) or None
     spec_index = index_rows(_spec_rows(db, batch.id))
@@ -435,6 +439,10 @@ def _process_file(
             clarification=clarification,
             source_file=record.relpath,
         )
+        # Векторы детали сразу получают траектории по семантике: технолог
+        # правит назначения в редакторе, а не расставляет их с нуля.
+        toolpath_service.auto_assign(db, part)
+
         record.part_id = part.id
         created_any = True
         duplicated = duplicated or is_duplicate

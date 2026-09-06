@@ -1,5 +1,6 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 
+import EditorPage from './pages/EditorPage'
 import ImportPage from './pages/ImportPage'
 import MaterialsPage from './pages/MaterialsPage'
 import PartsPage from './pages/PartsPage'
@@ -16,10 +17,13 @@ export default function App() {
       <nav className="sidebar">
         <h1>
           Раскрой
-          <small>Этап 1 — импорт и сортировка</small>
+          <small>Импорт · раскладка · траектории</small>
         </h1>
         <NavLink className="nav-link" to="/import">
           Импорт DXF
+        </NavLink>
+        <NavLink className="nav-link" to="/editor">
+          Редактор раскроя
         </NavLink>
         <NavLink className="nav-link" to="/projects">
           Проекты
@@ -42,6 +46,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/import" replace />} />
           <Route path="/import" element={<ImportPage />} />
+          <Route path="/editor" element={<EditorPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/parts" element={<PartsPage />} />
           <Route path="/pending" element={<PendingPage />} />

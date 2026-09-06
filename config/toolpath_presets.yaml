@@ -1,0 +1,122 @@
+# Пресеты траекторий — то, что в ArtCAM называется стратегией обработки.
+#
+# Пресет назначается НА ВЕКТОР: выбрал контур в редакторе, применил пресет.
+# По умолчанию пресеты раздаются автоматически по семантике слоя, чтобы
+# после импорта деталь уже была готова к обработке, а технолог правил, а не
+# назначал с нуля.
+#
+# Глубина берётся в таком приоритете:
+#   1. from_layer — глубина, объявленная в имени слоя (Базис: «INSETS D 12.00»);
+#   2. through    — насквозь: толщина детали + подрез;
+#   3. fixed      — фиксированное значение из пресета;
+# Это позволяет одному пресету работать и там, где источник несёт глубину,
+# и там, где её нет.
+
+# Куда смещается фреза относительно вектора.
+# outside — снаружи контура (внешний контур детали)
+# inside  — внутри контура (вырез, карман)
+# center  — по центру линии (паз, гравировка)
+# none    — без коррекции (сверление)
+
+defaults:
+  # Пресет, назначаемый автоматически, по семантике вектора.
+  by_semantic:
+    OUTER: profile_outside
+    INNER: profile_inside
+    POCKET: pocket
+    DRILL: drill
+    GROOVE: groove_center
+    MARK: engrave
+
+presets:
+  - id: profile_outside
+    name: "Контур наружу"
+    semantic: OUTER
+    side: outside
+    depth: {mode: from_layer, fallback: through, overcut: 0.5}
+    tool: {type: compression, diameter: 8.0}
+    step_down: 9.0
+    finish_pass: true
+    finish_allowance: 0.2
+    direction: climb
+    lead: {type: arc, radius: 5.0}
+    # Мостики ставятся по порогу: вакуум держит крупную деталь и без них,
+    # мелкую срывает. Пороги — в config/post/*.yaml, здесь только режим.
+    tabs: auto
+    color: "#111827"
+
+  - id: profile_inside
+    name: "Контур внутрь"
+    semantic: INNER
+    side: inside
+    depth: {mode: from_layer, fallback: through, overcut: 0.5}
+    tool: {type: compression, diameter: 8.0}
+    step_down: 9.0
+    finish_pass: true
+    finish_allowance: 0.2
+    direction: climb
+    lead: {type: arc, radius: 3.0}
+    tabs: never
+    color: "#374151"
+
+  - id: pocket
+    name: "Карман (выборка)"
+    semantic: POCKET
+    side: inside
+    depth: {mode: from_layer, fallback: fixed, value: 8.0}
+    tool: {type: end_mill, diameter: 6.0}
+    step_down: 4.0
+    finish_pass: true
+    finish_allowance: 0.2
+    direction: climb
+    lead: {type: normal, radius: 0.0}
+    tabs: never
+    # Стратегия выборки материала внутри кармана.
+    pocket_strategy: offset      # offset | raster
+    stepover: 0.45               # доля диаметра фрезы
+    color: "#0891b2"
+
+  - id: drill
+    name: "Сверление"
+    semantic: DRILL
+    side: none
+    depth: {mode: from_layer, fallback: fixed, value: 12.0}
+    tool: {type: drill, diameter: null}   # берётся по диаметру отверстия
+    peck: 0.0                             # 0 — без клевков
+    tabs: never
+    color: "#b91c1c"
+
+  - id: groove_center
+    name: "Паз по центру"
+    semantic: GROOVE
+    side: center
+    depth: {mode: from_layer, fallback: fixed, value: 8.0}
+    tool: {type: groove, diameter: 4.0}
+    step_down: 4.0
+    finish_pass: false
+    direction: climb
+    lead: {type: none, radius: 0.0}
+    tabs: never
+    color: "#7c3aed"
+
+  - id: engrave
+    name: "Гравировка"
+    semantic: MARK
+    side: center
+    depth: {mode: fixed, value: 0.3}
+    tool: {type: end_mill, diameter: 3.0}
+    step_down: 0.3
+    finish_pass: false
+    direction: climb
+    lead: {type: none, radius: 0.0}
+    tabs: never
+    color: "#65a30d"
+
+  - id: skip
+    name: "Не обрабатывать"
+    semantic: null
+    side: none
+    depth: {mode: fixed, value: 0.0}
+    tool: {type: end_mill, diameter: 0.0}
+    tabs: never
+    color: "#9ca3af"

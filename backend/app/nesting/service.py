@@ -1,0 +1,480 @@
+"""Задания на раскрой: создание, автораскладка, ручные правки.
+
+Раскрой всегда идёт по паре «материал + толщина» — разные толщины никогда
+не попадают на один лист. Задание собирает все готовые детали этой пары,
+раскладывает их и отдаёт редактору всё, что нужно для отрисовки холста
+одним запросом.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.core.colors import product_style
+from app.models import (
+    JobStatus,
+    Material,
+    NestingJob,
+    Part,
+    PartInstance,
+    PartStatus,
+    Product,
+    Project,
+    Sheet,
+    StockItem,
+)
+from app.nesting.layout import EPS, Piece, pack
+
+
+class NestingError(RuntimeError):
+    pass
+
+
+@dataclass(slots=True)
+class InstanceView:
+    """Экземпляр детали на холсте."""
+
+    instance_id: int
+    part_id: int
+    uid: str
+    sheet_index: int | None
+    x: float | None
+    y: float | None
+    rotation: float
+    pinned: bool
+
+
+def create_job(
+    db: Session,
+    *,
+    material_id: int,
+    thickness: float,
+    name: str | None = None,
+    sheet_w: float | None = None,
+    sheet_h: float | None = None,
+    auto_arrange: bool = True,
+) -> NestingJob:
+    """Создаёт задание и, если попросили, сразу раскладывает детали."""
+    material = db.get(Material, material_id)
+    if material is None:
+        raise NestingError("Материал не найден")
+
+    job = NestingJob(
+        name=name or f"{material.name} {thickness:g} мм",
+        material_id=material_id,
+        thickness=thickness,
+        status=JobStatus.DRAFT,
+        params={
+            "sheet_w": sheet_w or material.sheet_w,
+            "sheet_h": sheet_h or material.sheet_h,
+        },
+    )
+    db.add(job)
+    db.flush()
+
+    if auto_arrange:
+        arrange(db, job)
+    return job
+
+
+def job_instances(db: Session, job: NestingJob) -> list[tuple[PartInstance, Part]]:
+    """Экземпляры деталей, которые должны лечь в это задание.
+
+    Берутся только готовые детали: у которых известны и материал, и толщина.
+    Деталь из очереди уточнений в раскрой не попадает — иначе она уедет на
+    чужой лист.
+    """
+    rows = db.execute(
+        select(PartInstance, Part)
+        .join(Part, Part.id == PartInstance.part_id)
+        .where(
+            Part.material_id == job.material_id,
+            Part.thickness == job.thickness,
+            Part.status == PartStatus.READY,
+        )
+        .order_by(PartInstance.id)
+    ).all()
+    return [(instance, part) for instance, part in rows]
+
+
+def arrange(db: Session, job: NestingJob, *, keep_pinned: bool = True) -> dict:
+    """Автораскладка. Зафиксированные детали остаются на своих местах."""
+    material = db.get(Material, job.material_id)
+    params = job.params or {}
+    sheet_w = float(params.get("sheet_w") or material.sheet_w)
+    sheet_h = float(params.get("sheet_h") or material.sheet_h)
+
+    pairs = job_instances(db, job)
+    if not pairs:
+        raise NestingError(
+            "Для этой пары «материал + толщина» нет готовых деталей. "
+            "Проверьте очередь уточнений."
+        )
+
+    existing_sheets = {
+        sheet.index: sheet
+        for sheet in db.scalars(select(Sheet).where(Sheet.job_id == job.id)).all()
+    }
+    index_by_sheet_id = {sheet.id: index for index, sheet in existing_sheets.items()}
+
+    pieces: list[Piece] = []
+    for instance, part in pairs:
+        pinned = bool(instance.pinned) and keep_pinned
+        pieces.append(
+            Piece(
+                instance_id=instance.id,
+                part_id=part.id,
+                w=float(part.length or 0.0),
+                h=float(part.width or 0.0),
+                grain=part.grain,
+                pinned=pinned and instance.x is not None,
+                x=instance.x,
+                y=instance.y,
+                rotation=instance.rotation or 0.0,
+            )
+        )
+
+    result = pack(
+        pieces,
+        sheet_w=sheet_w,
+        sheet_h=sheet_h,
+        trim=(
+            material.trim_left,
+            material.trim_right,
+            material.trim_bottom,
+            material.trim_top,
+        ),
+        has_grain=material.has_grain,
+    )
+
+    # Листы задания приводятся к результату раскладки.
+    for plan in result.sheets:
+        sheet = existing_sheets.get(plan.index)
+        if sheet is None:
+            sheet = Sheet(
+                job_id=job.id,
+                index=plan.index,
+                material_id=job.material_id,
+                w=sheet_w,
+                h=sheet_h,
+            )
+            db.add(sheet)
+            db.flush()
+            existing_sheets[plan.index] = sheet
+        sheet.utilization = plan.utilization
+        index_by_sheet_id[sheet.id] = plan.index
+
+    for index, sheet in list(existing_sheets.items()):
+        if index >= len(result.sheets):
+            db.delete(sheet)
+            del existing_sheets[index]
+    db.flush()
+
+    by_instance = {
+        placement.instance_id: (placement, plan)
+        for plan in result.sheets
+        for placement in plan.placements
+    }
+    for instance, _ in pairs:
+        found = by_instance.get(instance.id)
+        if found is None:
+            instance.sheet_id = None
+            instance.x = instance.y = None
+            continue
+        placement, plan = found
+        sheet = existing_sheets[plan.index]
+        instance.sheet_id = sheet.id
+        instance.x = placement.x
+        instance.y = placement.y
+        instance.rotation = placement.rotation
+
+    job.utilization = result.utilization
+    job.status = JobStatus.DONE
+    db.flush()
+
+    return {
+        "sheets": len(result.sheets),
+        "placed": len(by_instance),
+        "unplaced": len(result.unplaced),
+        "utilization": result.utilization,
+        "warnings": result.warnings,
+    }
+
+
+def layout_payload(db: Session, job: NestingJob) -> dict:
+    """Всё, что нужно холсту для отрисовки, одним запросом.
+
+    Собирать это на фронте отдельными вызовами нельзя: на листе бывает
+    больше сотни деталей, и каждая тянула бы за собой геометрию, цвет
+    проекта и назначенные траектории.
+    """
+    material = db.get(Material, job.material_id)
+    sheets = list(
+        db.scalars(select(Sheet).where(Sheet.job_id == job.id).order_by(Sheet.index)).all()
+    )
+    sheet_index = {sheet.id: sheet.index for sheet in sheets}
+
+    pairs = job_instances(db, job)
+    part_ids = {part.id for _, part in pairs}
+    parts = {part.id: part for _, part in pairs}
+
+    products = {
+        product.id: product
+        for product in db.scalars(
+            select(Product).where(
+                Product.id.in_({part.product_id for part in parts.values()})
+            )
+        ).all()
+    }
+    projects = {
+        project.id: project
+        for project in db.scalars(
+            select(Project).where(
+                Project.id.in_({product.project_id for product in products.values()})
+            )
+        ).all()
+    }
+
+    from app.toolpath.service import assignments_of, vectors_of
+
+    assignments = assignments_of(db, list(part_ids))
+
+    part_payload = {}
+    for part in parts.values():
+        product = products.get(part.product_id)
+        project = projects.get(product.project_id) if product else None
+        style = (
+            product_style(project.color, product.shade_index)
+            if product and project
+            else None
+        )
+        assigned = {row.target: row for row in assignments.get(part.id, [])}
+        part_payload[part.id] = {
+            "id": part.id,
+            "name": part.name,
+            "product_id": part.product_id,
+            "product_name": product.name if product else None,
+            "project_id": project.id if project else None,
+            "project_name": project.name if project else None,
+            "style": style,
+            "length": part.length,
+            "width": part.width,
+            "thickness": part.thickness,
+            "grain": part.grain,
+            "geometry": part.geometry,
+            "vectors": [
+                {
+                    **vector.as_dict(),
+                    "preset_id": assigned[vector.target].preset_id
+                    if vector.target in assigned
+                    else None,
+                    "enabled": assigned[vector.target].enabled
+                    if vector.target in assigned
+                    else False,
+                }
+                for vector in vectors_of(part).vectors
+            ],
+        }
+
+    instances = [
+        {
+            "id": instance.id,
+            "part_id": instance.part_id,
+            "uid": instance.uid,
+            "sheet_index": sheet_index.get(instance.sheet_id),
+            "x": instance.x,
+            "y": instance.y,
+            "rotation": instance.rotation,
+            "pinned": instance.pinned,
+        }
+        for instance, _ in pairs
+    ]
+
+    return {
+        "job": {
+            "id": job.id,
+            "name": job.name,
+            "material_id": job.material_id,
+            "material_name": material.name if material else None,
+            "has_grain": material.has_grain if material else False,
+            "thickness": job.thickness,
+            "status": job.status,
+            "utilization": job.utilization,
+            "params": job.params,
+        },
+        "sheets": [
+            {
+                "id": sheet.id,
+                "index": sheet.index,
+                "w": sheet.w,
+                "h": sheet.h,
+                "utilization": sheet.utilization,
+                "is_offcut": sheet.is_offcut,
+                "trim": {
+                    "left": material.trim_left if material else 0.0,
+                    "right": material.trim_right if material else 0.0,
+                    "top": material.trim_top if material else 0.0,
+                    "bottom": material.trim_bottom if material else 0.0,
+                },
+            }
+            for sheet in sheets
+        ],
+        "parts": part_payload,
+        "instances": instances,
+        "stock": _stock_summary(db, job),
+    }
+
+
+def _stock_summary(db: Session, job: NestingJob) -> dict:
+    """Хватает ли листов на складе под это задание."""
+    available = db.scalar(
+        select(func.coalesce(func.sum(StockItem.qty), 0)).where(
+            StockItem.material_id == job.material_id,
+            StockItem.status == "available",
+        )
+    )
+    needed = db.scalar(
+        select(func.count()).select_from(Sheet).where(Sheet.job_id == job.id)
+    )
+    return {"available": int(available or 0), "needed": int(needed or 0)}
+
+
+def move_instances(db: Session, job: NestingJob, moves: list[dict]) -> dict:
+    """Ручная правка раскладки из редактора.
+
+    Каждое перемещение фиксирует деталь: пересчёт раскладки её больше не
+    двигает. Это прямое требование — последнее слово за технологом.
+    """
+    sheets = {
+        sheet.index: sheet
+        for sheet in db.scalars(select(Sheet).where(Sheet.job_id == job.id)).all()
+    }
+    updated = 0
+    for move in moves:
+        instance = db.get(PartInstance, move["instance_id"])
+        if instance is None:
+            continue
+        if "sheet_index" in move and move["sheet_index"] is not None:
+            sheet = sheets.get(int(move["sheet_index"]))
+            if sheet is None:
+                raise NestingError(f"Листа №{move['sheet_index']} нет в задании")
+            instance.sheet_id = sheet.id
+        if move.get("x") is not None:
+            instance.x = float(move["x"])
+        if move.get("y") is not None:
+            instance.y = float(move["y"])
+        if move.get("rotation") is not None:
+            instance.rotation = float(move["rotation"]) % 360
+        instance.pinned = bool(move.get("pinned", True))
+        updated += 1
+
+    db.flush()
+    _recalculate_utilization(db, job)
+    return {"updated": updated, "utilization": job.utilization}
+
+
+def _recalculate_utilization(db: Session, job: NestingJob) -> None:
+    pairs = {instance.id: part for instance, part in job_instances(db, job)}
+    sheets = list(db.scalars(select(Sheet).where(Sheet.job_id == job.id)).all())
+    total_area = 0.0
+    used_total = 0.0
+
+    for sheet in sheets:
+        used = 0.0
+        for instance in db.scalars(
+            select(PartInstance).where(PartInstance.sheet_id == sheet.id)
+        ).all():
+            part = pairs.get(instance.id)
+            if part and part.length and part.width:
+                used += float(part.length) * float(part.width)
+        sheet.utilization = round(used / (sheet.w * sheet.h), 4) if sheet.w and sheet.h else 0.0
+        total_area += sheet.w * sheet.h
+        used_total += used
+
+    job.utilization = round(used_total / total_area, 4) if total_area else 0.0
+    db.flush()
+
+
+def collisions(db: Session, job: NestingJob) -> list[dict]:
+    """Пересечения деталей и выходы за габарит листа.
+
+    Ручная правка не запрещается — технолог может знать, что делает, — но
+    проблема должна быть видна сразу.
+    """
+    from app.core.config_files import app_config
+
+    cfg = app_config().get("nesting", {}) or {}
+    gap = float(cfg.get("kerf", 8.0)) + float(cfg.get("part_gap", 0.0))
+
+    material = db.get(Material, job.material_id)
+    sheets = {
+        sheet.id: sheet
+        for sheet in db.scalars(select(Sheet).where(Sheet.job_id == job.id)).all()
+    }
+    parts = {part.id: part for _, part in job_instances(db, job)}
+
+    boxes: dict[int, list[tuple]] = {}
+    issues: list[dict] = []
+
+    for instance, part in job_instances(db, job):
+        if instance.sheet_id is None or instance.x is None or instance.y is None:
+            continue
+        w = float(part.length or 0.0)
+        h = float(part.width or 0.0)
+        if int(instance.rotation or 0) % 180 == 90:
+            w, h = h, w
+        boxes.setdefault(instance.sheet_id, []).append(
+            (instance.id, instance.x, instance.y, w, h, part.name)
+        )
+
+    for sheet_id, items in boxes.items():
+        sheet = sheets.get(sheet_id)
+        if sheet is None:
+            continue
+        min_x = material.trim_left if material else 0.0
+        min_y = material.trim_bottom if material else 0.0
+        max_x = sheet.w - (material.trim_right if material else 0.0)
+        max_y = sheet.h - (material.trim_top if material else 0.0)
+
+        for instance_id, x, y, w, h, name in items:
+            if (
+                x < min_x - EPS
+                or y < min_y - EPS
+                or x + w > max_x + EPS
+                or y + h > max_y + EPS
+            ):
+                issues.append(
+                    {
+                        "kind": "out_of_sheet",
+                        "instance_ids": [instance_id],
+                        "sheet_index": sheet.index,
+                        "message": f"«{name}» выходит за полезную область листа",
+                    }
+                )
+
+        for i in range(len(items)):
+            for j in range(i + 1, len(items)):
+                a_id, ax, ay, aw, ah, a_name = items[i]
+                b_id, bx, by, bw, bh, b_name = items[j]
+                if not (
+                    ax + aw + gap <= bx + EPS
+                    or bx + bw + gap <= ax + EPS
+                    or ay + ah + gap <= by + EPS
+                    or by + bh + gap <= ay + EPS
+                ):
+                    issues.append(
+                        {
+                            "kind": "overlap",
+                            "instance_ids": [a_id, b_id],
+                            "sheet_index": sheet.index,
+                            "message": (
+                                f"«{a_name}» и «{b_name}» ближе {gap:g} мм "
+                                "(ширина реза + мостик)"
+                            ),
+                        }
+                    )
+    del parts
+    return issues
