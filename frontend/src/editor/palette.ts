@@ -101,11 +101,14 @@ const OPERATION_FALLBACK: Record<string, string> = {
   GROOVE: '#6425c4',
   DRILL: '#be1414',
   MARK: '#46700d',
+  /* Тип не распознан или траектория не назначена: это не «серое ничто», а
+     решение, которое технолог ещё не принял. */
+  NONE: '#7a4e00',
 }
 
 export function operationColor(semantic: string): string {
   const key = semantic.toUpperCase()
-  const fallback = OPERATION_FALLBACK[key] ?? '#5a646f'
+  const fallback = OPERATION_FALLBACK[key] ?? OPERATION_FALLBACK.NONE
   return themeColor(`--op-${key.toLowerCase()}`, fallback)
 }
 
@@ -146,7 +149,7 @@ const VECTOR_STYLES: Record<string, Omit<VectorStyle, 'color'>> = {
 
 export function vectorStyle(semantic: string): VectorStyle {
   const key = semantic.toUpperCase()
-  const shape = VECTOR_STYLES[key] ?? { width: 1.3, dash: [2, 2] }
+  const shape = VECTOR_STYLES[key] ?? { width: 1.4, dash: [2, 2] }
   return { color: operationColor(key), ...shape }
 }
 

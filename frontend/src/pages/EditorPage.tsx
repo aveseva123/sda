@@ -17,6 +17,7 @@ import type {
   Material,
   SourceFile,
 } from '../api/types'
+import { fileColors } from '../editor/palette'
 import { plural } from '../lib/format'
 import { useLoader } from '../lib/hooks'
 
@@ -507,7 +508,10 @@ export default function EditorPage() {
       if (!part?.source_file_id) continue
       const row = counts.get(part.source_file_id) ?? {
         id: part.source_file_id,
-        color: part.style?.fill ?? 'var(--ink-2)',
+        // Базовый цвет файла, а не заливка первой попавшейся детали: у неё
+        // может быть оттенок второго листа, и квадратик в легенде разойдётся
+        // с тем, что человек видит на карте.
+        color: part.style ? fileColors(part.style.base ?? part.style.fill).fill : 'var(--ink-2)',
         name: part.source_file ?? `Файл ${part.source_file_id}`,
         count: 0,
       }

@@ -96,7 +96,8 @@
   --op-groove: #6425c4;  /* углублён: на дешёвой матрице фиолетовый уходил в синий */
   --op-drill: #be1414;
   --op-mark: #46700d;    /* прежний #65a30d — 2,9:1, гравировка была невидимой */
-  --op-skip: #8a94a1;    /* «не обрабатывать»: слабее всех, но не невидимо */
+  --op-none: #7a4e00;    /* тип не распознан: решение ещё не принято */
+  --op-skip: #6f7a87;    /* «не обрабатывать»: слабее всех, но не невидимо */
   --preview-fill: #e3e7ee;
 
   --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
@@ -394,7 +395,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: var(--sunken);
 }
 
+/* Образец цвета файла. Заливки нормированы в бледные — без рамки такой
+   квадратик на светлой панели просто не виден. */
 .swatch {
+  box-shadow: inset 0 0 0 1px rgba(16, 24, 40, 0.25);
   width: 10px;
   height: 10px;
   border-radius: 2px;

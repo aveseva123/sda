@@ -192,3 +192,25 @@ def test_config_endpoint_exposes_editable_settings(client):
     assert config["thicknesses"]["known"], "список толщин расширяемый и приходит из конфига"
     assert config["labels"]["default_template"] == "roll_120x75"
     assert any(t["name"] == "fusion_full" for t in config["filename_templates"])
+
+
+def test_sticker_text_color_picks_the_more_readable_of_black_and_white():
+    """Подпись на стикере читают в цеху с вытянутой руки.
+
+    Раньше цвет подписи выбирался по телевизионной формуле YIQ с порогом 0,6.
+    Она завышает вклад зелёного и на зелёной заливке выбирала БЕЛУЮ подпись
+    там, где чёрная даёт вдвое больший контраст.
+    """
+    from app.core.colors import FILE_PALETTE, _relative_luminance, contrast_text_color
+
+    def ratio(a: str, b: str) -> float:
+        la, lb = _relative_luminance(a), _relative_luminance(b)
+        light, dark = max(la, lb), min(la, lb)
+        return (light + 0.05) / (dark + 0.05)
+
+    for fill in FILE_PALETTE:
+        chosen = contrast_text_color(fill)
+        other = "#FFFFFF" if chosen == "#000000" else "#000000"
+        assert ratio(chosen, fill) >= ratio(other, fill), (
+            f"на {fill} выбран {chosen}, хотя {other} контрастнее"
+        )

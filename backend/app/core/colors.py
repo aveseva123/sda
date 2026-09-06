@@ -87,16 +87,33 @@ def part_style(base_hex: str, sheet_index: int = 0) -> dict:
         "base": base_hex,
         "fill": fill,
         "pattern": sheet_pattern(sheet_index),
-        "stroke": _adjust(base_hex, -0.35),
+        # Обводка заметно темнее базы: на светлом листе она несёт форму
+        # детали, и запаса в 35 % не хватало на светлых цветах палитры.
+        "stroke": _adjust(base_hex, -0.45),
         "text": contrast_text_color(fill),
     }
 
 
 def contrast_text_color(hex_color: str) -> str:
-    """Цвет подписи поверх заливки — по относительной яркости."""
-    r, g, b = _to_rgb(hex_color)
-    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-    return "#000000" if luminance > 0.6 else "#FFFFFF"
+    """Цвет подписи поверх заливки: чёрный или белый — что контрастнее.
+
+    Считается по относительной яркости WCAG, а не по старой телевизионной
+    формуле YIQ с порогом 0,6: та завышает вклад зелёного и на зелёной заливке
+    выбирала белую подпись там, где чёрная даёт вдвое больший контраст. Подпись
+    попадает на стикер, который читают в цеху с расстояния вытянутой руки.
+    """
+    if _relative_luminance(hex_color) > 0.179:
+        return "#000000"
+    return "#FFFFFF"
+
+
+def _relative_luminance(hex_color: str) -> float:
+    """Относительная яркость по WCAG. Та же формула, что в palette.ts."""
+    channels = []
+    for value in _to_rgb(hex_color):
+        v = value / 255.0
+        channels.append(v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
 
 
 def _adjust(hex_color: str, amount: float) -> str:

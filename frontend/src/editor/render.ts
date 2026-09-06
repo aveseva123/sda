@@ -70,6 +70,8 @@ const REST_FILL = () => ink('--rest-fill', '#C6E6D6')
 const LABEL_INK = () => ink('--canvas-ink', '#16191D')
 const DIM_INK = () => ink('--canvas-ink-2', '#47515F')
 const FAINT_INK = () => ink('--canvas-ink-3', '#5E6976')
+/** «Не обрабатывать»: слабее всех линий, но не невидимо. */
+const SKIP_INK = () => ink('--op-skip', '#6F7A87')
 /**
  * Белым на холсте были обозначены пять разных вещей: выделенная деталь, её
  * угловые маркеры, подсветка под курсором, выбранный вектор внутри детали,
@@ -647,7 +649,7 @@ function drawOperations(
     // Начертание — второй канал различия к цвету: сплошная режется насквозь,
     // штриховая снимается на глубину. Выключенный вектор гасится и цветом, и
     // рисуется тем же штрихом, что и был, — чтобы тип оставался узнаваем.
-    ctx.strokeStyle = enabled ? color : FAINT_INK()
+    ctx.strokeStyle = enabled ? color : SKIP_INK()
     ctx.lineWidth = selected ? style.width + 1.7 : style.width
     ctx.setLineDash(enabled ? style.dash : [2, 3])
     if (op.center && op.diameter) {

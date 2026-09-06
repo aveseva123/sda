@@ -123,11 +123,18 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
   useEffect(() => {
     const element = wrapRef.current
     if (!element) return
-    const observer = new ResizeObserver(() => {
-      setSize({ width: element.clientWidth, height: element.clientHeight })
-    })
+    // Дробный размер, а не clientWidth. Тот возвращает округлённое целое: при
+    // реальных 803,33 пикселя он даёт 803, буфер холста растягивается с
+    // коэффициентом 1,0004, и подгонка линий под пиксельную сетку теряет
+    // смысл — тонкие линии снова размываются. Особенно заметно при дробном
+    // масштабе экрана (125 %), где такой множитель не редкость.
+    const measure = () => {
+      const box = element.getBoundingClientRect()
+      setSize({ width: box.width, height: box.height })
+    }
+    const observer = new ResizeObserver(measure)
     observer.observe(element)
-    setSize({ width: element.clientWidth, height: element.clientHeight })
+    measure()
     return () => observer.disconnect()
   }, [])
 
@@ -213,13 +220,20 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     const dpr = window.devicePixelRatio || 1
-    canvas.width = Math.round(size.width * dpr)
-    canvas.height = Math.round(size.height * dpr)
+    // Буфер выставляется целым числом устройственных пикселей, а CSS-размер —
+    // ровно его обратным пересчётом. Иначе браузер масштабирует готовый растр
+    // и съедает всю чёткость, ради которой линии подгонялись под сетку.
+    const bufferW = Math.round(size.width * dpr)
+    const bufferH = Math.round(size.height * dpr)
+    if (canvas.width !== bufferW) canvas.width = bufferW
+    if (canvas.height !== bufferH) canvas.height = bufferH
+    canvas.style.width = `${bufferW / dpr}px`
+    canvas.style.height = `${bufferH / dpr}px`
     render(ctx, {
       layout: effective,
       viewport,
-      width: size.width,
-      height: size.height,
+      width: bufferW / dpr,
+      height: bufferH / dpr,
       selection,
       focusedPartId,
       hoveredInstance: hovered,
@@ -640,7 +654,7 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
     >
       <canvas
         ref={canvasRef}
-        style={{ width: '100%', height: '100%', display: 'block', cursor }}
+        style={{ display: 'block', cursor }}
         onMouseDown={beginDrag}
         onMouseMove={onMouseMove}
         onMouseUp={endDrag}
