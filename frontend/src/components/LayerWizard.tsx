@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { api } from '../api/client'
 import type { LayerSummary } from '../api/types'
-import { dxfSourceLabel } from '../lib/format'
+import { dxfSourceLabel, plural } from '../lib/format'
 import ShapeCanvas from './ShapeCanvas'
 
 interface Props {
@@ -94,18 +94,18 @@ export default function LayerWizard({ batchId, summary, onApply, busy }: Props) 
           </thead>
           <tbody>
             {summary.layers.map((layer) => (
+              // Подсветка выбранной строки осталась от светлой темы: почти
+              // белый фон под светлым текстом делал строку нечитаемой.
               <tr
                 key={layer.name}
+                className={selected === layer.name ? 'picked' : undefined}
                 onClick={() => setSelected(layer.name)}
-                style={{
-                  cursor: 'pointer',
-                  background: selected === layer.name ? '#eaf4fb' : undefined,
-                }}
+                style={{ cursor: 'pointer' }}
               >
                 <td>
                   <b>{layer.name}</b>
                   <div className="small muted">
-                    в {layer.files} файл(ах){' '}
+                    {plural(layer.files, 'файл', 'файла', 'файлов')}{' '}
                     {layer.from_preset ? (
                       <span className="badge ok">пресет</span>
                     ) : (
@@ -154,7 +154,7 @@ export default function LayerWizard({ batchId, summary, onApply, busy }: Props) 
           <div className="small muted" style={{ marginBottom: 6 }}>
             Превью слоя {selected ? <b>{selected}</b> : '—'}
           </div>
-          <ShapeCanvas paths={preview} height={220} stroke="#0072b2" />
+          <ShapeCanvas paths={preview} height={220} stroke="#9AA8FF" />
           <div className="small muted" style={{ marginTop: 6 }}>
             Показана геометрия слоя из первого файла загрузки.
           </div>

@@ -37,6 +37,62 @@ function resolveDepth(
   return spec.value === undefined ? null : Number(spec.value)
 }
 
+/**
+ * Координата детали: правка применяется по Enter или по уходу из поля.
+ *
+ * Раньше поле стояло на onChange, и каждый набранный символ уезжал на сервер
+ * отдельным перемещением: «125» — это три запроса, три перерисовки и три
+ * шага в истории отмены, а стёртое поле мгновенно означало ноль.
+ */
+function CoordField({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string
+  value: number | null
+  onCommit: (value: number) => void
+}) {
+  const [text, setText] = useState('')
+  const [editing, setEditing] = useState(false)
+
+  useEffect(() => {
+    if (!editing) setText(value === null ? '' : String(Math.round(value * 10) / 10))
+  }, [value, editing])
+
+  const commit = () => {
+    setEditing(false)
+    const next = Number(text.replace(',', '.'))
+    if (text.trim() === '' || Number.isNaN(next) || next === value) {
+      setText(value === null ? '' : String(Math.round(value * 10) / 10))
+      return
+    }
+    onCommit(next)
+  }
+
+  return (
+    <label className="fld">
+      <span>{label}</span>
+      <input
+        inputMode="decimal"
+        disabled={value === null}
+        value={value === null ? 'не размещена' : text}
+        onFocus={() => setEditing(true)}
+        onChange={(event) => setText(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur()
+          if (event.key === 'Escape') {
+            setEditing(false)
+            setText(value === null ? '' : String(value))
+            event.currentTarget.blur()
+          }
+        }}
+      />
+    </label>
+  )
+}
+
 /** Значок операции — по типу, распознанному из геометрии вектора. */
 function OpIcon({ semantic, bright }: { semantic: string; bright: boolean }) {
   const stroke = bright ? '#E8EAED' : '#9AA3AF'
@@ -225,6 +281,8 @@ export default function PropertiesPanel({
     )
   }
 
+  // Деталь без листа не размещена: показывать её координаты нулями — врать.
+  const placed = single ? single.sheet_index !== null && single.x !== null : false
   const rotation = single?.rotation ?? 0
   const width = Math.abs(rotation % 180) === 90 ? part.width : part.length
   const height = Math.abs(rotation % 180) === 90 ? part.length : part.width
@@ -287,37 +345,38 @@ export default function PropertiesPanel({
 
       <div className="sec">
         <div className="lbl" style={{ marginBottom: 9 }}>
-          Положение
+          Положение на листе
         </div>
+        {placed ? null : (
+          <div className="notice warn small" style={{ marginBottom: 9 }}>
+            Деталь не разместилась ни на одном листе. Раньше в полях X и Y у неё
+            стояли нули — как будто она лежит в углу.
+          </div>
+        )}
         <div className="fld-grid">
-          <label className="fld">
-            <span>X</span>
-            <input
-              type="number"
-              step={0.1}
-              value={single?.x ?? 0}
-              onChange={(event) => setField('x', Number(event.target.value))}
-            />
-          </label>
-          <label className="fld">
-            <span>Y</span>
-            <input
-              type="number"
-              step={0.1}
-              value={single?.y ?? 0}
-              onChange={(event) => setField('y', Number(event.target.value))}
-            />
-          </label>
+          {/* Ввод отправляется по Enter или уходу из поля. Раньше запрос летел
+              на каждое нажатие: «125» — это три перемещения детали, три
+              обращения к серверу и три шага в стеке отмены. */}
+          <CoordField
+            label="X, мм"
+            value={placed ? (single?.x ?? null) : null}
+            onCommit={(next) => setField('x', next)}
+          />
+          <CoordField
+            label="Y, мм"
+            value={placed ? (single?.y ?? null) : null}
+            onCommit={(next) => setField('y', next)}
+          />
           <div className="fld">
-            <span>Ш</span>
-            {width?.toFixed(0) ?? '—'}
+            <span>Ширина, мм</span>
+            <div className="fld-value mono">{width?.toFixed(0) ?? '—'}</div>
           </div>
           <div className="fld">
-            <span>В</span>
-            {height?.toFixed(0) ?? '—'}
+            <span>Высота, мм</span>
+            <div className="fld-value mono">{height?.toFixed(0) ?? '—'}</div>
           </div>
           <label className="fld">
-            <span>Угол</span>
+            <span>Поворот</span>
             <select
               value={rotation}
               style={{ border: 'none', background: 'transparent', padding: 0, width: '100%' }}
@@ -479,12 +538,14 @@ export default function PropertiesPanel({
           <button
             type="button"
             className="grow"
+            title={
+              single?.pinned
+                ? 'Пересчёт сможет двигать эту деталь'
+                : 'Пересчёт оставит эту деталь на месте'
+            }
             onClick={() => single && onMove([{ instance_id: single.id, pinned: !single.pinned }])}
           >
-            {single?.pinned ? 'Открепить' : 'Закрепить'}
-          </button>
-          <button type="button" className="grow" disabled title="Появится вместе с печатью стикеров">
-            Стикер
+            {single?.pinned ? 'Открепить' : 'Закрепить на месте'}
           </button>
         </div>
         <div className="small muted" style={{ marginTop: 10, lineHeight: 1.5 }}>

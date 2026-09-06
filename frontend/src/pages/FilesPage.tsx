@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 import { api } from '../api/client'
 import type { Order, SourceFile } from '../api/types'
@@ -7,14 +6,13 @@ import { plural } from '../lib/format'
 import { useLoader } from '../lib/hooks'
 
 /**
- * Буфер файлов и заказы.
+ * Файлы и проекты.
  *
- * CRM-слоя в платформе нет: заказ — это просто имя. Настоящая единица
+ * CRM-слоя в платформе нет: проект — это просто имя. Настоящая единица
  * принадлежности — файл DXF: он держит цвет, и именно по нему технолог
  * опознаёт деталь в цеху.
  */
 export default function FilesPage() {
-  const navigate = useNavigate()
   const [version, setVersion] = useState(0)
   const { data: files, error, loading } = useLoader<SourceFile[]>(() => api.files(), [version])
   const { data: orders } = useLoader<Order[]>(() => api.orders(), [version])
@@ -40,10 +38,10 @@ export default function FilesPage() {
     <>
       <div className="page-head">
         <div>
-          <h2>Файлы и заказы</h2>
+          <h2>Файлы и проекты</h2>
           <p>
             Цвет закреплён за файлом, штриховка на карте раскроя — за номером листа
-            внутри файла. Заказ — просто имя: ни клиентов, ни изделий, ни сроков
+            внутри файла. Проект — просто имя: ни клиентов, ни сроков
             платформа не ведёт.
           </p>
         </div>
@@ -54,11 +52,11 @@ export default function FilesPage() {
 
       {!!orders?.length && (
         <div className="panel">
-          <h3>Заказы</h3>
+          <h3>Проекты</h3>
           <table>
             <thead>
               <tr>
-                <th>Заказ</th>
+                <th>Проект</th>
                 <th className="num">Файлов</th>
                 <th className="num">Позиций</th>
                 <th className="num">Деталей</th>
@@ -76,12 +74,13 @@ export default function FilesPage() {
                   <td className="num">{order.parts}</td>
                   <td>
                     {order.needs_clarification > 0 && (
+                      // Кнопка вела на удалённый экран уточнений. Толщину
+                      // теперь спрашивают в диалоге добавления файлов.
                       <span
                         className="badge warn"
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => navigate('/pending')}
+                        title="Толщина этих деталей не определена — её спросят при добавлении файла в раскрой"
                       >
-                        уточнить: {order.needs_clarification}
+                        без толщины: {order.needs_clarification}
                       </span>
                     )}
                   </td>
@@ -93,7 +92,7 @@ export default function FilesPage() {
       )}
 
       <div className="panel">
-        <h3>Буфер файлов</h3>
+        <h3>Все загруженные файлы</h3>
         {files?.length === 0 && !loading && (
           <div className="empty">
             Файлов пока нет. Загрузите пачку DXF на вкладке «Импорт DXF».
@@ -105,7 +104,7 @@ export default function FilesPage() {
               <tr>
                 <th style={{ width: 34 }} />
                 <th>Файл</th>
-                <th>Заказ</th>
+                <th>Проект</th>
                 <th className="num">Листов</th>
                 <th className="num">Позиций</th>
                 <th className="num">Деталей</th>

@@ -367,6 +367,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .split { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
 
+tbody tr.picked { background: #21262e; box-shadow: inset 2px 0 0 var(--accent); }
+
 .layer-table td { vertical-align: middle; }
 .layer-table select { min-width: 190px; }
 
@@ -874,6 +876,17 @@ canvas.preview {
   color: var(--ink);
 }
 .fld select { font-family: var(--sans); }
+.fld input:disabled { color: var(--ink-3); font-family: var(--sans); font-size: 11.5px; }
+
+/* Нередактируемое значение в сетке полей выглядит как значение, а не как поле. */
+.fld-value {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--ink);
+}
 .fld select option { background: var(--surface); }
 
 /* Порядок обработки: то, в каком порядке фрезы идут по детали. */

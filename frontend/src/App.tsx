@@ -54,7 +54,7 @@ export default function App() {
             Импорт DXF
           </NavItem>
           <NavItem to="/files" icon="files">
-            Файлы и заказы
+            Файлы и проекты
           </NavItem>
           <NavItem to="/presets" icon="presets">
             Шаблоны траекторий
@@ -63,7 +63,7 @@ export default function App() {
             Материалы
           </NavItem>
           <NavItem to="/stock" icon="stock">
-            Остатки
+            Склад
           </NavItem>
         </nav>
         <div className="sidebar-foot">

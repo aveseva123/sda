@@ -459,21 +459,33 @@ def arrange(db: Session, job: NestingJob, *, keep_pinned: bool = True) -> dict:
         instance.x = placement.x
         instance.y = placement.y
         instance.rotation = placement.rotation
+        # Закрепление означает «эту деталь поставил человек, не трогать».
+        # Полный пересчёт её всё равно переложил, значит ручного места больше
+        # нет — флаг снимается. Иначе следующее «Уплотнить» замораживало бы
+        # координаты, выбранные машиной, и переставало что-либо делать.
+        if not keep_pinned:
+            instance.pinned = False
 
-    job.utilization = result.utilization
+    # КИМ считается одной формулой на всю платформу — от полной площади листа.
+    # Укладчик делит на ПОЛЕЗНУЮ площадь (лист минус обрезка кромок), и из-за
+    # этого число прыгало: разложил — 91 %, сдвинул деталь на миллиметр и
+    # пересчёт после правки показал 89,6 %. Обрезка кромок — тоже купленный
+    # материал, поэтому знаменатель здесь полный лист.
+    db.flush()
+    _recalculate_utilization(db, job)
     job.status = JobStatus.DONE
     # Карточка пресета показывает КИМ последнего задания, посчитанного им.
     if job.preset_id:
         preset = db.get(CuttingPreset, job.preset_id)
         if preset is not None:
-            preset.last_utilization = result.utilization
+            preset.last_utilization = job.utilization
     db.flush()
 
     return {
         "sheets": len(result.sheets),
         "placed": len(by_instance),
         "unplaced": len(result.unplaced),
-        "utilization": result.utilization,
+        "utilization": job.utilization or 0.0,
         "warnings": result.warnings,
     }
 

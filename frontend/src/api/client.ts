@@ -191,7 +191,12 @@ export const api = {
     files: FileDecision[],
     placement?: Record<string, unknown>,
   ) =>
-    request<{ added: number; warnings: string[]; layout?: Record<string, unknown> }>(
+    request<{
+      added: number
+      warnings: string[]
+      /** Итог раскладки сразу после добавления: сколько листов и что не влезло. */
+      layout?: { sheets: number; placed: number; unplaced: number; utilization: number }
+    }>(
       `/nesting/jobs/${jobId}/files/confirm`,
       json('POST', { batch_id: batchId, files, placement }),
     ),

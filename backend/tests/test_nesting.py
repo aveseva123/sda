@@ -322,3 +322,78 @@ def test_tall_parts_do_not_overlap_on_the_sheet(db, materials):
 
     for _, part in nesting.job_instances(db, job):
         assert nesting.part_footprint(part) == (630.0, 1954.0)
+
+
+def test_full_rearrange_clears_manual_pinning(db, materials, tmp_path, tmp_storage):
+    """Полный пересчёт снимает закрепление: ручного места после него нет.
+
+    Флаг ``pinned`` значит «эту деталь поставил человек». «Разложить заново»
+    её всё равно переложило, поэтому оставлять флаг нельзя: следующее
+    «Уплотнить» замораживало бы координаты, выбранные машиной, и переставало
+    бы что-либо делать.
+    """
+    material = db.scalar(select(Material).where(Material.thickness == 18.0))
+    path = tmp_path / "Kv12_Shkaf_Bok_18_2.dxf"
+    factories.bazis_part(path, width=600, height=400, thickness=18.0)
+    batch = create_batch(
+        db,
+        name="Партия",
+        files=[IncomingFile(path.name, path.name, path.read_bytes())],
+    )
+    process_batch(db, batch, ImportOptions())
+    for part in db.scalars(select(Part)).all():
+        part.material_id = material.id
+        part.thickness = 18.0
+        part.status = PartStatus.READY
+    db.flush()
+
+    job = nesting.create_job(db, material_id=material.id, thickness=18.0, operator="Севак")
+    nesting.arrange(db, job)
+    assert nesting.job_instances(db, job)
+    for instance, _ in nesting.job_instances(db, job):
+        instance.pinned = True
+    db.flush()
+
+    nesting.arrange(db, job, keep_pinned=True)
+    assert all(i.pinned for i, _ in nesting.job_instances(db, job)), (
+        "«Уплотнить» закрепление не трогает"
+    )
+
+    nesting.arrange(db, job, keep_pinned=False)
+    assert not any(i.pinned for i, _ in nesting.job_instances(db, job)), (
+        "«Разложить заново» снимает закрепление"
+    )
+
+
+def test_utilization_does_not_change_from_nudging_a_part(db, materials, tmp_path, tmp_storage):
+    """КИМ не должен прыгать оттого, что деталь сдвинули на миллиметр.
+
+    Укладчик делил полезную площадь на площадь ЗА ВЫЧЕТОМ обрезки кромок, а
+    пересчёт после ручной правки — на полную площадь листа. Оператор видел
+    «91 %» сразу после раскладки и «89,6 %» после сдвига детали на 1 мм, не
+    сделав ничего осмысленного.
+    """
+    material = db.scalar(select(Material).where(Material.thickness == 18.0))
+    path = tmp_path / "Kv12_Shkaf_Bok_18_2.dxf"
+    factories.bazis_part(path, width=600, height=400, thickness=18.0)
+    batch = create_batch(
+        db, name="Партия", files=[IncomingFile(path.name, path.name, path.read_bytes())]
+    )
+    process_batch(db, batch, ImportOptions())
+    for part in db.scalars(select(Part)).all():
+        part.material_id = material.id
+        part.thickness = 18.0
+        part.status = PartStatus.READY
+    db.flush()
+
+    job = nesting.create_job(db, material_id=material.id, thickness=18.0, operator="Севак")
+    after_arrange = nesting.arrange(db, job)["utilization"]
+
+    instance = next(i for i, _ in nesting.job_instances(db, job) if i.x is not None)
+    nesting.move_instances(
+        db, job, [{"instance_id": instance.id, "x": float(instance.x) + 1.0}]
+    )
+
+    assert job.utilization == pytest.approx(after_arrange, abs=0.0005), (
+        "сдвиг детали не меняет КИМ"
+    )

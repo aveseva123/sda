@@ -168,7 +168,7 @@ export default function ImportPage() {
 
         <div className="row" style={{ marginTop: 14 }}>
           <label className="field">
-            Заказ по умолчанию
+            Проект по умолчанию
             <input
               placeholder="если не удастся определить из файлов"
               value={defaults.order_name}
@@ -246,9 +246,14 @@ export default function ImportPage() {
                 В раскрой
               </button>
               {(stats.needs_clarification ?? 0) > 0 && (
-                <button type="button" onClick={() => navigate('/pending')}>
-                  Разобрать {plural(stats.needs_clarification ?? 0, 'деталь', 'детали', 'деталей')}
-                </button>
+                // Отдельного экрана уточнений больше нет: толщину спрашивают
+                // при добавлении файла в раскрой. Кнопка вела на удалённую
+                // страницу и просто выбрасывала обратно в раскрой.
+                <span className="small" style={{ color: 'var(--warn)' }}>
+                  У{' '}
+                  {plural(stats.needs_clarification ?? 0, 'детали', 'деталей', 'деталей')} не
+                  определена толщина — их спросят при добавлении файлов в раскрой.
+                </span>
               )}
             </div>
           )}

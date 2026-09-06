@@ -37,9 +37,16 @@ export const fileStatusLabel = (key: string) => FILE_STATUS_LABELS[key] ?? key
 export const batchStatusLabel = (key: string) => BATCH_STATUS_LABELS[key] ?? key
 export const dxfSourceLabel = (key: string) => SOURCE_TITLES[key] ?? key
 
+/** Миллиметры по-русски: дробная часть через запятую, целые без хвоста. */
 export function mm(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
-  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+  return (Number.isInteger(value) ? String(value) : value.toFixed(1)).replace('.', ',')
+}
+
+/** Число с фиксированным знаком после запятой — для площадей и процентов. */
+export function fixed(value: number | null | undefined, digits: number): string {
+  if (value === null || value === undefined) return '—'
+  return value.toFixed(digits).replace('.', ',')
 }
 
 export function plural(n: number, one: string, few: string, many: string): string {

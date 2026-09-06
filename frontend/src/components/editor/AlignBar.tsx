@@ -257,8 +257,16 @@ export default function AlignBar({ layout, selection, onMove, onCompact, busy }:
 
       <div className="sep" />
 
-      <button type="button" className="primary go" disabled={busy} onClick={onCompact}>
-        Уплотнить лист
+      {/* Кнопка пересчитывает ВСЁ задание, по всем листам, оставляя на местах
+          закреплённые детали. Подпись «лист» врала про область действия. */}
+      <button
+        type="button"
+        className="primary go"
+        disabled={busy}
+        onClick={onCompact}
+        title="Пересчитать весь раскрой, оставив закреплённые детали на местах"
+      >
+        Уплотнить, не трогая закреплённые
       </button>
     </div>
   )

@@ -195,7 +195,7 @@ export default function BufferPanel({
                 title={
                   trouble
                     ? `${file.needs_clarification} деталей требуют уточнения`
-                    : file.order_name ?? 'без заказа'
+                    : file.order_name ?? 'без проекта'
                 }
               >
                 <Chevron open={isOpen} />

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 
 import { api } from '../api/client'
 import type { Material, OffcutVerdict, StockItem, StockMovement } from '../api/types'
-import { mm } from '../lib/format'
+import { fixed, mm, plural } from '../lib/format'
 import { useLoader } from '../lib/hooks'
 
 interface OffcutDraft {
@@ -45,6 +45,11 @@ function CutDialog({
     setOffcuts((prev) =>
       prev.map((row, i) => (i === index ? { ...row, ...patch } : row)),
     )
+    // Подсказка пересчитывается только когда изменился габарит. Раньше она
+    // шла на любую правку и вместе с собой возвращала галочку «Оставить»:
+    // снять её было физически невозможно.
+    const sizeChanged = 'w' in patch || 'h' in patch
+    if (!sizeChanged) return
     const next = { ...offcuts[index], ...patch }
     const w = Number(next.w)
     const h = Number(next.h)
@@ -79,8 +84,16 @@ function CutDialog({
       })
       const dropped = offcuts.length - kept.length
       onDone(
-        `Списано ${qty} шт. Обрезков сохранено: ${result.offcuts.length}` +
-          (dropped > 0 ? `, отброшено: ${dropped}.` : '.'),
+        `Списано ${plural(Number(qty), 'лист', 'листа', 'листов')}. ` +
+          `На складе оставлено ${plural(
+            result.offcuts.length,
+            'обрезок',
+            'обрезка',
+            'обрезков',
+          )}` +
+          (dropped > 0
+            ? `, ${plural(dropped, 'обрезок', 'обрезка', 'обрезков')} не сохранено.`
+            : '.'),
       )
     } catch (err) {
       setError((err as Error).message)
@@ -90,11 +103,18 @@ function CutDialog({
   }
 
   return (
-    <div className="panel" style={{ borderColor: 'var(--accent)' }}>
-      <h3>
-        Отрезан лист: {item.material_name} {mm(item.thickness)} мм ·{' '}
-        {mm(item.w)} × {mm(item.h)} мм
-      </h3>
+    <div className="modal-backdrop">
+      <div className="modal">
+        <div className="modal-head">
+          <b>
+            Списать лист: {item.material_name} {mm(item.thickness)} мм ·{' '}
+            {mm(item.w)} × {mm(item.h)} мм
+          </b>
+          <button type="button" className="ghost" onClick={onClose} disabled={busy}>
+            ✕
+          </button>
+        </div>
+        <div className="modal-body">
       {error && <div className="notice error">{error}</div>}
 
       <div className="row">
@@ -190,17 +210,19 @@ function CutDialog({
         </div>
       ))}
 
-      <div className="row" style={{ marginTop: 12 }}>
-        <button type="button" onClick={addOffcut}>
+      <button type="button" style={{ marginTop: 12 }} onClick={addOffcut}>
           Добавить обрезок
         </button>
-        <div className="grow" />
-        <button type="button" onClick={onClose} disabled={busy}>
-          Отмена
-        </button>
-        <button type="button" className="primary" onClick={submit} disabled={busy}>
-          {busy ? 'Списываю…' : 'Списать лист'}
-        </button>
+        </div>
+        <div className="modal-foot">
+          <span className="grow" />
+          <button type="button" onClick={onClose} disabled={busy}>
+            Отмена
+          </button>
+          <button type="button" className="primary" onClick={submit} disabled={busy}>
+            {busy ? 'Списываю…' : 'Списать лист'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -251,9 +273,14 @@ export default function StockPage() {
 
   const scrap = async (item: StockItem) => {
     if (!window.confirm(`Списать в мусор обрезок ${mm(item.w)} × ${mm(item.h)} мм?`)) return
-    await api.stockScrap(item.id, { qty: item.qty, reason: 'слишком мелкий' })
-    setMessage('Обрезок списан в мусор.')
-    reload()
+    setFormError(null)
+    try {
+      await api.stockScrap(item.id, { qty: item.qty, reason: 'слишком мелкий' })
+      setMessage('Обрезок списан в мусор.')
+      reload()
+    } catch (err) {
+      setFormError((err as Error).message)
+    }
   }
 
   const showHistory = async (item: StockItem) => {
@@ -285,6 +312,7 @@ export default function StockPage() {
       </div>
 
       {error && <div className="notice error">{error}</div>}
+      {formError && <div className="notice error">{formError}</div>}
       {message && <div className="notice ok">{message}</div>}
 
       {!!summary?.length && (
@@ -307,7 +335,7 @@ export default function StockPage() {
                   <td className="num">{mm(row.thickness)} мм</td>
                   <td className="num">{row.sheets}</td>
                   <td className="num">{row.offcuts}</td>
-                  <td className="num">{row.area_m2.toFixed(2)}</td>
+                  <td className="num">{fixed(row.area_m2, 2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -317,7 +345,6 @@ export default function StockPage() {
 
       <div className="panel">
         <h3>Приход</h3>
-        {formError && <div className="notice error">{formError}</div>}
         <div className="row">
           <label className="field">
             Материал
@@ -423,9 +450,7 @@ export default function StockPage() {
                       <span className="badge plain">лист</span>
                     )}
                     {item.note && <div className="small muted">{item.note}</div>}
-                    {item.source_item_id && (
-                      <div className="small muted">от позиции №{item.source_item_id}</div>
-                    )}
+                    <div className="small muted">№{item.id}</div>
                   </td>
                   <td>
                     {item.material_name}
@@ -434,13 +459,17 @@ export default function StockPage() {
                   <td className="num">
                     {mm(item.w)} × {mm(item.h)}
                   </td>
-                  <td className="num">{item.area_m2.toFixed(3)}</td>
+                  <td className="num">{fixed(item.area_m2, 2)}</td>
                   <td className="num">{item.qty}</td>
                   <td className="small muted">{item.location ?? '—'}</td>
                   <td>
                     <div className="row tight">
-                      <button type="button" onClick={() => setCutting(item)}>
-                        Отрезан
+                      <button
+                        type="button"
+                        onClick={() => setCutting(item)}
+                        title="Списать лист со склада и записать, какие обрезки от него остались"
+                      >
+                        Списать: отрезан
                       </button>
                       <button type="button" onClick={() => showHistory(item)}>
                         История

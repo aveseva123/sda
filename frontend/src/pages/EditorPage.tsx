@@ -235,7 +235,9 @@ export default function EditorPage() {
             ? `Не поместилось: ${plural(result.unplaced, 'деталь', 'детали', 'деталей')} — ` +
               'они ждут в списке слева.'
             : '',
-          keepPinned ? 'Закреплённые детали не двигались.' : 'Закрепление снято со всех деталей.',
+          keepPinned
+            ? 'Закреплённые детали остались на местах.'
+            : 'Закрепление снято: все детали переставлены заново.',
         ]
           .filter(Boolean)
           .join('\n'),
@@ -326,9 +328,25 @@ export default function EditorPage() {
       undoStack.current = []
       say(
         [
-          `Добавлено ${plural(result.added, 'позиция', 'позиции', 'позиций')}.`,
+          `Добавлено ${plural(result.added, 'позиция', 'позиции', 'позиций')}, ` +
+            `разложено на ${plural(
+              result.layout?.sheets ?? 0,
+              'лист',
+              'листа',
+              'листов',
+            )}.`,
+          result.layout?.unplaced
+            ? `Не поместилось: ${plural(
+                result.layout.unplaced,
+                'деталь',
+                'детали',
+                'деталей',
+              )} — они в списке слева.`
+            : '',
           ...result.warnings,
-        ].join('\n'),
+        ]
+          .filter(Boolean)
+          .join('\n'),
       )
       await loadLayout(jobId)
       await loadJobs()
@@ -499,6 +517,7 @@ export default function EditorPage() {
   // Наложения — испорченный лист, поэтому о них говорят в шапке, а не в
   // сообщении, которое закроют через минуту.
   const trouble = collisions.length
+  const unplaced = (layout?.instances ?? []).filter((i) => i.sheet_index === null).length
 
   return (
     <div className="editor">
@@ -557,6 +576,14 @@ export default function EditorPage() {
               {layout ? `${layout.stock.needed} из ${layout.stock.available}` : '—'}
             </b>
           </span>
+          {unplaced > 0 && (
+            <span
+              className="chip"
+              title="Эти детали не влезли ни на один лист — они перечислены в панели слева"
+            >
+              Не влезло <b className="bad">{unplaced}</b>
+            </span>
+          )}
           {trouble > 0 && (
             <button
               type="button"

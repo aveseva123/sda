@@ -44,15 +44,17 @@ export default function JobFlow({ layout, busy, onTake, onCheck, onFinish }: Pro
           <button
             type="button"
             className="primary"
-            disabled={busy}
-            onClick={() => onTake(operator || layout.job.operator || '')}
+            // Пустое имя в журнале листа означает «никто»: в цеху потом не
+            // найти, кто его вёл.
+            disabled={busy || !(operator || layout.job.operator || '').trim()}
+            onClick={() => onTake((operator || layout.job.operator || '').trim())}
           >
             Взял в работу
           </button>
         </div>
         <div className="small muted" style={{ marginTop: 8 }}>
           Учётных записей нет — оператор просто называет себя. Имя останется в
-          журнале листа и попадёт на стикеры.
+          журнале листа.
         </div>
       </div>
     )
