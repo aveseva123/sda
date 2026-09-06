@@ -620,6 +620,7 @@ const CanvasStage = forwardRef<StageHandle, Props>(function CanvasStage(props, r
   return (
     <div
       className={`stage${dragOver ? ' drag-over' : ''}`}
+      data-drop
       ref={wrapRef}
       onDragOver={(event) => {
         event.preventDefault()

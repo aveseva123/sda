@@ -17,7 +17,9 @@
 
   --ink: #e8eaed;
   --ink-2: #9aa3af;
-  --ink-3: #69717d;
+  /* 4,8:1 к поверхности панели: прежний #69717d давал 3,7:1 —
+     подписи полей и шапки таблиц в цеху приходилось угадывать. */
+  --ink-3: #7c848f;
 
   --pA: #7d82c5;
   --pB: #23ac74;
@@ -160,12 +162,14 @@ a:hover { color: #fff; }
 .mono { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
 
 .lbl {
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-3);
 }
+
+.lbl.warn-lbl { color: var(--warn); }
 
 button {
   font: inherit;
@@ -180,7 +184,15 @@ button {
 }
 
 button:hover:not(:disabled) { background: #21262e; }
+button:active:not(:disabled) { transform: translateY(1px); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Клавиатурный фокус должен быть виден: у станка работают и без мыши. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
 button.primary {
   background: #e8eaed;
@@ -189,6 +201,7 @@ button.primary {
   font-weight: 600;
 }
 button.primary:hover:not(:disabled) { background: #fff; }
+button.primary:active:not(:disabled) { background: #c9ced6; }
 
 button.ghost { background: transparent; border-color: transparent; color: var(--ink-2); }
 button.ghost:hover:not(:disabled) { background: #1d222a; color: var(--ink); }
@@ -206,8 +219,13 @@ input, select, textarea {
 }
 
 input:focus, select:focus, textarea:focus {
-  outline: 1px solid var(--line-3);
-  outline-offset: 0;
+  outline: none;
+  border-color: var(--accent);
+}
+
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 input[type='checkbox'] { accent-color: var(--pA); }
@@ -223,7 +241,7 @@ label.field {
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 th {
-  font-size: 10px;
+  font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--ink-3);
@@ -576,6 +594,14 @@ canvas.preview {
   cursor: pointer;
 }
 
+.buffer-drop > div:hover { border-color: var(--ink-3); color: var(--ink); }
+.buffer-drop > div.over {
+  border-color: var(--accent);
+  border-style: solid;
+  background: #171b28;
+  color: var(--ink);
+}
+
 .buffer-drop small {
   display: block;
   font-family: var(--mono);
@@ -597,6 +623,7 @@ canvas.preview {
 }
 .frow:hover { background: #1b2028; }
 .frow.on { background: #21262e; }
+.frow.warn { color: var(--warn); }
 .frow.warn { background: var(--warn-bg); color: var(--warn); }
 
 .srow {
@@ -683,7 +710,62 @@ canvas.preview {
 }
 
 .stage-chips .chip { background: rgba(20, 23, 28, 0.9); pointer-events: auto; }
-.stage-chips .chip button { border: none; background: transparent; padding: 0 2px; color: var(--ink-2); }
+.stage-chips .chip { height: 28px; }
+.stage-chips .chip button {
+  min-width: 24px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  padding: 0 4px;
+  color: var(--ink-2);
+  border-radius: 4px;
+}
+.stage-chips .chip button:hover { background: #262c35; color: var(--ink); }
+
+/* Долгая операция: видно, что именно считается, пока экран не отвечает. */
+.stage-busy {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 13px;
+  border-radius: 16px;
+  border: 1px solid var(--line-2);
+  background: rgba(20, 23, 28, 0.96);
+  font-size: 12px;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--line-3);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.4s; }
+  button:active:not(:disabled) { transform: none; }
+}
+
+/* Наложение деталей — испорченный лист, о нём говорят в шапке. */
+.chip.trouble {
+  color: var(--danger);
+  border-color: #4a2a22;
+  background: var(--danger-bg);
+  cursor: pointer;
+  height: 26px;
+}
+.chip.trouble b { color: var(--danger); }
+.chip.trouble:hover { background: #241614; }
 
 .legend {
   position: absolute;

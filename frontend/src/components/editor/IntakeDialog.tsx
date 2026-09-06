@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import type { FileCard, FileDecision, Material } from '../../api/types'
+import { plural } from '../../lib/format'
 
 interface Props {
   cards: FileCard[]
@@ -11,7 +12,7 @@ interface Props {
   placement: Placement
   busy: boolean
   onCancel: () => void
-  onConfirm: (decisions: FileDecision[], placement: Placement) => void
+  onConfirm: (decisions: FileDecision[], placement: Placement) => Promise<void>
 }
 
 export interface Placement {
@@ -56,9 +57,11 @@ export default function IntakeDialog({
   onConfirm,
 }: Props) {
   const [rows, setRows] = useState<Record<string, Row>>({})
+  // Параметры раскладки берутся начальным значением. Раньше их переписывал
+  // эффект на каждый перерисованный кадр родителя: введённый мостик
+  // возвращался к прежнему прямо под руками.
   const [layout, setLayout] = useState<Placement>(placement)
-
-  useEffect(() => setLayout(placement), [placement])
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const next: Record<string, Row> = {}
@@ -80,21 +83,27 @@ export default function IntakeDialog({
 
   const chosen = cards.filter((card) => rows[card.relpath]?.keep)
 
-  const submit = () => {
-    onConfirm(
-      chosen.map((card) => {
-        const row = rows[card.relpath]
-        return {
-          relpath: card.relpath,
-          thickness: Number(row.thickness),
-          material_id: Number(row.material_id) || null,
-          order_name: row.order_name.trim() || null,
-          product_name: row.product_name.trim() || null,
-          grain: row.grain,
-        }
-      }),
-      layout,
-    )
+  const submit = async () => {
+    setError(null)
+    try {
+      await onConfirm(
+        chosen.map((card) => {
+          const row = rows[card.relpath]
+          return {
+            relpath: card.relpath,
+            thickness: Number(row.thickness),
+            material_id: Number(row.material_id) || null,
+            order_name: row.order_name.trim() || null,
+            product_name: row.product_name.trim() || null,
+            grain: row.grain,
+          }
+        }),
+        layout,
+      )
+    } catch (err) {
+      // Отказ сервера показывается здесь: плашку за затемнением не видно.
+      setError(err instanceof Error ? err.message : String(err))
+    }
   }
 
   return (
@@ -103,7 +112,8 @@ export default function IntakeDialog({
         <div className="modal-head">
           <b>Добавить в раскрой</b>
           <span className="muted small">
-            {cards.length} файл(ов) · толщина раскроя {jobThickness} мм
+            {plural(cards.length, 'файл', 'файла', 'файлов')} · толщина раскроя{' '}
+            {String(jobThickness).replace('.', ',')} мм
           </span>
           <button type="button" className="ghost" onClick={onCancel} disabled={busy}>
             ✕
@@ -182,8 +192,8 @@ export default function IntakeDialog({
                       }
                     />
                   </label>
-                  <label className="field">
-                    Направление волокна
+                  <label className="field" title="Как волокно должно идти по самой детали">
+                    Волокно детали
                     <select
                       value={row.grain}
                       disabled={!row.keep}
@@ -261,8 +271,11 @@ export default function IntakeDialog({
                 <option value="free">свободно</option>
               </select>
             </label>
-            <label className="field">
-              Направление волокна
+            <label
+              className="field"
+              title="Разрешать ли раскладке разворачивать детали поперёк волокна"
+            >
+              Волокно при раскладке
               <select
                 value={layout.respect_grain ? 'yes' : 'no'}
                 onChange={(event) =>
@@ -280,13 +293,21 @@ export default function IntakeDialog({
           </div>
         </div>
 
+        {error && (
+          <div className="notice error" style={{ margin: '0 18px 10px' }}>
+            {error}
+          </div>
+        )}
+
         <div className="modal-foot">
           <span className="small muted grow">
-            Один файл — одна толщина. Проект и изделие нужны, чтобы после раскроя
-            разложить детали по местам.
+            {chosen.length === 0
+              ? 'Отметьте галочкой файлы, которые идут в этот раскрой.'
+              : 'Один файл — одна толщина. Проект и изделие нужны, чтобы после ' +
+                'раскроя разложить детали по местам.'}
           </span>
           <button type="button" onClick={onCancel} disabled={busy}>
-            Отмена
+            Не добавлять
           </button>
           <button
             type="button"
@@ -294,7 +315,9 @@ export default function IntakeDialog({
             disabled={busy || chosen.length === 0}
             onClick={submit}
           >
-            Добавить {chosen.length ? `(${chosen.length})` : ''}
+            {busy
+              ? 'Считаю…'
+              : `Добавить ${plural(chosen.length, 'файл', 'файла', 'файлов')}`}
           </button>
         </div>
       </div>

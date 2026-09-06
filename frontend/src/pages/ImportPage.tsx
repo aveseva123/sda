@@ -125,6 +125,7 @@ export default function ImportPage() {
 
       <div className="panel">
         <div
+          data-drop
           className={`dropzone${dragOver ? ' over' : ''}`}
           onDragOver={(event) => {
             event.preventDefault()

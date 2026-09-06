@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 
 import type { SourceFile } from '../../api/types'
 import type { Layout, Selection } from '../../editor/types'
-import { plural } from '../../lib/format'
 
 interface Props {
   files: SourceFile[]
@@ -12,6 +11,7 @@ interface Props {
   onFocusPart: (partId: number | null) => void
   onFocusSheet: (index: number) => void
   onPickFiles: () => void
+  onDropFiles: (files: File[]) => void
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -61,8 +61,12 @@ export default function BufferPanel({
   onFocusPart,
   onFocusSheet,
   onPickFiles,
+  onDropFiles,
 }: Props) {
   const [open, setOpen] = useState<Record<number, boolean>>({})
+  // Рамка выглядела как место для перетаскивания, но обработчиков не имела:
+  // браузер уходил на файл, а раскрой оставался пустым.
+  const [over, setOver] = useState(false)
 
   // Что из буфера реально лежит на листах этого задания.
   const placed = useMemo(() => {
@@ -98,13 +102,23 @@ export default function BufferPanel({
 
   const sheetsOfJob = layout?.sheets ?? []
 
+  // Деталь без листа не рисуется на холсте — её попросту нет на экране.
+  // Раньше о ней сообщала одна строка во всплывающем сообщении, оператор
+  // закрывал его и резал лист, а деталь всплывала на сборке.
+  const unplaced = useMemo(() => {
+    if (!layout) return []
+    return layout.instances
+      .filter((instance) => instance.sheet_index === null)
+      .map((instance) => ({ instance, part: layout.parts[String(instance.part_id)] }))
+      .filter((row) => Boolean(row.part))
+  }, [layout])
+
   return (
     <div className="panel-scroll">
       <div className="panel-title">
-        Файлы раскроя
-        <span className="count">
-          {plural(totals.files, 'файл', 'файла', 'файлов')} ·{' '}
-          {plural(totals.parts, 'деталь', 'детали', 'деталей')}
+        Файлы
+        <span className="count" title={`${totals.files} · ${totals.parts} деталей в раскрое`}>
+          {totals.files} · {totals.parts} дет.
         </span>
         <button
           type="button"
@@ -118,7 +132,22 @@ export default function BufferPanel({
       </div>
 
       <div className="buffer-drop">
-        <div onClick={onPickFiles}>
+        <div
+          data-drop
+          className={over ? 'over' : undefined}
+          onClick={onPickFiles}
+          onDragOver={(event) => {
+            event.preventDefault()
+            setOver(true)
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(event) => {
+            event.preventDefault()
+            setOver(false)
+            const dropped = Array.from(event.dataTransfer.files)
+            if (dropped.length) onDropFiles(dropped)
+          }}
+        >
           <svg
             width="15"
             height="15"
@@ -216,6 +245,31 @@ export default function BufferPanel({
           )
         })}
       </div>
+
+      {unplaced.length > 0 && (
+        <>
+          <div className="lbl warn-lbl" style={{ padding: '14px 12px 8px' }}>
+            Не поместились · {unplaced.length}
+          </div>
+          <div className="tree">
+            {unplaced.map(({ instance, part }) => (
+              <div
+                key={instance.id}
+                className="frow warn"
+                title="Деталь не влезла ни на один лист: добавьте лист или уменьшите зазор"
+              >
+                <span className="swatch" style={{ background: part.style?.fill ?? '#9AA3AF' }} />
+                <span className="grow mono ellipsis" style={{ fontSize: 11.5 }}>
+                  {part.name}
+                </span>
+                <span className="num">
+                  {(part.length ?? 0).toFixed(0)} × {(part.width ?? 0).toFixed(0)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="lbl" style={{ padding: '14px 12px 8px' }}>
         На рабочем поле

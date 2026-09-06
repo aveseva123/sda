@@ -16,6 +16,7 @@ import type {
   Material,
   SourceFile,
 } from '../api/types'
+import { plural } from '../lib/format'
 import { useLoader } from '../lib/hooks'
 
 const STAGE_TITLE: Record<string, string> = {
@@ -46,6 +47,9 @@ export default function EditorPage() {
   const [jobs, setJobs] = useState<JobRow[]>([])
   const [jobId, setJobId] = useState<number | null>(null)
   const [layout, setLayout] = useState<Layout | null>(null)
+  // Снимок раскладки для стека отмены: он читается в коллбэках, которым
+  // нельзя пересоздаваться на каждое движение мыши.
+  const layoutRef = useRef<Layout | null>(null)
   const [collisions, setCollisions] = useState<Collision[]>([])
   const [presets, setPresets] = useState<ToolpathPreset[]>([])
   const [cuttingPresets, setCuttingPresets] = useState<CuttingPreset[]>([])
@@ -57,8 +61,12 @@ export default function EditorPage() {
   const [showToolpaths, setShowToolpaths] = useState(false)
   const [scale, setScale] = useState(0.15)
   const [busy, setBusy] = useState(false)
+  const [busyWhat, setBusyWhat] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Отмена ручных правок. Раньше промах мышью было нечем откатить, кроме
+  // полного пересчёта, — и раскладку переставали трогать вообще.
+  const undoStack = useRef<Move[][]>([])
   const [creating, setCreating] = useState({ material_id: '', thickness: '', operator: '' })
   // Файлы разбираются до создания деталей: сначала оператор отвечает в диалоге.
   const [intake, setIntake] = useState<IntakeResult | null>(null)
@@ -72,6 +80,39 @@ export default function EditorPage() {
     return (params.kerf ?? 8) + (params.part_gap ?? 0)
   }, [layout])
 
+  const say = useCallback((text: string) => {
+    setError(null)
+    setMessage(text)
+  }, [])
+
+  const fail = useCallback((err: unknown) => {
+    setMessage(null)
+    const text = err instanceof Error ? err.message : String(err)
+    // «Failed to fetch» на экране у станка не значит ничего.
+    setError(
+      /failed to fetch|networkerror|load failed/i.test(text)
+        ? 'Нет связи с сервером. Проверьте, запущен ли «Нестор» на компьютере-сервере.'
+        : text,
+    )
+  }, [])
+
+  /** Долгая операция: показывает, что именно считается, и не даёт кликать. */
+  const run = useCallback(
+    async (what: string, action: () => Promise<void>) => {
+      setBusy(true)
+      setBusyWhat(what)
+      try {
+        await action()
+      } catch (err) {
+        fail(err)
+      } finally {
+        setBusy(false)
+        setBusyWhat(null)
+      }
+    },
+    [fail],
+  )
+
   const loadJobs = useCallback(async () => {
     const rows = await api.nestingJobs()
     setJobs(rows)
@@ -80,6 +121,7 @@ export default function EditorPage() {
 
   const loadLayout = useCallback(async (id: number) => {
     const [data, issues] = await Promise.all([api.layout(id), api.collisions(id)])
+    layoutRef.current = data
     setLayout(data)
     setCollisions(issues)
     // Буфер — файлы этого раскроя, а не всё, что когда-либо загружали в цеху.
@@ -89,24 +131,46 @@ export default function EditorPage() {
   useEffect(() => {
     api.toolpathPresets().then(setPresets).catch(() => undefined)
     api.cuttingPresets().then(setCuttingPresets).catch(() => undefined)
-    loadJobs().catch((err: Error) => setError(err.message))
+    loadJobs().catch(fail)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (jobId === null) return
-    loadLayout(jobId).catch((err: Error) => setError(err.message))
+    loadLayout(jobId).catch(fail)
   }, [jobId, loadLayout])
 
   const applyMoves = useCallback(
-    async (moves: Move[]) => {
+    async (moves: Move[], remember = true) => {
       if (jobId === null || !moves.length) return
+      // Обратный ход запоминается до правки: без него промах мышью нечем
+      // откатить, и раскладку перестают трогать руками совсем.
+      if (remember && layoutRef.current) {
+        const before = new Map(layoutRef.current.instances.map((i) => [i.id, i]))
+        const back = moves
+          .map((move) => {
+            const was = before.get(move.instance_id)
+            if (!was) return null
+            return {
+              instance_id: was.id,
+              x: was.x ?? undefined,
+              y: was.y ?? undefined,
+              rotation: was.rotation,
+              sheet_index: was.sheet_index ?? undefined,
+              pinned: was.pinned,
+            } as Move
+          })
+          .filter((item): item is Move => item !== null)
+        if (back.length) {
+          undoStack.current = [...undoStack.current.slice(-29), back]
+        }
+      }
       // Раскладка правится сразу на экране, ответ сервера её только подтверждает:
       // иначе перетаскивание «залипает» на времени запроса.
       setLayout((current) => {
         if (!current) return current
         const byId = new Map(moves.map((m) => [m.instance_id, m]))
-        return {
+        const next = {
           ...current,
           instances: current.instances.map((instance) => {
             const move = byId.get(instance.id)
@@ -121,58 +185,82 @@ export default function EditorPage() {
             }
           }),
         }
+        layoutRef.current = next
+        return next
       })
       try {
         await api.moveInstances(jobId, moves)
         await loadLayout(jobId)
       } catch (err) {
-        setError((err as Error).message)
+        fail(err)
         await loadLayout(jobId)
       }
     },
-    [jobId, loadLayout],
+    [jobId, loadLayout, fail],
   )
+
+  const undo = useCallback(() => {
+    const back = undoStack.current.pop()
+    if (!back) {
+      say('Отменять нечего.')
+      return
+    }
+    applyMoves(back, false)
+  }, [applyMoves, say])
 
   const arrange = async (keepPinned: boolean) => {
     if (jobId === null) return
-    setBusy(true)
-    setError(null)
-    try {
+    // Полный пересчёт стирает ручную расстановку. Полчаса работы не должны
+    // исчезать от случайного попадания по кнопке в верхней строке.
+    if (!keepPinned) {
+      const pinned = (layout?.instances ?? []).filter((i) => i.pinned).length
+      const question = pinned
+        ? `Разложить заново? Все детали переставятся, закрепление снимется с ${plural(
+            pinned,
+            'детали',
+            'деталей',
+            'деталей',
+          )}.`
+        : 'Разложить заново? Все детали переставятся с нуля.'
+      if (!window.confirm(question)) return
+    }
+    await run(keepPinned ? 'Уплотняю лист' : 'Раскладываю заново', async () => {
       const result = await api.arrange(jobId, keepPinned)
-      setMessage(
-        `Разложено на ${result.sheets} лист(ах), КПД ${(result.utilization * 100).toFixed(1)}%` +
-          (result.unplaced ? `, не размещено: ${result.unplaced}` : '') +
-          (keepPinned ? '. Закреплённые детали не двигались.' : '.'),
+      undoStack.current = []
+      say(
+        [
+          `Разложено на ${plural(result.sheets, 'лист', 'листа', 'листов')}, ` +
+            `КИМ ${percent(result.utilization)}.`,
+          result.unplaced
+            ? `Не поместилось: ${plural(result.unplaced, 'деталь', 'детали', 'деталей')} — ` +
+              'они ждут в списке слева.'
+            : '',
+          keepPinned ? 'Закреплённые детали не двигались.' : 'Закрепление снято со всех деталей.',
+        ]
+          .filter(Boolean)
+          .join('\n'),
       )
       await loadLayout(jobId)
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   const changePreset = async (value: string) => {
     if (jobId === null) return
-    setBusy(true)
-    setError(null)
-    try {
-      // У другого пресета другая фреза и другой зазор — раскладка
+    await run('Пересчитываю раскладку по шаблону', async () => {
+      // У другого шаблона другая фреза и другой зазор — раскладка
       // пересчитывается сразу, иначе она перестанет соответствовать УП.
       const result = await api.setJobPreset(jobId, value ? Number(value) : null)
-      setMessage(
+      say(
         result.preset
-          ? `Пресет «${result.preset.name}»: фреза контура ⌀${
-              (result.preset.layout.kerf ?? 0)
-            } мм, зазор ${(result.preset.layout.kerf ?? 0) + (result.preset.layout.part_gap ?? 0)} мм.`
-          : 'Пресет снят. Раскладка считается по умолчанию из config/app.yaml.',
+          ? `Шаблон «${result.preset.name}»: фреза контура ⌀${
+              result.preset.layout.kerf ?? 0
+            } мм, зазор ${
+              (result.preset.layout.kerf ?? 0) + (result.preset.layout.part_gap ?? 0)
+            } мм.`
+          : 'Шаблон снят. Раскладка считается по общим настройкам.',
       )
       await loadLayout(jobId)
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   const createJob = async () => {
@@ -186,7 +274,7 @@ export default function EditorPage() {
       await loadJobs()
       setJobId(created.id)
     } catch (err) {
-      setError((err as Error).message)
+      fail(err)
     }
   }
 
@@ -194,9 +282,9 @@ export default function EditorPage() {
     try {
       await api.assignToolpath(partId, { targets, preset_id: presetId })
       if (jobId !== null) await loadLayout(jobId)
-      setMessage(`Траектория применена к ${targets.length} вектор(ам).`)
+      say(`Траектория применена к ${plural(targets.length, 'вектору', 'векторам', 'векторам')}.`)
     } catch (err) {
-      setError((err as Error).message)
+      fail(err)
     }
   }
 
@@ -208,59 +296,57 @@ export default function EditorPage() {
       await api.assignToolpath(partId, { targets, preset_id: vector.preset_id, enabled })
       if (jobId !== null) await loadLayout(jobId)
     } catch (err) {
-      setError((err as Error).message)
+      fail(err)
     }
   }
 
   const dropFiles = async (files: File[]) => {
     if (jobId === null) {
-      setError('Сначала заведите раскрой: материал, толщина, оператор.')
+      fail(new Error('Сначала заведите раскрой: материал, толщина, оператор.'))
       return
     }
-    setBusy(true)
-    setError(null)
-    try {
-      // Первый шаг: файлы разобраны, деталей ещё нет. Что с ними делать,
-      // решает оператор в диалоге.
-      setIntake(await api.addFiles(jobId, files))
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setBusy(false)
-    }
+    await run(
+      `Читаю ${plural(files.length, 'файл', 'файла', 'файлов')}`,
+      async () => {
+        // Первый шаг: файлы разобраны, деталей ещё нет. Что с ними делать,
+        // решает оператор в диалоге.
+        setIntake(await api.addFiles(jobId, files))
+      },
+    )
   }
 
   const confirmFiles = async (decisions: FileDecision[], placement: Placement) => {
     if (jobId === null || !intake) return
     setBusy(true)
+    setBusyWhat('Раскладываю добавленные детали')
     setError(null)
     try {
       const result = await api.confirmFiles(jobId, intake.batch_id, decisions, { ...placement })
       setIntake(null)
-      setMessage(
-        [`Добавлено деталей: ${result.added}.`, ...result.warnings].join('\n'),
+      undoStack.current = []
+      say(
+        [
+          `Добавлено ${plural(result.added, 'позиция', 'позиции', 'позиций')}.`,
+          ...result.warnings,
+        ].join('\n'),
       )
       await loadLayout(jobId)
       await loadJobs()
     } catch (err) {
-      setError((err as Error).message)
+      // Ошибку показывает сам диалог: под затемнением плашку сзади не видно.
+      throw err
     } finally {
       setBusy(false)
+      setBusyWhat(null)
     }
   }
 
   const takeJob = async (operator: string) => {
     if (jobId === null) return
-    setBusy(true)
-    setError(null)
-    try {
+    await run('Записываю оператора', async () => {
       await api.takeJob(jobId, operator)
       await loadLayout(jobId)
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   const checkItem = async (key: string, done: boolean) => {
@@ -271,23 +357,28 @@ export default function EditorPage() {
       await api.setChecklist(jobId, items)
       await loadLayout(jobId)
     } catch (err) {
-      setError((err as Error).message)
+      fail(err)
     }
   }
 
   const finishJob = async () => {
     if (jobId === null) return
-    setBusy(true)
-    setError(null)
-    try {
-      await api.finishJob(jobId)
-      setMessage('Раскрой завершён. Лист закрыт по чеклисту.')
-      await loadLayout(jobId)
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setBusy(false)
+    // Наложение деталей — это испорченный лист. Закрывать раскрой, зная о
+    // них, нельзя: сначала пусть технолог их разведёт.
+    if (collisions.length) {
+      fail(
+        new Error(
+          `На листе ${plural(collisions.length, 'наложение', 'наложения', 'наложений')} — ` +
+            'раскрой не закрывается. Найдите красные детали и разведите их.',
+        ),
+      )
+      return
     }
+    await run('Закрываю раскрой', async () => {
+      await api.finishJob(jobId)
+      say('Раскрой завершён. Лист списан, деловой обрезок ушёл на склад.')
+      await loadLayout(jobId)
+    })
   }
 
   // Горячие клавиши: как в редакторах — стрелки двигают, R вращает.
@@ -302,6 +393,11 @@ export default function EditorPage() {
       if (event.key === 'Escape') {
         setSelection(emptySelection)
         setFocusedPartId(null)
+        return
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        undo()
         return
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
@@ -344,7 +440,7 @@ export default function EditorPage() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [layout, selection, applyMoves])
+  }, [layout, selection, applyMoves, undo])
 
   const thicknesses = useMemo(
     () =>
@@ -385,8 +481,24 @@ export default function EditorPage() {
   }, [layout])
 
   const job = layout?.job
+
+  // Стартовые параметры диалога. Поворот берётся из шаблона: раньше здесь
+  // всегда стояло «0 / 90°», и настройка шаблона молча затиралась.
+  const intakePlacement = useMemo(() => {
+    const params = layout?.job.preset_snapshot?.layout
+    const step = params?.rotation_step
+    return {
+      part_gap: params?.part_gap ?? 2,
+      sheet_margin: params?.sheet_margin ?? 0,
+      rotation: step === 0 ? 'none' : step === 90 ? 'quarter' : 'free',
+      respect_grain: layout?.job.has_grain ?? false,
+    }
+  }, [layout])
   // Нехватка листов — не украшение шапки, а причина не начинать раскрой.
   const shortage = layout ? layout.stock.needed > layout.stock.available : false
+  // Наложения — испорченный лист, поэтому о них говорят в шапке, а не в
+  // сообщении, которое закроют через минуту.
+  const trouble = collisions.length
 
   return (
     <div className="editor">
@@ -445,6 +557,21 @@ export default function EditorPage() {
               {layout ? `${layout.stock.needed} из ${layout.stock.available}` : '—'}
             </b>
           </span>
+          {trouble > 0 && (
+            <button
+              type="button"
+              className="chip trouble"
+              title="Показать детали, которые налезают друг на друга"
+              onClick={() => {
+                setSelection({
+                  instances: [...new Set(collisions.flatMap((c) => c.instance_ids))],
+                  vectors: [],
+                })
+              }}
+            >
+              Наложений <b>{trouble}</b>
+            </button>
+          )}
           <button
             type="button"
             className="primary"
@@ -487,6 +614,7 @@ export default function EditorPage() {
               onFocusPart={setFocusedPartId}
               onFocusSheet={(index) => stage.current?.focusSheet(index)}
               onPickFiles={() => filePicker.current?.click()}
+              onDropFiles={dropFiles}
             />
           ) : (
             <div className="panel-scroll">
@@ -630,6 +758,13 @@ export default function EditorPage() {
             />
           )}
 
+          {busy && busyWhat && (
+            <div className="stage-busy">
+              <span className="spinner" />
+              {busyWhat}…
+            </div>
+          )}
+
           <Shortcuts />
         </div>
 
@@ -659,21 +794,20 @@ export default function EditorPage() {
         </aside>
       </div>
 
-      {intake && layout && (
+      {/* Диалог показывается по факту разобранных файлов: раньше он ждал
+          раскладку и при незагруженной пропадал вместе с файлами. */}
+      {intake && (
         <IntakeDialog
           cards={intake.files}
           materials={materials ?? []}
-          jobThickness={layout.job.thickness}
-          jobMaterialId={layout.job.material_id}
-          placement={{
-            part_gap: layout.job.preset_snapshot?.layout.part_gap ?? 2,
-            sheet_margin: layout.job.preset_snapshot?.layout.sheet_margin ?? 0,
-            rotation:
-              layout.job.preset_snapshot?.layout.rotation_step === 90 ? 'quarter' : 'quarter',
-            respect_grain: layout.job.has_grain,
-          }}
+          jobThickness={job?.thickness ?? (Number(creating.thickness) || 0)}
+          jobMaterialId={job?.material_id ?? (Number(creating.material_id) || 0)}
+          placement={intakePlacement}
           busy={busy}
-          onCancel={() => setIntake(null)}
+          onCancel={() => {
+            setIntake(null)
+            say('Файлы не добавлены — раскрой остался прежним.')
+          }}
           onConfirm={confirmFiles}
         />
       )}
@@ -704,6 +838,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ['R / Shift + R', 'повернуть на 90° туда и обратно'],
   ['Стрелки', 'сдвинуть на 1 мм, с Shift — на 10'],
   ['Esc', 'снять выделение'],
+  ['Ctrl + Z', 'отменить последнюю правку'],
 ]
 
 /**

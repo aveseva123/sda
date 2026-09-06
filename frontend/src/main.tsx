@@ -19,6 +19,16 @@ import App from './App'
 import { IS_DEMO } from './api/demo'
 import './styles.css'
 
+// Файл, брошенный мимо рабочего поля, браузер открывает вместо платформы —
+// и несохранённая раскладка пропадает. Промах обязан быть безвредным.
+for (const event of ['dragover', 'drop'] as const) {
+  window.addEventListener(event, (native) => {
+    const target = native.target as HTMLElement | null
+    if (target?.closest('[data-drop]')) return
+    native.preventDefault()
+  })
+}
+
 // Демо открывают как один файл — там нет сервера, который отдаст /editor по
 // прямой ссылке, поэтому маршруты живут в адресе после решётки.
 const Router = IS_DEMO ? HashRouter : BrowserRouter
