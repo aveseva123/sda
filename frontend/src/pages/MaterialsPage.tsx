@@ -236,7 +236,7 @@ function MaterialForm({
         </label>
       ))}
       <label className="fld">
-        <span>Листов на складе</span>
+        <span>Листов, справочно</span>
         <input
           type="number"
           placeholder="не считаем"
@@ -425,7 +425,9 @@ export default function MaterialsPage() {
                 <th className="num">Толщина</th>
                 <th>Форматы листа, мм</th>
                 <th className="num">Обрезка кромок, мм</th>
-                <th className="num">Листов</th>
+                <th className="num" title="Справочное число из карточки материала. Настоящий остаток ведётся на экране «Склад»">
+                  Листов, справочно
+                </th>
                 <th>Распознаётся как</th>
                 <th />
               </tr>

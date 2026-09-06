@@ -283,6 +283,29 @@ export default function StockPage() {
     }
   }
 
+  /** Пересчёт: на складе посчитали руками, и число разошлось с экраном. */
+  const adjust = async (item: StockItem) => {
+    const answer = window.prompt(
+      `Сколько ${item.kind === 'offcut' ? 'обрезков' : 'листов'} этой позиции ` +
+        'на самом деле лежит на складе?',
+      String(item.qty),
+    )
+    if (answer === null) return
+    const qty = Number(answer.replace(',', '.'))
+    if (!Number.isFinite(qty) || qty < 0) {
+      setFormError('Количество должно быть числом не меньше нуля.')
+      return
+    }
+    setFormError(null)
+    try {
+      await api.stockAdjust(item.id, { new_qty: qty, reason: 'пересчёт на складе' })
+      setMessage(`Позиция №${item.id}: было ${item.qty}, стало ${qty}.`)
+      reload()
+    } catch (err) {
+      setFormError((err as Error).message)
+    }
+  }
+
   const showHistory = async (item: StockItem) => {
     setHistory({ item, rows: await api.stockMovements(item.id) })
   }
@@ -470,6 +493,13 @@ export default function StockPage() {
                         title="Списать лист со склада и записать, какие обрезки от него остались"
                       >
                         Списать: отрезан
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => adjust(item)}
+                        title="Поправить количество, если на складе посчитали руками"
+                      >
+                        Пересчёт
                       </button>
                       <button type="button" onClick={() => showHistory(item)}>
                         История

@@ -409,6 +409,17 @@ export default function PresetsPage() {
                       ))}
                     </select>
                   </label>
+                  {dirty && (
+                    <button
+                      type="button"
+                      style={{ alignSelf: 'flex-end' }}
+                      disabled={busy}
+                      onClick={() => setDraft(preset ? structuredClone(preset) : null)}
+                      title="Вернуть шаблон к сохранённому состоянию"
+                    >
+                      Отменить правки
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="primary"

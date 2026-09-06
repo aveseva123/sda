@@ -122,12 +122,11 @@ export default function BufferPanel({
         </span>
         <button
           type="button"
-          className="ghost"
-          style={{ marginLeft: 'auto', padding: '2px 6px' }}
-          title="Добавить DXF"
+          style={{ marginLeft: 'auto', padding: '2px 8px', height: 22 }}
+          title="Выбрать DXF на диске"
           onClick={onPickFiles}
         >
-          +
+          + Файл
         </button>
       </div>
 
@@ -160,8 +159,8 @@ export default function BufferPanel({
             <path d="M8 11V2.5M4.5 6 8 2.5 11.5 6M2.5 12v1.5h11V12" />
           </svg>
           <span>
-            Перетащите DXF
-            <small>или папку / zip</small>
+            Перетащите DXF или нажмите
+            <small>файл, папка или zip</small>
           </span>
         </div>
       </div>

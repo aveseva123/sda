@@ -151,6 +151,7 @@ export function demoRequest<T>(path: string, init?: RequestInit): Promise<T> {
     }
     if (clean === '/nesting/jobs/1/layout') return Promise.resolve(currentLayout() as T)
     if (clean === '/nesting/jobs/1/collisions') return Promise.resolve([] as unknown as T)
+      // Буфер запрашивается с параметром job — путь тот же, отвечаем так же.
     if (clean === '/files' && !state.filesAdded) return Promise.resolve([] as unknown as T)
 
     const found = data[clean] ?? data[path]
@@ -182,6 +183,14 @@ export function demoRequest<T>(path: string, init?: RequestInit): Promise<T> {
     state.filesAdded = true
     return Promise.resolve({
       added: layout.instances.length,
+      // Форма ответа та же, что у сервера: интерфейс показывает итог раскладки
+      // сразу после добавления файлов.
+      layout: {
+        sheets: (layout.sheets as unknown[]).length,
+        placed: layout.instances.length,
+        unplaced: 0,
+        utilization: Number((layout.job as Json).utilization ?? 0),
+      },
       warnings: [
         'Демонстрация: раскладка взята готовой (ЛДСП 16 мм), разбор DXF и ' +
           'пересчёт работают только на сервере.',

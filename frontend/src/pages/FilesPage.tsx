@@ -158,11 +158,22 @@ export default function FilesPage() {
                   <td className="small muted">{file.detected_source}</td>
                   <td>
                     {file.needs_clarification > 0 && (
-                      <span className="badge warn">
+                      <span
+                        className="badge warn"
+                        title="Толщину этих деталей спросят при добавлении файла в раскрой"
+                      >
+                        без толщины:{' '}
                         {plural(file.needs_clarification, 'деталь', 'детали', 'деталей')}
                       </span>
                     )}
-                    {file.error && <span className="badge danger">ошибка</span>}
+                    {file.error && (
+                      // Бейдж «ошибка» ничего не говорил: причину знал только
+                      // сервер, и она никуда не выводилась.
+                      <span className="badge danger" title={file.error}>
+                        не разобран
+                      </span>
+                    )}
+                    {file.error && <div className="small muted">{file.error}</div>}
                   </td>
                 </tr>
               ))}
