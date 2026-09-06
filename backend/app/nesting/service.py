@@ -72,6 +72,19 @@ def create_job(
     if material is None:
         raise NestingError("Материал не найден")
 
+    # Толщина — часть идентичности материала: «ЛДСП 16» и «ЛДСП 28» это две
+    # разные записи справочника, а не одна с параметром. Раскрой, заведённый
+    # на ЛДСП 28 с объявленной толщиной 16, взял бы формат листа и обрезку
+    # кромок от одной записи, а глубины резания — от другой: фреза ушла бы на
+    # двенадцать миллиметров мимо. В интерфейсе так не сделать — там материал
+    # и толщина выбираются одним списком, — но через API можно было.
+    if abs(float(material.thickness) - float(thickness)) > 0.001:
+        raise NestingError(
+            f"Материал «{material.name}» — это {material.thickness:g} мм, "
+            f"а раскрой заводится на {thickness:g} мм. "
+            "Выберите запись справочника с нужной толщиной."
+        )
+
     if preset_id is None:
         preset = cutting.preset_for(db, material=material, thickness=thickness)
     else:

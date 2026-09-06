@@ -371,3 +371,21 @@ def test_finished_job_cannot_be_rearranged(db, job, tmp_path):
             db, job, later["batch_id"],
             [{"relpath": later["files"][0]["relpath"], "thickness": 18.0}],
         )
+
+
+def test_job_thickness_must_match_the_material(db, materials):
+    """Толщина — часть идентичности материала, а не его параметр.
+
+    «ЛДСП 16» и «ЛДСП 28» — две разные записи справочника. Раскрой,
+    заведённый на одной записи с толщиной другой, взял бы формат листа и
+    обрезку кромок от первой, а глубины резания от второй: фреза ушла бы на
+    двенадцать миллиметров мимо. В интерфейсе так не сделать, через API было
+    можно.
+    """
+    material = db.scalar(select(Material).where(Material.thickness == 18.0))
+
+    with pytest.raises(nesting.NestingError, match="18 мм"):
+        nesting.create_job(db, material_id=material.id, thickness=16.0, operator="Севак")
+
+    job = nesting.create_job(db, material_id=material.id, thickness=18.0, operator="Севак")
+    assert job.thickness == 18.0
