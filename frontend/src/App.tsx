@@ -11,7 +11,7 @@ import { IS_DEMO } from './api/demo'
 /** Логотип: лист с вырезанной деталью — то, чем платформа занимается. */
 function Mark() {
   return (
-    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#E8EAED" strokeWidth="1.5">
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="1.5" y="1.5" width="17" height="17" rx="2.5" />
       <path d="M1.5 8h17M8 1.5v17M8 13h5.5v5.5" />
     </svg>

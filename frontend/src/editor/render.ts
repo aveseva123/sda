@@ -5,7 +5,7 @@ import {
   rotatedSize,
   sheetOrigin,
 } from './geometry'
-import { alpha, themeColor } from './palette'
+import { alpha, operationColor, themeColor } from './palette'
 import type { Collision, Layout, Selection, ToolpathPreset } from './types'
 import { vectorKey } from './types'
 
@@ -348,13 +348,16 @@ function drawOperations(
   for (const op of placed.operations) {
     const vector = byTarget.get(op.target)
     const preset = vector?.preset_id ? input.presets.get(vector.preset_id) : undefined
-    const color = preset?.color ?? '#6b7280'
+    // Цвет — по ТИПУ операции, а не по пресету: оператор читает на карте
+    // «это паз», «это присадка». Два пресета одного типа не должны выглядеть
+    // разными операциями, а цвет из конфига не знает, на каком фоне рисуют.
+    const color = operationColor(op.semantic)
     const selected = selectedVectors.has(vectorKey(part.id, op.target))
     const enabled = vector?.enabled !== false
 
     // Ширина фрезы: видно, что реально снимет инструмент.
     if (input.showToolpaths && preset?.tool_diameter && enabled) {
-      ctx.strokeStyle = `${color}40`
+      ctx.strokeStyle = alpha(color, 0.25)
       ctx.lineWidth = Math.max(preset.tool_diameter * input.viewport.scale, 1)
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
@@ -370,7 +373,7 @@ function drawOperations(
       ctx.lineCap = 'butt'
     }
 
-    ctx.strokeStyle = enabled ? color : '#9ca3af'
+    ctx.strokeStyle = enabled ? color : FAINT_INK()
     ctx.lineWidth = selected ? 3 : 1.3
     if (!enabled) ctx.setLineDash([4, 3])
     if (op.center && op.diameter) {

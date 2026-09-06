@@ -157,7 +157,7 @@ export default function BufferPanel({
             height="15"
             viewBox="0 0 16 16"
             fill="none"
-            stroke="#69717D"
+            stroke="currentColor"
             strokeWidth="1.4"
             style={{ flex: 'none' }}
           >
@@ -263,7 +263,7 @@ export default function BufferPanel({
                 className="frow warn"
                 title="Деталь не влезла ни на один лист: добавьте лист или уменьшите зазор"
               >
-                <span className="swatch" style={{ background: part.style?.fill ?? '#9AA3AF' }} />
+                <span className="swatch" style={{ background: part.style?.fill ?? 'var(--ink-2)' }} />
                 <span className="grow mono ellipsis" style={{ fontSize: 11.5 }}>
                   {part.name}
                 </span>

@@ -154,7 +154,7 @@ export default function LayerWizard({ batchId, summary, onApply, busy }: Props) 
           <div className="small muted" style={{ marginBottom: 6 }}>
             Превью слоя {selected ? <b>{selected}</b> : '—'}
           </div>
-          <ShapeCanvas paths={preview} height={220} stroke="#9AA8FF" />
+          <ShapeCanvas paths={preview} height={220} />
           <div className="small muted" style={{ marginTop: 6 }}>
             Показана геометрия слоя из первого файла загрузки.
           </div>

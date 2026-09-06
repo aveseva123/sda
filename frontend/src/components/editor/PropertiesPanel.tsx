@@ -96,7 +96,7 @@ function CoordField({
 
 /** Значок операции — по типу, распознанному из геометрии вектора. */
 function OpIcon({ semantic, bright }: { semantic: string; bright: boolean }) {
-  const stroke = bright ? '#E8EAED' : '#9AA3AF'
+  const stroke = bright ? 'var(--ink)' : 'var(--ink-2)'
   const common = { width: 13, height: 13, viewBox: '0 0 16 16', fill: 'none', stroke, strokeWidth: 1.5 }
   if (semantic === 'DRILL') {
     return (
@@ -330,7 +330,7 @@ export default function PropertiesPanel({
     <div className="panel-scroll">
       <div className="sec">
         <div className="sec-head" style={{ marginBottom: 3 }}>
-          <span className="swatch" style={{ background: part.style?.fill ?? '#9AA3AF' }} />
+          <span className="swatch" style={{ background: part.style?.fill ?? 'var(--ink-2)' }} />
           <span className="ellipsis grow" style={{ fontSize: 14, fontWeight: 600 }} title={part.name}>
             {part.name}
           </span>

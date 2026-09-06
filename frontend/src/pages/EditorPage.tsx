@@ -496,7 +496,7 @@ export default function EditorPage() {
       if (!part?.source_file_id) continue
       const row = counts.get(part.source_file_id) ?? {
         id: part.source_file_id,
-        color: part.style?.fill ?? '#9AA3AF',
+        color: part.style?.fill ?? 'var(--ink-2)',
         name: part.source_file ?? `Файл ${part.source_file_id}`,
         count: 0,
       }
