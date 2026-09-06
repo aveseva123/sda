@@ -10,6 +10,9 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import (
     cutting,
@@ -67,3 +70,27 @@ for router in (
 @app.get(f"{settings.api_prefix}/health", tags=["Служебное"])
 def health() -> dict:
     return {"status": "ok"}
+
+
+class SpaFiles(StaticFiles):
+    """Раздача собранного интерфейса.
+
+    Маршруты редактора живут в адресной строке (/editor, /tools), а файлов
+    для них на диске нет: при обновлении страницы нужно отдать index.html и
+    дать роутеру разобраться самому.
+    """
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return FileResponse(self.directory / "index.html")
+            raise
+
+
+if settings.static_dir.exists():
+    # Интерфейс и API с одного порта: в цеху это один процесс вместо связки
+    # «nginx + сервер», и запускать его может человек без командной строки.
+    app.mount("/", SpaFiles(directory=settings.static_dir, html=True), name="ui")
+    logging.getLogger(__name__).info("Интерфейс раздаётся из %s", settings.static_dir)
