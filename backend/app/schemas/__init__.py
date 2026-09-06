@@ -465,9 +465,23 @@ class FileDecisionIn(BaseModel):
     grain: str = "none"
 
 
+class PlacementIn(BaseModel):
+    """Правка раскладки прямо в окне добавления файлов.
+
+    Меняет ТОЛЬКО этот раскрой: общий шаблон траекторий остаётся как был.
+    """
+
+    part_gap: float | None = Field(default=None, ge=0)
+    sheet_margin: float | None = Field(default=None, ge=0)
+    # quarter (0/90°) | none | free
+    rotation: str | None = None
+    respect_grain: bool | None = None
+
+
 class ConfirmFilesIn(BaseModel):
     batch_id: int
     files: list[FileDecisionIn] = Field(min_length=1)
+    placement: PlacementIn | None = None
 
 
 class ToolIn(BaseModel):

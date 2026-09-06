@@ -7,9 +7,18 @@ interface Props {
   materials: Material[]
   jobThickness: number
   jobMaterialId: number
+  /** Параметры раскладки текущего раскроя — их можно поправить прямо здесь. */
+  placement: Placement
   busy: boolean
   onCancel: () => void
-  onConfirm: (decisions: FileDecision[]) => void
+  onConfirm: (decisions: FileDecision[], placement: Placement) => void
+}
+
+export interface Placement {
+  part_gap: number
+  sheet_margin: number
+  rotation: string
+  respect_grain: boolean
 }
 
 interface Row {
@@ -41,11 +50,15 @@ export default function IntakeDialog({
   materials,
   jobThickness,
   jobMaterialId,
+  placement,
   busy,
   onCancel,
   onConfirm,
 }: Props) {
   const [rows, setRows] = useState<Record<string, Row>>({})
+  const [layout, setLayout] = useState<Placement>(placement)
+
+  useEffect(() => setLayout(placement), [placement])
 
   useEffect(() => {
     const next: Record<string, Row> = {}
@@ -80,6 +93,7 @@ export default function IntakeDialog({
           grain: row.grain,
         }
       }),
+      layout,
     )
   }
 
@@ -207,6 +221,63 @@ export default function IntakeDialog({
               </div>
             )
           })}
+        </div>
+
+        <div className="intake-layout">
+          <div className="lbl" style={{ marginBottom: 8 }}>
+            Раскладка этого раскроя
+          </div>
+          <div className="intake-grid">
+            <label className="field">
+              Мостик между деталями, мм
+              <input
+                type="number"
+                step={0.5}
+                value={layout.part_gap}
+                onChange={(event) =>
+                  setLayout({ ...layout, part_gap: Number(event.target.value) })
+                }
+              />
+            </label>
+            <label className="field">
+              Отступ от края листа, мм
+              <input
+                type="number"
+                step={1}
+                value={layout.sheet_margin}
+                onChange={(event) =>
+                  setLayout({ ...layout, sheet_margin: Number(event.target.value) })
+                }
+              />
+            </label>
+            <label className="field">
+              Поворот деталей
+              <select
+                value={layout.rotation}
+                onChange={(event) => setLayout({ ...layout, rotation: event.target.value })}
+              >
+                <option value="quarter">0 / 90°</option>
+                <option value="none">не вертеть</option>
+                <option value="free">свободно</option>
+              </select>
+            </label>
+            <label className="field">
+              Направление волокна
+              <select
+                value={layout.respect_grain ? 'yes' : 'no'}
+                onChange={(event) =>
+                  setLayout({ ...layout, respect_grain: event.target.value === 'yes' })
+                }
+              >
+                <option value="yes">учитывать</option>
+                <option value="no">не важно</option>
+              </select>
+            </label>
+          </div>
+          <div className="small muted" style={{ marginTop: 8 }}>
+            Правки действуют на этот раскрой. Общий шаблон траекторий остаётся
+            прежним. Зазор между деталями = диаметр фрезы контура + мостик.
+          </div>
         </div>
 
         <div className="modal-foot">

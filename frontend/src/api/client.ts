@@ -182,10 +182,15 @@ export const api = {
       body: form,
     })
   },
-  confirmFiles: (jobId: number, batchId: number, files: FileDecision[]) =>
+  confirmFiles: (
+    jobId: number,
+    batchId: number,
+    files: FileDecision[],
+    placement?: Record<string, unknown>,
+  ) =>
     request<{ added: number; warnings: string[]; layout?: Record<string, unknown> }>(
       `/nesting/jobs/${jobId}/files/confirm`,
-      json('POST', { batch_id: batchId, files }),
+      json('POST', { batch_id: batchId, files, placement }),
     ),
 
   // ---- работа с листом ----
@@ -202,8 +207,13 @@ export const api = {
   finishJob: (jobId: number) =>
     request<{ stage: string }>(`/nesting/jobs/${jobId}/finish`, json('POST', {})),
 
+  updateCuttingPreset: (presetId: number, payload: Record<string, unknown>) =>
+    request<CuttingPreset>(`/cutting-presets/${presetId}`, json('PUT', payload)),
+
   // ---- библиотека фрез ----
   tools: () => request<ToolLibrary>('/tools'),
+  updateTool: (toolId: number, payload: Record<string, unknown>) =>
+    request<unknown>(`/tools/${toolId}`, json('PUT', payload)),
   setToolResource: (toolId: number, used: number, limit?: number | null) =>
     request<unknown>(`/tools/${toolId}/resource`, json('POST', { used, limit })),
   layout: (jobId: number) => request<Layout>(`/nesting/jobs/${jobId}/layout`),

@@ -24,17 +24,36 @@ from app.tools import service as tools
 # Толщины 16, 12, 18 и 4 мм взяты из эталонных файлов заказчика: именно они
 # встречаются в его выгрузках. Названия и цены — заглушки, их надо заменить
 # реальным справочником цеха.
-MATERIALS = [
-    # name, thickness, has_grain, sheet_w, sheet_h, aliases
-    ("ЛДСП Белый", 18.0, False, 2800.0, 2070.0, ["ldsp", "белый", "white"]),
-    ("ЛДСП Дуб Сонома", 18.0, True, 2800.0, 2070.0, ["дуб", "сонома", "oak"]),
-    ("ЛДСП Белый", 16.0, False, 2800.0, 2070.0, ["ldsp16"]),
-    ("ЛДСП Белый", 15.0, False, 2800.0, 2070.0, ["ldsp15"]),
-    ("ЛДСП Белый", 12.0, False, 2800.0, 2070.0, ["ldsp12"]),
-    ("МДФ", 30.0, False, 2800.0, 2070.0, ["мдф", "mdf"]),
-    ("ХДФ", 4.0, False, 2800.0, 2070.0, ["хдф", "hdf"]),
-]
+# Справочник заводится сразу рабочим: все ходовые толщины в тех форматах,
+# в которых лист реально приезжает на склад. Названия обобщённые — декор и
+# поставщик дописываются в карточке материала.
+#
+# Текстура: у фанеры направление волокна важно, у ЛДСП и МДФ — нет.
+SHEET_LDSP = (2070.0, 2800.0)
+SHEET_MDF = (2070.0, 2800.0)
+SHEET_PLY = (2440.0, 1220.0)
 
+LDSP_THICKNESS = [8.0, 10.0, 16.0, 18.0, 22.0, 25.0, 28.0, 38.0]
+MDF_THICKNESS = [3.0, 4.0, 6.0, 8.0, 10.0, 12.0, 16.0, 18.0, 19.0, 22.0, 25.0]
+PLY_THICKNESS = [4.0, 6.0, 8.0, 9.0, 10.0, 12.0, 15.0, 18.0, 21.0, 24.0, 27.0, 30.0]
+
+
+def _materials() -> list[tuple]:
+    """name, thickness, has_grain, sheet_w, sheet_h, aliases."""
+    rows: list[tuple] = []
+    for thickness in LDSP_THICKNESS:
+        rows.append(("ЛДСП", thickness, False, *SHEET_LDSP, ["ldsp", "лдсп"]))
+    for thickness in MDF_THICKNESS:
+        rows.append(("МДФ", thickness, False, *SHEET_MDF, ["mdf", "мдф"]))
+    for thickness in PLY_THICKNESS:
+        rows.append(("Фанера", thickness, True, *SHEET_PLY, ["fanera", "фанера", "ply"]))
+    # ХДФ ходит задними стенками — формат тот же, что у ЛДСП.
+    for thickness in (3.0, 4.0):
+        rows.append(("ХДФ", thickness, False, *SHEET_LDSP, ["hdf", "хдф"]))
+    return rows
+
+
+MATERIALS = _materials()
 
 
 def seed() -> None:

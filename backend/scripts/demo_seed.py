@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from sqlalchemy import select  # noqa: E402
 
 import app.models  # noqa: E402,F401
-from app.core.db import Base, SessionLocal, engine  # noqa: E402
+from app.core.db import SessionLocal  # noqa: E402
 from app.importer import (  # noqa: E402
     ImportOptions,
     IncomingFile,
@@ -45,7 +45,11 @@ MATERIALS = [
 
 
 def main() -> None:
-    Base.metadata.create_all(engine)
+    # Схема приводится к моделям тем же способом, что и при запуске без
+    # Docker: демо не должно расходиться с рабочим сценарием.
+    from app.scripts.sync_schema import sync
+
+    sync()
     db = SessionLocal()
 
     if not db.scalars(select(Material)).first():

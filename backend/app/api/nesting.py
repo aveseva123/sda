@@ -81,6 +81,12 @@ def confirm_files(
     """Второй шаг: решения оператора приняты, детали ложатся на листы."""
     job = _require(db, job_id)
     try:
+        # Настройки раскладки из того же окна: они относятся к этому раскрою,
+        # а не к общему шаблону траекторий.
+        if payload.placement is not None:
+            service.tune_placement(
+                db, job, payload.placement.model_dump(exclude_none=True)
+            )
         result = intake.confirm(
             db, job, payload.batch_id, [d.model_dump() for d in payload.files]
         )

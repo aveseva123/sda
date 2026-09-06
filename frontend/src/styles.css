@@ -720,16 +720,19 @@ canvas.preview {
 
 .fld span { color: var(--ink-3); font-family: var(--sans); font-size: 10.5px; }
 
-.fld input {
+.fld input,
+.fld select {
+  flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
   padding: 0;
-  width: 100%;
   font-family: var(--mono);
   font-size: 11.5px;
   color: var(--ink);
 }
-.fld input:focus { outline: none; }
+.fld input:focus, .fld select:focus { outline: none; }
+.fld select option { background: var(--surface); }
 
 .op {
   display: flex;
@@ -960,3 +963,10 @@ canvas.preview {
 
 .list-row:hover { background: #1b2028; }
 .list-row.active { background: #21262e; border-color: var(--line-2); }
+
+/* Настройки раскладки в окне добавления файлов: правки на один раскрой. */
+.intake-layout {
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--sunken);
+}

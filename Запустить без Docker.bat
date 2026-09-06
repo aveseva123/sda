@@ -71,7 +71,7 @@ set STORAGE_DIR=%~dp0storage
 set CONFIG_DIR=%~dp0config
 
 echo   Готовлю базу и справочники...
-backend\.venv\Scripts\python -c "import app.models; from app.core.db import Base, engine; Base.metadata.create_all(engine)"
+backend\.venv\Scripts\python -m app.scripts.sync_schema
 if errorlevel 1 (
   echo   Не удалось создать базу. Покажите текст выше разработчику.
   pause

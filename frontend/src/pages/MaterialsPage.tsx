@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { api } from '../api/client'
 import type { Material, SheetFormat } from '../api/types'
@@ -139,6 +139,18 @@ export default function MaterialsPage() {
     }
   }
 
+  // Справочник заводится сразу полным, поэтому его группируют, а не листают.
+  const grouped = useMemo(() => {
+    const map = new Map<string, Material[]>()
+    for (const material of data ?? []) {
+      map.set(material.name, [...(map.get(material.name) ?? []), material])
+    }
+    const groups: Array<[string, Material[]]> = Array.from(map.entries()).map(
+      ([name, rows]) => [name, [...rows].sort((a, b) => a.thickness - b.thickness)],
+    )
+    return groups.sort((a, b) => a[0].localeCompare(b[0], 'ru'))
+  }, [data])
+
   const remove = async (material: Material) => {
     if (!window.confirm(`Удалить материал «${material.name}» ${material.thickness} мм?`)) return
     try {
@@ -249,54 +261,57 @@ export default function MaterialsPage() {
         </div>
       </div>
 
-      <div className="panel">
-        {loading && <div className="empty">Загрузка…</div>}
-        <table>
-          <thead>
-            <tr>
-              <th>Материал</th>
-              <th className="num">Толщина</th>
-              <th>Форматы листа, мм</th>
-              <th>Текстура</th>
-              <th className="num">Обрезка</th>
-              <th className="num">В наличии</th>
-              <th>Алиасы</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {(data ?? []).map((material) => (
-              <tr key={material.id}>
-                <td>
-                  <b>{material.name}</b>
-                  {material.supplier && <div className="small muted">{material.supplier}</div>}
-                </td>
-                <td className="num">{material.thickness} мм</td>
-                <td>
-                  <SheetFormats material={material} />
-                </td>
-                <td>
-                  {material.has_grain ? (
-                    <span className="badge warn">есть</span>
-                  ) : (
-                    <span className="badge plain">нет</span>
-                  )}
-                </td>
-                <td className="num small">
-                  {material.trim_left}/{material.trim_right}/{material.trim_top}/
-                  {material.trim_bottom}
-                </td>
-                <td className="num">{material.stock_sheets ?? '∞'}</td>
-                <td className="small muted">{(material.aliases ?? []).join(', ')}</td>
-                <td>
-                  <button type="button" className="danger" onClick={() => remove(material)}>
-                    Удалить
-                  </button>
-                </td>
+      {loading && <div className="panel empty">Загрузка…</div>}
+
+      {/* Материалы сгруппированы по названию: в справочнике их три десятка,
+          и плоский список, где ЛДСП 8 стоит между МДФ 6 и фанерой 9, читать
+          невозможно. */}
+      {grouped.map(([name, rows]) => (
+        <div className="panel" key={name}>
+          <h3>
+            {name}{' '}
+            <span className="badge plain">{rows.length} толщин</span>{' '}
+            {rows[0].has_grain && <span className="badge warn">с текстурой</span>}
+          </h3>
+          <table>
+            <thead>
+              <tr>
+                <th className="num">Толщина</th>
+                <th>Форматы листа, мм</th>
+                <th className="num">Обрезка</th>
+                <th className="num">В наличии</th>
+                <th>Алиасы</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((material) => (
+                <tr key={material.id}>
+                  <td className="num">
+                    <b>{material.thickness} мм</b>
+                  </td>
+                  <td>
+                    <SheetFormats material={material} />
+                  </td>
+                  <td className="num small">
+                    {material.trim_left}/{material.trim_right}/{material.trim_top}/
+                    {material.trim_bottom}
+                  </td>
+                  <td className="num">{material.stock_sheets ?? '∞'}</td>
+                  <td className="small muted">{(material.aliases ?? []).join(', ')}</td>
+                  <td>
+                    <button type="button" className="danger" onClick={() => remove(material)}>
+                      Удалить
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+
+      <div className="panel">
         {data?.length === 0 && (
           <div className="empty">
             Справочник пуст. Добавьте материалы — без них деталь не сможет уйти в раскрой.

@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import AlignBar from '../components/editor/AlignBar'
 import BufferPanel from '../components/editor/BufferPanel'
 import CanvasStage, { type Move, type StageHandle } from '../components/editor/CanvasStage'
-import IntakeDialog from '../components/editor/IntakeDialog'
+import IntakeDialog, { type Placement } from '../components/editor/IntakeDialog'
 import JobFlow from '../components/editor/JobFlow'
 import PropertiesPanel from '../components/editor/PropertiesPanel'
 import type { Collision, Layout, Selection, ToolpathPreset } from '../editor/types'
@@ -216,12 +216,12 @@ export default function EditorPage() {
     }
   }
 
-  const confirmFiles = async (decisions: FileDecision[]) => {
+  const confirmFiles = async (decisions: FileDecision[], placement: Placement) => {
     if (jobId === null || !intake) return
     setBusy(true)
     setError(null)
     try {
-      const result = await api.confirmFiles(jobId, intake.batch_id, decisions)
+      const result = await api.confirmFiles(jobId, intake.batch_id, decisions, { ...placement })
       setIntake(null)
       setMessage(
         [`Добавлено деталей: ${result.added}.`, ...result.warnings].join('\n'),
@@ -654,6 +654,13 @@ export default function EditorPage() {
           materials={materials ?? []}
           jobThickness={layout.job.thickness}
           jobMaterialId={layout.job.material_id}
+          placement={{
+            part_gap: layout.job.preset_snapshot?.layout.part_gap ?? 2,
+            sheet_margin: layout.job.preset_snapshot?.layout.sheet_margin ?? 0,
+            rotation:
+              layout.job.preset_snapshot?.layout.rotation_step === 90 ? 'quarter' : 'quarter',
+            respect_grain: layout.job.has_grain,
+          }}
           busy={busy}
           onCancel={() => setIntake(null)}
           onConfirm={confirmFiles}

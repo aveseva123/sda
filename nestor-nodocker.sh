@@ -23,8 +23,7 @@ export STORAGE_DIR="$PWD/storage"
 export CONFIG_DIR="$PWD/config"
 
 echo "Готовлю базу и справочники…"
-backend/.venv/bin/python -c \
-  "import app.models; from app.core.db import Base, engine; Base.metadata.create_all(engine)"
+backend/.venv/bin/python -m app.scripts.sync_schema
 backend/.venv/bin/python -m app.scripts.seed
 
 echo

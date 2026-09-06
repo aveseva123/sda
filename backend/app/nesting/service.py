@@ -124,6 +124,35 @@ def _apply_preset(job: NestingJob, preset: CuttingPreset | None) -> None:
     }
 
 
+def tune_placement(db: Session, job: NestingJob, values: dict) -> NestingJob:
+    """Правка раскладки на одном раскрое.
+
+    Технолог смотрит на конкретный лист и решает: тут мостик побольше, тут
+    деталь нельзя вертеть. Общий шаблон траекторий при этом не меняется —
+    у соседнего раскроя свои условия.
+    """
+    snapshot = dict(job.preset_snapshot or {})
+    layout = dict(snapshot.get("layout") or {})
+
+    if values.get("part_gap") is not None:
+        layout["part_gap"] = float(values["part_gap"])
+    if values.get("sheet_margin") is not None:
+        layout["sheet_margin"] = float(values["sheet_margin"])
+    if values.get("respect_grain") is not None:
+        layout["respect_grain"] = bool(values["respect_grain"])
+    rotation = values.get("rotation")
+    if rotation == "none":
+        layout["rotations"] = [0.0]
+    elif rotation in {"quarter", "free"}:
+        layout.pop("rotations", None)
+        layout["rotation_step"] = 90
+
+    snapshot["layout"] = layout
+    job.preset_snapshot = snapshot
+    db.flush()
+    return job
+
+
 def set_preset(db: Session, job: NestingJob, preset_id: int | None) -> NestingJob:
     """Смена пресета на задании. Раскладку пересчитывает вызывающий."""
     preset = db.get(CuttingPreset, preset_id) if preset_id is not None else None
