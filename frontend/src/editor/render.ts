@@ -142,6 +142,29 @@ function hatch(
   return made ?? tint(fill, 0.30)
 }
 
+/**
+ * Прямоугольник по пиксельной сетке.
+ *
+ * Canvas рисует линию по центру координаты: линия толщиной 1 при целой
+ * координате ложится на границу двух пикселей и размывается в две серые
+ * полосы вместо одной чёткой. Классическое лекарство — сдвиг на полпикселя.
+ * Применимо только к прямоугольникам по осям: рамка листа, полоса обрезки,
+ * остаток, плашка подписи, рамка выделения. Контур детали — произвольная
+ * ломаная, её округлять нельзя, это исказило бы геометрию.
+ */
+function crispRect(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  lineWidth: number,
+): [number, number, number, number] {
+  const shift = (lineWidth % 2) / 2
+  const x0 = Math.round(x) + shift
+  const y0 = Math.round(y) + shift
+  return [x0, y0, Math.round(x + w) + shift - x0, Math.round(y + h) + shift - y0]
+}
+
 export function worldToScreen(v: Viewport, width: number, height: number, p: Point): Point {
   return [width / 2 + (p[0] - v.cx) * v.scale, height / 2 - (p[1] - v.cy) * v.scale]
 }
@@ -177,22 +200,26 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     const w = sheet.w * viewport.scale
     const h = sheet.h * viewport.scale
 
+    const sheetBox = crispRect(topLeft[0], topLeft[1], w, h, 1)
     ctx.fillStyle = SHEET_FILL()
-    ctx.fillRect(topLeft[0], topLeft[1], w, h)
+    ctx.fillRect(...sheetBox)
     ctx.strokeStyle = SHEET_STROKE()
-    ctx.lineWidth = 1.5
-    ctx.strokeRect(topLeft[0], topLeft[1], w, h)
+    ctx.lineWidth = 1
+    ctx.strokeRect(...sheetBox)
 
     // Полезная область: то, что осталось после обрезки кромок листа.
     const inset = toScreen([ox + sheet.trim.left, oy + sheet.h - sheet.trim.top])
-    ctx.setLineDash([6, 4])
+    ctx.setLineDash([5, 4])
     ctx.strokeStyle = TRIM_STROKE()
     ctx.lineWidth = 1
     ctx.strokeRect(
-      inset[0],
-      inset[1],
-      (sheet.w - sheet.trim.left - sheet.trim.right) * viewport.scale,
-      (sheet.h - sheet.trim.top - sheet.trim.bottom) * viewport.scale,
+      ...crispRect(
+        inset[0],
+        inset[1],
+        (sheet.w - sheet.trim.left - sheet.trim.right) * viewport.scale,
+        (sheet.h - sheet.trim.top - sheet.trim.bottom) * viewport.scale,
+        1,
+      ),
     )
     ctx.setLineDash([])
 
@@ -615,14 +642,15 @@ function drawRest(
     const w = width * viewport.scale
     const h = height * viewport.scale
 
+    const restBox = crispRect(corner[0], corner[1], w, h, 1)
     ctx.fillStyle = REST_FILL()
     ctx.globalAlpha = 0.5
-    ctx.fillRect(corner[0], corner[1], w, h)
+    ctx.fillRect(...restBox)
     ctx.globalAlpha = 1
-    ctx.setLineDash([6, 4])
+    ctx.setLineDash([5, 4])
     ctx.strokeStyle = SHEET_STROKE()
     ctx.lineWidth = 1
-    ctx.strokeRect(corner[0], corner[1], w, h)
+    ctx.strokeRect(...restBox)
     ctx.setLineDash([])
 
     if (h > 16 && w > 150) {
@@ -657,19 +685,23 @@ function drawSelection(
   const w = b[0] - a[0] + pad * 2
   const h = b[1] - a[1] + pad * 2
 
+  const box = crispRect(x, y, w, h, 1)
   ctx.strokeStyle = SELECT()
-  ctx.lineWidth = 1.5
-  ctx.strokeRect(x, y, w, h)
+  ctx.lineWidth = 1
+  ctx.strokeRect(...box)
 
+  // Угловые маркеры — по той же сетке, что и рамка, иначе они «плывут»
+  // относительно неё на пол-пикселя.
+  const [bx, by, bw, bh] = box
   ctx.fillStyle = SELECT()
   const s = 5
   for (const [cx, cy] of [
-    [x, y],
-    [x + w, y],
-    [x, y + h],
-    [x + w, y + h],
+    [bx, by],
+    [bx + bw, by],
+    [bx, by + bh],
+    [bx + bw, by + bh],
   ]) {
-    ctx.fillRect(cx - s / 2, cy - s / 2, s, s)
+    ctx.fillRect(Math.round(cx - s / 2), Math.round(cy - s / 2), s, s)
   }
 }
 
@@ -710,9 +742,10 @@ function drawMarquee(ctx: CanvasRenderingContext2D, input: RenderInput): void {
   const y = Math.min(m.y0, m.y1)
   const w = Math.abs(m.x1 - m.x0)
   const h = Math.abs(m.y1 - m.y0)
+  const box = crispRect(x, y, w, h, 1)
   ctx.fillStyle = alpha(SELECT(), 0.08)
-  ctx.fillRect(x, y, w, h)
+  ctx.fillRect(...box)
   ctx.strokeStyle = SELECT()
   ctx.lineWidth = 1
-  ctx.strokeRect(x, y, w, h)
+  ctx.strokeRect(...box)
 }
