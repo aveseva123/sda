@@ -66,6 +66,34 @@
   --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
 
+  /* Состояния. Раньше их держали полтора десятка почти одинаковых серых
+     литералов, разбросанных по правилам: #1b2028, #1d222a, #21262e, #191d23,
+     #15191f — на глаз одно и то же, а при смене темы каждый пришлось бы
+     искать отдельно. Осталось четыре, у каждого своя роль. */
+  --hover: #1b2028;          /* наведение на строку списка или таблицы */
+  --selected: #21262e;       /* выбранная строка, активный пункт меню */
+  --raised-hover: #262c35;   /* наведение на кнопку и на фишку над холстом */
+  --raised-on: #2a313a;      /* нажатая кнопка-переключатель */
+  --track: #22272e;          /* дорожка полосы ресурса */
+  --drop-bg: #171b28;        /* поле, готовое принять файл */
+
+  /* Главная кнопка. На тёмной теме она светлая, на светлой станет цветной —
+     поэтому у неё свои токены, а не «белый». */
+  --primary-bg: #e8eaed;
+  --primary-ink: #0c0e11;
+  --primary-hover: #ffffff;
+  --primary-active: #c9ced6;
+  --accent-ink: #ffffff;
+
+  /* Границы плашек и бейджей: у каждого состояния своя, иначе на светлом
+     фоне они все превратятся в одинаковую серую рамку. */
+  --warn-line: #4a3d1c;
+  --ok-line: #1f3a2a;
+  --danger-line: #4a2a22;
+
+  --link: #c4cbd4;
+  --link-hover: #ffffff;
+
   --bg: var(--canvas);
   --panel: var(--surface);
   --border: var(--line);
@@ -88,8 +116,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-a { color: #c4cbd4; text-decoration: none; }
-a:hover { color: #fff; }
+a { color: var(--link); text-decoration: none; }
+a:hover { color: var(--link-hover); }
 
 .app {
   display: grid;
@@ -145,8 +173,8 @@ a:hover { color: #fff; }
 }
 
 .nav-link svg { flex: none; }
-.nav-link:hover { background: #1d222a; color: var(--ink); }
-.nav-link.active { background: #21262e; color: var(--ink); font-weight: 500; }
+.nav-link:hover { background: var(--hover); color: var(--ink); }
+.nav-link.active { background: var(--selected); color: var(--ink); font-weight: 500; }
 .nav-link .badge { margin-left: auto; }
 
 .sidebar-foot {
@@ -212,7 +240,7 @@ button {
   cursor: pointer;
 }
 
-button:hover:not(:disabled) { background: #21262e; }
+button:hover:not(:disabled) { background: var(--raised-hover); }
 button:active:not(:disabled) { transform: translateY(1px); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 
@@ -224,18 +252,18 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 button.primary {
-  background: #e8eaed;
-  border-color: #e8eaed;
-  color: #0c0e11;
+  background: var(--primary-bg);
+  border-color: var(--primary-bg);
+  color: var(--primary-ink);
   font-weight: 600;
 }
-button.primary:hover:not(:disabled) { background: #fff; }
-button.primary:active:not(:disabled) { background: #c9ced6; }
+button.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+button.primary:active:not(:disabled) { background: var(--primary-active); border-color: var(--primary-active); }
 
 button.ghost { background: transparent; border-color: transparent; color: var(--ink-2); }
-button.ghost:hover:not(:disabled) { background: #1d222a; color: var(--ink); }
+button.ghost:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 
-button.danger { color: var(--danger); border-color: #4a2a22; }
+button.danger { color: var(--danger); border-color: var(--danger-line); }
 
 input, select, textarea {
   font: inherit;
@@ -276,7 +304,7 @@ th {
   color: var(--ink-3);
   font-weight: 600;
 }
-tbody tr:hover { background: #191d23; }
+tbody tr:hover { background: var(--hover); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .badge {
@@ -290,7 +318,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .badge.ok { background: var(--ok-bg); color: var(--ok); }
 .badge.warn { background: var(--warn-bg); color: var(--warn); }
 .badge.danger { background: var(--danger-bg); color: var(--danger); }
-.badge.plain { background: #1d222a; color: var(--ink-2); }
+.badge.plain { background: var(--hover); color: var(--ink-2); }
 
 .badge.auto {
   border: 1px solid var(--line-2);
@@ -342,7 +370,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   color: var(--ink-2);
   transition: background 0.15s, border-color 0.15s;
 }
-.dropzone.over { border-color: var(--pA); background: #16181f; }
+.dropzone.over { border-color: var(--accent); background: var(--drop-bg); }
 .dropzone p { margin: 6px 0; }
 
 .notice {
@@ -352,9 +380,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   margin-bottom: 12px;
   font-size: 12.5px;
 }
-.notice.warn { background: var(--warn-bg); border-color: #3a2f16; color: var(--warn); }
-.notice.error { background: var(--danger-bg); border-color: #442520; color: var(--danger); }
-.notice.ok { background: var(--ok-bg); border-color: #1c3527; color: var(--ok); }
+.notice.warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn); }
+.notice.error { background: var(--danger-bg); border-color: var(--danger-line); color: var(--danger); }
+.notice.ok { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok); }
 
 .trace {
   margin: 6px 0 0;
@@ -396,7 +424,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .split { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
 
-tbody tr.picked { background: #21262e; box-shadow: inset 2px 0 0 var(--accent); }
+tbody tr.picked { background: var(--selected); box-shadow: inset 2px 0 0 var(--accent); }
 
 .layer-table td { vertical-align: middle; }
 .layer-table select { min-width: 190px; }
@@ -513,13 +541,13 @@ canvas.preview {
 
 .stage-badge.in_progress {
   color: var(--warn);
-  border-color: #4a3d1c;
+  border-color: var(--warn-line);
   background: var(--warn-bg);
 }
 
 .stage-badge.finished {
   color: var(--ok);
-  border-color: #1f3a2a;
+  border-color: var(--ok-line);
   background: var(--ok-bg);
 }
 
@@ -632,7 +660,7 @@ canvas.preview {
 .buffer-drop > div.over {
   border-color: var(--accent);
   border-style: solid;
-  background: #171b28;
+  background: var(--drop-bg);
   color: var(--ink);
 }
 
@@ -655,8 +683,8 @@ canvas.preview {
   font-size: 12.5px;
   cursor: pointer;
 }
-.frow:hover { background: #1b2028; }
-.frow.on { background: #21262e; }
+.frow:hover { background: var(--hover); }
+.frow.on { background: var(--selected); }
 .frow.warn { background: var(--warn-bg); color: var(--warn); }
 
 .srow {
@@ -670,8 +698,8 @@ canvas.preview {
   color: var(--ink-2);
   cursor: pointer;
 }
-.srow:hover { background: #1b2028; }
-.srow.on { background: #1d222a; color: var(--ink); }
+.srow:hover { background: var(--hover); }
+.srow.on { background: var(--selected); color: var(--ink); }
 
 .tree .num {
   font-family: var(--mono);
@@ -753,13 +781,13 @@ canvas.preview {
   color: var(--ink-2);
   border-radius: 4px;
 }
-.stage-chips .chip button:hover { background: #262c35; color: var(--ink); }
+.stage-chips .chip button:hover { background: var(--raised-hover); color: var(--ink); }
 
 /* Переключатель вида карты: одно из двух, состояние видно без подсказки. */
 .chip.segmented { padding: 0 3px; gap: 2px; }
 .chip.segmented button { padding: 0 9px; font-size: 11.5px; }
-.chip.segmented button.on { background: var(--accent); color: #fff; }
-.chip.segmented button.on:hover { background: var(--accent); color: #fff; }
+.chip.segmented button.on { background: var(--accent); color: var(--accent-ink); }
+.chip.segmented button.on:hover { background: var(--accent); color: var(--accent-ink); }
 
 /* Долгая операция: видно, что именно считается, пока экран не отвечает. */
 .stage-busy {
@@ -798,13 +826,13 @@ canvas.preview {
 /* Наложение деталей — испорченный лист, о нём говорят в шапке. */
 .chip.trouble {
   color: var(--danger);
-  border-color: #4a2a22;
+  border-color: var(--danger-line);
   background: var(--danger-bg);
   cursor: pointer;
   height: 26px;
 }
 .chip.trouble b { color: var(--danger); }
-.chip.trouble:hover { background: #241614; }
+.chip.trouble:hover { background: var(--danger-bg); filter: brightness(1.25); }
 
 .legend {
   position: absolute;
@@ -897,8 +925,8 @@ canvas.preview {
   color: var(--ink-2);
   padding: 0;
 }
-.align-bar .tool:hover:not(:disabled) { background: #242b34; color: var(--ink); }
-.align-bar .tool.on { background: #2a313a; color: var(--ink); }
+.align-bar .tool:hover:not(:disabled) { background: var(--raised-hover); color: var(--ink); }
+.align-bar .tool.on { background: var(--raised-on); color: var(--ink); }
 .align-bar .sep { width: 1px; height: 20px; background: var(--line-2); margin: 0 4px; }
 .align-bar .go { height: 28px; padding: 0 11px; white-space: nowrap; }
 .align-bar .pin-count { font-size: 11px; color: var(--ink-3); padding: 0 2px; }
@@ -992,8 +1020,8 @@ canvas.preview {
   text-align: left;
   color: var(--ink);
 }
-.op:hover:not(:disabled) { background: #15191f; }
-.op.on { border-color: var(--line-3); background: #1d222a; }
+.op:hover:not(:disabled) { background: var(--hover); }
+.op.on { border-color: var(--line-3); background: var(--selected); }
 .op.off { color: var(--ink-3); }
 
 .op-add {
@@ -1052,8 +1080,8 @@ canvas.preview {
   cursor: pointer;
   font-size: 12.5px;
 }
-.tree-row:hover { background: #1b2028; }
-.tree-row.active { background: #21262e; box-shadow: inset 2px 0 0 var(--pA); }
+.tree-row:hover { background: var(--hover); }
+.tree-row.active { background: var(--selected); box-shadow: inset 2px 0 0 var(--accent); }
 .tree-row.vector { padding-left: 30px; color: var(--ink-2); }
 .tree-vectors { border-left: 1px dashed var(--line); margin-left: 20px; }
 
@@ -1248,7 +1276,7 @@ canvas.preview {
   color: var(--ink-2);
 }
 
-.check-row:hover { background: #1b2028; }
+.check-row:hover { background: var(--hover); }
 .check-row.done { color: var(--ink); }
 
 /* ------------------------------------------------- библиотеки и справочники */
@@ -1271,7 +1299,7 @@ canvas.preview {
 }
 
 .slot.empty { border-style: dashed; color: var(--ink-3); }
-.slot.low { border-color: #4a3c1a; }
+.slot.low { border-color: var(--warn-line); }
 .slot b { font-family: var(--mono); font-size: 12px; }
 .slot span { font-size: 11px; color: var(--ink-2); line-height: 1.35; }
 /* Имя фрезы и диаметр — разными строками: в одну они слипались. */
@@ -1293,7 +1321,7 @@ canvas.preview {
 .bar {
   height: 4px;
   border-radius: 2px;
-  background: #22272e;
+  background: var(--track);
   overflow: hidden;
 }
 
@@ -1311,8 +1339,8 @@ canvas.preview {
   cursor: pointer;
 }
 
-.list-row:hover { background: #1b2028; }
-.list-row.active { background: #21262e; border-color: var(--line-2); }
+.list-row:hover { background: var(--hover); }
+.list-row.active { background: var(--selected); border-color: var(--line-2); }
 
 /* Настройки раскладки в окне добавления файлов: правки на один раскрой. */
 .intake-layout {
