@@ -65,6 +65,8 @@ export const api = {
   materials: () => request<Material[]>('/materials'),
   createMaterial: (payload: Partial<Material> & { name: string; thickness: number }) =>
     request<Material>('/materials', json('POST', payload)),
+  updateMaterial: (id: number, payload: Record<string, unknown>) =>
+    request<Material>(`/materials/${id}`, json('PUT', payload)),
   deleteMaterial: (id: number) => request<void>(`/materials/${id}`, { method: 'DELETE' }),
   sheetFormats: (materialId: number) =>
     request<SheetFormat[]>(`/materials/${materialId}/formats`),
@@ -210,6 +212,10 @@ export const api = {
 
   updateCuttingPreset: (presetId: number, payload: Record<string, unknown>) =>
     request<CuttingPreset>(`/cutting-presets/${presetId}`, json('PUT', payload)),
+  createCuttingPreset: (payload: Record<string, unknown>) =>
+    request<CuttingPreset>('/cutting-presets', json('POST', payload)),
+  deleteCuttingPreset: (presetId: number) =>
+    request<void>(`/cutting-presets/${presetId}`, { method: 'DELETE' }),
 
   // ---- библиотека фрез ----
   tools: () => request<ToolLibrary>('/tools'),
