@@ -5,7 +5,7 @@ import {
   rotatedSize,
   sheetOrigin,
 } from './geometry'
-import { alpha, operationColor, themeColor, vectorStyle } from './palette'
+import { alpha as alphaOf, luminance, operationColor, themeColor, vectorStyle } from './palette'
 import type { Collision, Layout, Selection, ToolpathPreset } from './types'
 import { vectorKey } from './types'
 
@@ -79,29 +79,41 @@ const GRAIN_INK = () => ink('--canvas-grain', 'rgba(142,151,162,0.75)')
 
 /** Заливка детали: цвет файла с прозрачностью — контур остаётся главным. */
 function tint(hex: string, alpha: number): string {
-  const value = hex.replace('#', '')
-  const r = parseInt(value.slice(0, 2), 16)
-  const g = parseInt(value.slice(2, 4), 16)
-  const b = parseInt(value.slice(4, 6), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  return alphaOf(hex, alpha)
+}
+
+/**
+ * Насколько плотной должна быть заливка детали.
+ *
+ * Прозрачность подбиралась под чёрный холст: цвет файла на 30 % поверх почти
+ * чёрного даёт различимое пятно. Поверх светлого листа те же 30 % — это едва
+ * заметный налёт, а сотня деталей превращается в белое поле. Плотность
+ * выбирается по яркости листа, а не зашивается под одну тему.
+ */
+function fillWeights(): { flat: number; base: number; ink: number } {
+  return luminance(SHEET_FILL()) > 0.4
+    ? { flat: 0.5, base: 0.36, ink: 0.72 }
+    : { flat: 0.3, base: 0.22, ink: 0.44 }
 }
 
 const patternCache = new Map<string, CanvasPattern | null>()
 
 /**
  * Заливка детали: цвет закреплён за файлом, штриховка — за листом внутри
- * файла. На тёмном холсте заливка полупрозрачная, штрих — тот же цвет, но
- * плотнее: принадлежность читается и цветом, и рисунком.
+ * файла. Штрих — тот же цвет, но плотнее: принадлежность читается и цветом,
+ * и рисунком.
  */
 function hatch(
   ctx: CanvasRenderingContext2D,
   fill: string,
   pattern: string,
 ): CanvasPattern | string {
-  if (pattern === 'solid') return tint(fill, 0.30)
-  const key = `${pattern}|${fill}`
+  const weight = fillWeights()
+  if (pattern === 'solid') return tint(fill, weight.flat)
+  // Ключ кеша включает плотность: при смене темы старые плитки не годятся.
+  const key = `${pattern}|${fill}|${weight.base}`
   const cached = patternCache.get(key)
-  if (cached !== undefined) return cached ?? tint(fill, 0.30)
+  if (cached !== undefined) return cached ?? tint(fill, weight.flat)
 
   const size = 10
   const tile = document.createElement('canvas')
@@ -110,12 +122,12 @@ function hatch(
   const tctx = tile.getContext('2d')
   if (!tctx) {
     patternCache.set(key, null)
-    return tint(fill, 0.30)
+    return tint(fill, weight.flat)
   }
-  tctx.fillStyle = tint(fill, 0.22)
+  tctx.fillStyle = tint(fill, weight.base)
   tctx.fillRect(0, 0, size, size)
-  tctx.strokeStyle = tint(fill, 0.44)
-  tctx.fillStyle = tint(fill, 0.44)
+  tctx.strokeStyle = tint(fill, weight.ink)
+  tctx.fillStyle = tint(fill, weight.ink)
   tctx.lineWidth = 1.1
   tctx.beginPath()
   switch (pattern) {
@@ -157,7 +169,7 @@ function hatch(
   tctx.stroke()
   const made = ctx.createPattern(tile, 'repeat')
   patternCache.set(key, made)
-  return made ?? tint(fill, 0.30)
+  return made ?? tint(fill, weight.flat)
 }
 
 /**
@@ -305,7 +317,7 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
       tracePath(ctx, placed.outer, toScreen, true)
       ctx.fillStyle = style
         ? hatch(ctx, style.fill, style.pattern)
-        : alpha(PART_EDGE(), 0.2)
+        : alphaOf(PART_EDGE(), 0.2)
       ctx.fill()
 
       // Вырезы «прорезают» деталь до листа.
@@ -341,7 +353,7 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     ctx.stroke()
 
     if (isColliding) {
-      ctx.fillStyle = alpha(DANGER(), 0.18)
+      ctx.fillStyle = alphaOf(DANGER(), 0.18)
       tracePath(ctx, placed.outer, toScreen, true)
       ctx.fill()
     }
@@ -567,7 +579,7 @@ function drawOperations(
 
     // Ширина фрезы: видно, что реально снимет инструмент.
     if (input.showToolpaths && preset?.tool_diameter && enabled) {
-      ctx.strokeStyle = alpha(color, 0.25)
+      ctx.strokeStyle = alphaOf(color, 0.25)
       ctx.lineWidth = Math.max(preset.tool_diameter * input.viewport.scale, 1)
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
@@ -945,7 +957,7 @@ function drawMarquee(ctx: CanvasRenderingContext2D, input: RenderInput): void {
   const w = Math.abs(m.x1 - m.x0)
   const h = Math.abs(m.y1 - m.y0)
   const box = crispRect(x, y, w, h, 1)
-  ctx.fillStyle = alpha(SELECT(), 0.08)
+  ctx.fillStyle = alphaOf(SELECT(), 0.08)
   ctx.fillRect(...box)
   ctx.strokeStyle = SELECT()
   ctx.lineWidth = 1
