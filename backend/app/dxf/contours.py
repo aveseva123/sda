@@ -1,38 +1,44 @@
-"""Разбор примитивов в листы и детали.
+"""Разбор чертежа на листы, детали и операции.
 
-Реальные выгрузки заказчика — это уже разложенные листы: слой ``BOARDS``
-несёт контуры ЛИСТОВ, а не деталей, и в одном чертеже листов бывает
-несколько, в том числе разной толщины. Поэтому разбор идёт в два шага:
-сначала выделяются листы, затем детали распределяются по ним.
+Тип операции определяется ГЕОМЕТРИЕЙ вектора, а не слоем: у одного
+источника слои осмысленные, у другого всё лежит в слое «0», и правило по
+слою там не работает вовсе. Форма контура есть всегда.
 
-Вложенность контуров определяется по геометрии (площадь + вхождение), а не
-по слою — это нужно для источников без мебельной семантики, где всё лежит
-в слое ``0``.
+Слой сохраняет две роли: он несёт глубину обработки там, где источник её
+пишет (Базис: «INSETS D 12.00»), и служит запасной подсказкой. Без глубины
+сквозной вырез и карман неразличимы — сверху они выглядят одинаково.
+
+Вложенность считается по СКВОЗНЫМ контурам. Карман не вскрывает материал,
+поэтому отверстие внутри кармана — по-прежнему отверстие в той же детали,
+а не новая деталь на «дне». Именно так устроены реальные выгрузки: круглая
+выборка ⌀270 на 6 мм, а внутри неё сквозное ⌀240.
 """
 
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 
 from shapely.geometry import Point as ShPoint
 from shapely.geometry import Polygon
 
 from app.core.config_files import geometry_config
-from app.dxf.layer_meta import LayerMeta, looks_like_drill
+from app.dxf.classify import classify_circle, classify_closed, classify_open
+from app.dxf.layer_meta import LayerMeta
 from app.dxf.model import Operation, PartShape, Primitive, PrimitiveKind, SheetRegion
-from app.dxf.normalize import deduplicate, path_length, stitch
+from app.dxf.normalize import canonical_signature, deduplicate, path_length, stitch
 from app.models.enums import LayerSemantic
 
-# Семантики, дающие замкнутый контур детали.
-_CONTOUR_SEMANTICS = {LayerSemantic.OUTER, LayerSemantic.INNER}
-# Семантики, дающие операции внутри детали.
-_OPERATION_SEMANTICS = {
-    LayerSemantic.DRILL,
-    LayerSemantic.GROOVE,
-    LayerSemantic.POCKET,
-    LayerSemantic.MARK,
-}
 _SKIP_SEMANTICS = {LayerSemantic.INFO, LayerSemantic.IGNORE}
+
+
+@dataclass(slots=True)
+class Ring:
+    """Замкнутый контур вместе с тем, откуда он пришёл."""
+
+    polygon: Polygon
+    layer: str
+    exact_diameter: float | None = None
 
 
 class ContourResult:
@@ -40,6 +46,7 @@ class ContourResult:
         self.shapes: list[PartShape] = []
         self.sheets: list[SheetRegion] = []
         self.warnings: list[str] = []
+        self.detected: Counter = Counter()
 
     def sheets_as_dicts(self) -> list[dict]:
         return [sheet.as_dict() for sheet in self.sheets]
@@ -52,12 +59,6 @@ def build_shapes(
     default_semantic: str = LayerSemantic.OUTER,
     layer_meta: dict[str, LayerMeta] | None = None,
 ) -> ContourResult:
-    """Строит листы и детали из примитивов.
-
-    ``semantic_by_layer`` — результат применения пресета слоёв. Слои, для
-    которых семантика не назначена, получают ``default_semantic``.
-    ``layer_meta`` несёт глубину и диаметр, разобранные из имени слоя.
-    """
     cfg = geometry_config()
     stitch_tol = float(cfg.get("stitch_tolerance", 0.01))
     dup_tol = float(cfg.get("duplicate_tolerance", 0.01))
@@ -65,13 +66,62 @@ def build_shapes(
     meta = layer_meta or {}
 
     result = ContourResult()
+    rings, open_chains, sheet_rings = _collect(
+        primitives, semantic_by_layer, default_semantic, stitch_tol, dup_tol, min_perimeter
+    )
 
-    # Контурные цепочки группируются по слою: сшивать контур одного слоя
-    # с контуром другого нельзя — это разные технологические сущности.
+    result.sheets = _build_sheets(sheet_rings, min_perimeter)
+    sheet_boxes = [(sheet, Polygon(_rect(sheet.bbox))) for sheet in result.sheets]
+
+    rings = _dedupe_across_layers(rings, meta, dup_tol)
+
+    if open_chains:
+        result.warnings.append(
+            f"Незамкнутых цепочек после сшивки: {len(open_chains)}. "
+            "Они разобраны как пазы — проверьте, нет ли среди них "
+            "разорванных контуров деталей."
+        )
+
+    if not rings:
+        result.warnings.append("В файле не найдено ни одного замкнутого контура.")
+        return result
+
+    ordered, children, roots = _build_tree(rings)
+
+    pending = list(roots)
+    seen: set[int] = set()
+    while pending:
+        index = pending.pop(0)
+        if index in seen:
+            continue
+        seen.add(index)
+        shape, islands = _build_part(ordered, children, index, meta, semantic_by_layer, result)
+        shape.sheet_index = _sheet_of(sheet_boxes, Polygon(shape.outer))
+        result.shapes.append(shape)
+        pending.extend(islands)
+
+    _attach_open_chains(result, open_chains, meta, semantic_by_layer)
+    _assign_sheet_thickness(result)
+    _report(result)
+    return result
+
+
+# --------------------------------------------------------------------------
+# Сбор геометрии
+# --------------------------------------------------------------------------
+
+
+def _collect(
+    primitives: list[Primitive],
+    semantic_by_layer: dict[str, str],
+    default_semantic: str,
+    stitch_tol: float,
+    dup_tol: float,
+    min_perimeter: float,
+) -> tuple[list[Ring], list[tuple[list, str]], list[list]]:
     contours_by_layer: dict[str, list[tuple[list, bool]]] = defaultdict(list)
+    circles: list[Primitive] = []
     sheet_rings: list[list] = []
-    drill_prims: list[Primitive] = []
-    op_prims: list[tuple[str, Primitive]] = []
 
     for prim in primitives:
         if prim.kind is PrimitiveKind.TEXT:
@@ -79,104 +129,247 @@ def build_shapes(
         semantic = semantic_by_layer.get(prim.layer, default_semantic)
         if semantic in _SKIP_SEMANTICS:
             continue
-
         if semantic == LayerSemantic.SHEET:
-            if prim.kind is PrimitiveKind.CIRCLE and len(prim.points) >= 3:
-                sheet_rings.append(list(prim.points) + [prim.points[0]])
-            elif len(prim.points) >= 3:
+            if len(prim.points) >= 3:
                 sheet_rings.append(list(prim.points))
             continue
-
-        if semantic == LayerSemantic.DRILL:
-            drill_prims.append(prim)
+        if prim.kind is PrimitiveKind.CIRCLE:
+            circles.append(prim)
             continue
+        if len(prim.points) >= 2:
+            contours_by_layer[prim.layer].append((list(prim.points), prim.closed))
 
-        if semantic in _OPERATION_SEMANTICS:
-            op_prims.append((semantic, prim))
-            continue
+    rings: list[Ring] = []
+    open_chains: list[tuple[list, str]] = []
 
-        if semantic in _CONTOUR_SEMANTICS:
-            if prim.kind is PrimitiveKind.CIRCLE:
-                entry = meta.get(prim.layer)
-                # Окружность мебельного диаметра на контурном слое — это
-                # присадка, а не круглый вырез. Включается флагом в мастере.
-                if (
-                    entry is not None
-                    and entry.circles_as_drill
-                    and prim.diameter is not None
-                    and looks_like_drill(prim.diameter)
-                ):
-                    drill_prims.append(prim)
-                    continue
-                if len(prim.points) >= 3:
-                    contours_by_layer[prim.layer].append(
-                        (list(prim.points) + [prim.points[0]], True)
-                    )
-                continue
-            if len(prim.points) >= 2:
-                contours_by_layer[prim.layer].append((list(prim.points), prim.closed))
-
-    result.sheets = _build_sheets(sheet_rings, min_perimeter)
-    sheet_polygons = [
-        (sheet, Polygon(_rect(sheet.bbox))) for sheet in result.sheets
-    ]
-
-    # (полигон, слой) — слой нужен, чтобы взять глубину и вывести толщину.
-    polygons: list[tuple[Polygon, str]] = []
-    open_total = 0
     for layer, entries in contours_by_layer.items():
         chains = deduplicate(
             [chain for chain, _ in entries], dup_tol, [flag for _, flag in entries]
         )
-        closed_rings, open_chains = stitch(chains, stitch_tol)
-        open_total += len(open_chains)
-        for ring in closed_rings:
+        closed, leftovers = stitch(chains, stitch_tol)
+        for ring in closed:
             if path_length(ring) < min_perimeter:
                 continue
             poly = _to_polygon(ring)
             if poly is not None and poly.area > 0:
-                polygons.append((poly, layer))
+                rings.append(Ring(poly, layer))
+        open_chains.extend((chain, layer) for chain in leftovers)
 
-    if open_total:
-        result.warnings.append(
-            f"Незакрытых контуров после сшивки: {open_total}. "
-            "Проверьте разрывы в исходном DXF."
-        )
+    # Окружности участвуют в определении вложенности наравне с полилиниями:
+    # круглая деталь приходит одной окружностью и не должна потеряться.
+    for prim in circles:
+        if len(prim.points) < 3:
+            continue
+        poly = _to_polygon(list(prim.points) + [prim.points[0]])
+        if poly is not None and poly.area > 0:
+            rings.append(Ring(poly, prim.layer, exact_diameter=prim.diameter))
 
-    if not polygons:
-        result.warnings.append("В файле не найдено ни одного замкнутого контура.")
-        return result
+    return rings, open_chains, sheet_rings
 
-    for outer_poly, outer_layer, hole_polys in _resolve_nesting(polygons):
-        entry = meta.get(outer_layer)
-        shape = PartShape(
-            outer=list(outer_poly.exterior.coords),
-            inners=[list(h.exterior.coords) for h in hole_polys],
-            bbox=outer_poly.bounds,
-            area=outer_poly.area - sum(h.area for h in hole_polys),
-            source_layer=outer_layer,
-            thickness_hint=entry.depth if entry else None,
-        )
-        shape.operations.extend(_drill_operations(drill_prims, outer_poly, meta))
-        shape.operations.extend(_path_operations(op_prims, outer_poly, meta))
-        shape.sheet_index = _sheet_of(sheet_polygons, outer_poly)
-        result.shapes.append(shape)
 
-    _assign_sheet_thickness(result)
+def _dedupe_across_layers(
+    rings: list[Ring], meta: dict[str, LayerMeta], tol: float
+) -> list[Ring]:
+    """Схлопывает контуры, совпавшие на разных слоях.
 
-    if result.sheets:
-        orphans = sum(1 for shape in result.shapes if shape.sheet_index is None)
-        if orphans:
-            result.warnings.append(
-                f"Деталей вне контуров листов: {orphans}. "
-                "Проверьте, все ли листы размечены на слое контуров листа."
+    В реальных выгрузках один и тот же ⌀240 нарисован и на слое выборки
+    (глубина 6), и на слое отверстий (глубина 18). Побеждает бо́льшая
+    глубина: сквозной рез поглощает более мелкий проход по тому же контуру.
+    """
+    best: dict[tuple, Ring] = {}
+    order: list[tuple] = []
+    for ring in rings:
+        signature = canonical_signature(list(ring.polygon.exterior.coords), tol, True)
+        if not signature:
+            continue
+        current = best.get(signature)
+        if current is None:
+            best[signature] = ring
+            order.append(signature)
+            continue
+        current_depth = _depth_of(current.layer, meta) or 0.0
+        candidate_depth = _depth_of(ring.layer, meta) or 0.0
+        if candidate_depth > current_depth:
+            best[signature] = ring
+    return [best[signature] for signature in order]
+
+
+def _depth_of(layer: str, meta: dict[str, LayerMeta]) -> float | None:
+    entry = meta.get(layer)
+    return entry.depth if entry else None
+
+
+# --------------------------------------------------------------------------
+# Дерево вложенности и сборка детали
+# --------------------------------------------------------------------------
+
+
+def _build_tree(
+    rings: list[Ring],
+) -> tuple[list[Ring], dict[int, list[int]], list[int]]:
+    ordered = sorted(rings, key=lambda r: r.polygon.area, reverse=True)
+    children: dict[int, list[int]] = defaultdict(list)
+    roots: list[int] = []
+
+    for i, ring in enumerate(ordered):
+        container: int | None = None
+        probe = ring.polygon.representative_point()
+        for j in range(i):
+            if ordered[j].polygon.contains(probe):
+                container = j
+        if container is None:
+            roots.append(i)
+        else:
+            children[container].append(i)
+    return ordered, children, roots
+
+
+def _build_part(
+    ordered: list[Ring],
+    children: dict[int, list[int]],
+    root: int,
+    meta: dict[str, LayerMeta],
+    semantic_by_layer: dict[str, str],
+    result: ContourResult,
+) -> tuple[PartShape, list[int]]:
+    """Собирает деталь из корневого контура и всего, что внутри неё.
+
+    Возвращает деталь и индексы островков — контуров, оказавшихся внутри
+    СКВОЗНОГО выреза: материала под ними нет, значит это отдельные детали.
+    """
+    outer = ordered[root]
+    thickness = _depth_of(outer.layer, meta)
+    shape = PartShape(
+        outer=list(outer.polygon.exterior.coords),
+        bbox=outer.polygon.bounds,
+        area=outer.polygon.area,
+        source_layer=outer.layer,
+        thickness_hint=thickness,
+    )
+    result.detected[str(LayerSemantic.OUTER)] += 1
+
+    islands: list[int] = []
+    queue = list(children.get(root, []))
+    holes_area = 0.0
+
+    while queue:
+        index = queue.pop(0)
+        child = ordered[index]
+        depth = _depth_of(child.layer, meta)
+        hint = semantic_by_layer.get(child.layer)
+
+        if child.exact_diameter is not None:
+            verdict = classify_circle(
+                child.exact_diameter,
+                layer_depth=depth,
+                thickness=thickness,
+                layer_semantic=hint,
             )
-    elif len(result.shapes) > 1:
-        result.warnings.append(
-            f"В файле {len(result.shapes)} независимых контуров — вероятно, "
-            "несколько деталей в одном DXF."
+        else:
+            verdict = classify_closed(
+                child.polygon,
+                is_outermost=False,
+                layer_depth=depth,
+                layer_semantic=hint,
+                thickness=thickness,
+            )
+
+        result.detected[str(verdict.semantic)] += 1
+        _attach(shape, child, verdict)
+
+        if verdict.semantic == LayerSemantic.INNER:
+            holes_area += child.polygon.area
+            # Под сквозным вырезом материала нет — то, что там лежит,
+            # это отдельные детали, а не части этой.
+            islands.extend(children.get(index, []))
+        else:
+            # Карман и присадка материал не вскрывают: вложенное в них
+            # по-прежнему принадлежит этой детали.
+            queue.extend(children.get(index, []))
+
+    shape.area = outer.polygon.area - holes_area
+    return shape, islands
+
+
+def _attach(shape: PartShape, child: Ring, verdict) -> None:
+    ring = list(child.polygon.exterior.coords)
+
+    if verdict.semantic == LayerSemantic.INNER:
+        shape.inners.append(ring)
+        return
+
+    if verdict.semantic == LayerSemantic.DRILL:
+        centroid = child.polygon.centroid
+        shape.operations.append(
+            Operation(
+                semantic=LayerSemantic.DRILL,
+                kind="circle",
+                layer=child.layer,
+                center=(round(centroid.x, 4), round(centroid.y, 4)),
+                diameter=verdict.diameter,
+                depth=verdict.depth,
+                closed=True,
+            )
         )
-    return result
+        return
+
+    shape.operations.append(
+        Operation(
+            semantic=verdict.semantic,
+            kind="contour",
+            layer=child.layer,
+            points=ring,
+            closed=True,
+            depth=verdict.depth,
+        )
+    )
+
+
+def _attach_open_chains(
+    result: ContourResult,
+    open_chains: list[tuple[list, str]],
+    meta: dict[str, LayerMeta],
+    semantic_by_layer: dict[str, str],
+) -> None:
+    """Незамкнутые цепочки — пазы, привязываются к детали, внутри которой лежат."""
+    for chain, layer in open_chains:
+        verdict = classify_open(
+            chain,
+            layer_depth=_depth_of(layer, meta),
+            layer_semantic=semantic_by_layer.get(layer),
+        )
+        if verdict is None:
+            continue
+        host = _shape_containing(result.shapes, chain[len(chain) // 2])
+        if host is None:
+            continue
+        result.detected[str(verdict.semantic)] += 1
+        host.operations.append(
+            Operation(
+                semantic=verdict.semantic,
+                kind="path",
+                layer=layer,
+                points=list(chain),
+                closed=False,
+                depth=verdict.depth,
+            )
+        )
+
+
+def _shape_containing(shapes: list[PartShape], point) -> PartShape | None:
+    probe = ShPoint(point)
+    for shape in shapes:
+        minx, miny, maxx, maxy = shape.bbox
+        if not (minx <= point[0] <= maxx and miny <= point[1] <= maxy):
+            continue
+        if Polygon(shape.outer).contains(probe):
+            return shape
+    return None
+
+
+# --------------------------------------------------------------------------
+# Листы и сводка
+# --------------------------------------------------------------------------
 
 
 def _rect(bbox: tuple[float, float, float, float]) -> list[tuple[float, float]]:
@@ -185,8 +378,6 @@ def _rect(bbox: tuple[float, float, float, float]) -> list[tuple[float, float]]:
 
 
 def _build_sheets(rings: list[list], min_perimeter: float) -> list[SheetRegion]:
-    """Контуры листов. Порядок — сверху вниз, слева направо: так же, как
-    их видит технолог на чертеже."""
     boxes: list[tuple[float, float, float, float]] = []
     for ring in rings:
         if path_length(ring) < min_perimeter:
@@ -195,40 +386,45 @@ def _build_sheets(rings: list[list], min_perimeter: float) -> list[SheetRegion]:
         if poly is None or poly.area <= 0:
             continue
         boxes.append(poly.bounds)
-
     boxes.sort(key=lambda b: (-b[3], b[0]))
     return [SheetRegion(index=i, bbox=box) for i, box in enumerate(boxes)]
 
 
-def _sheet_of(
-    sheet_polygons: list[tuple[SheetRegion, Polygon]], part: Polygon
-) -> int | None:
-    if not sheet_polygons:
+def _sheet_of(sheet_boxes: list[tuple[SheetRegion, Polygon]], part: Polygon) -> int | None:
+    if not sheet_boxes:
         return None
     probe = part.representative_point()
-    for sheet, poly in sheet_polygons:
+    for sheet, poly in sheet_boxes:
         if poly.contains(probe):
             return sheet.index
     return None
 
 
 def _assign_sheet_thickness(result: ContourResult) -> None:
-    """Толщина листа = преобладающая глубина контуров деталей на нём.
-
-    Именно так в одном чертеже уживаются листы разной толщины: лист 18 мм
-    с деталями на ``PERIMETER D 18.00`` и лист 4 мм с деталью на
-    ``PERIMETER D 4.00``.
-    """
     per_sheet: dict[int, Counter] = defaultdict(Counter)
     for shape in result.shapes:
         if shape.sheet_index is None or shape.thickness_hint is None:
             continue
         per_sheet[shape.sheet_index][shape.thickness_hint] += 1
-
     for sheet in result.sheets:
         counts = per_sheet.get(sheet.index)
         if counts:
             sheet.thickness = counts.most_common(1)[0][0]
+
+
+def _report(result: ContourResult) -> None:
+    if result.sheets:
+        orphans = sum(1 for shape in result.shapes if shape.sheet_index is None)
+        if orphans:
+            result.warnings.append(
+                f"Деталей вне контуров листов: {orphans}. "
+                "Проверьте, все ли листы размечены."
+            )
+    elif len(result.shapes) > 1:
+        result.warnings.append(
+            f"В файле {len(result.shapes)} независимых контуров — вероятно, "
+            "несколько деталей в одном DXF."
+        )
 
 
 def _to_polygon(ring: list) -> Polygon | None:
@@ -239,113 +435,9 @@ def _to_polygon(ring: list) -> Polygon | None:
     except Exception:
         return None
     if not poly.is_valid:
-        # Самопересечения после сшивки — buffer(0) их вычищает.
         poly = poly.buffer(0)
         if poly.geom_type == "MultiPolygon":
             poly = max(poly.geoms, key=lambda g: g.area)
     if poly.is_empty or poly.geom_type != "Polygon":
         return None
     return poly
-
-
-def _resolve_nesting(
-    polygons: list[tuple[Polygon, str]],
-) -> list[tuple[Polygon, str, list[Polygon]]]:
-    """Определяет вложенность по площади и вхождению.
-
-    Контур верхнего уровня = не лежит внутри другого. Контуры, лежащие
-    непосредственно в нём, становятся его вырезами. Третий уровень
-    вложенности (остров внутри выреза) снова становится деталью.
-    """
-    ordered = sorted(polygons, key=lambda item: item[0].area, reverse=True)
-    depth: list[int] = []
-    parent: list[int | None] = []
-
-    for i, (poly, _) in enumerate(ordered):
-        # Ближайший (наименьший по площади) контейнер среди больших контуров.
-        container: int | None = None
-        probe = poly.representative_point()
-        for j in range(i):
-            if ordered[j][0].contains(probe):
-                container = j
-        depth.append(0 if container is None else depth[container] + 1)
-        parent.append(container)
-
-    groups: list[tuple[Polygon, str, list[Polygon]]] = []
-    for i, (poly, layer) in enumerate(ordered):
-        if depth[i] % 2 != 0:
-            continue  # нечётная глубина — это вырез, а не деталь
-        holes = [
-            ordered[j][0]
-            for j in range(len(ordered))
-            if parent[j] == i and depth[j] % 2 == 1
-        ]
-        groups.append((poly, layer, holes))
-    return groups
-
-
-def _drill_operations(
-    prims: list[Primitive], outer: Polygon, meta: dict[str, LayerMeta]
-) -> list[Operation]:
-    """Присадка: диаметр берётся из геометрии окружности, глубина — из
-    имени слоя, если источник её туда пишет."""
-    ops: list[Operation] = []
-    for prim in prims:
-        entry = meta.get(prim.layer)
-        depth = entry.depth if entry else None
-        if prim.kind is PrimitiveKind.CIRCLE and prim.center is not None:
-            if not outer.contains(ShPoint(prim.center)):
-                continue
-            ops.append(
-                Operation(
-                    semantic=LayerSemantic.DRILL,
-                    kind="circle",
-                    layer=prim.layer,
-                    center=prim.center,
-                    diameter=prim.diameter,
-                    depth=depth,
-                    closed=True,
-                )
-            )
-        elif prim.points:
-            # Присадка, нарисованная полилинией: диаметр из описанной окружности.
-            poly = _to_polygon(list(prim.points) + [prim.points[0]])
-            if poly is None or not outer.contains(poly.representative_point()):
-                continue
-            minx, miny, maxx, maxy = poly.bounds
-            ops.append(
-                Operation(
-                    semantic=LayerSemantic.DRILL,
-                    kind="circle",
-                    layer=prim.layer,
-                    center=(round((minx + maxx) / 2, 4), round((miny + maxy) / 2, 4)),
-                    diameter=round((maxx - minx + maxy - miny) / 2, 4),
-                    depth=depth,
-                    closed=True,
-                )
-            )
-    return ops
-
-
-def _path_operations(
-    prims: list[tuple[str, Primitive]], outer: Polygon, meta: dict[str, LayerMeta]
-) -> list[Operation]:
-    ops: list[Operation] = []
-    for semantic, prim in prims:
-        if not prim.points:
-            continue
-        probe = ShPoint(prim.points[len(prim.points) // 2])
-        if not outer.contains(probe) and not outer.touches(probe):
-            continue
-        entry = meta.get(prim.layer)
-        ops.append(
-            Operation(
-                semantic=semantic,
-                kind="path",
-                layer=prim.layer,
-                points=list(prim.points),
-                closed=prim.closed,
-                depth=entry.depth if entry else None,
-            )
-        )
-    return ops
