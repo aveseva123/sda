@@ -52,18 +52,32 @@ if not exist "backend\.venv" (
   )
 )
 
-if not exist "frontend\dist\index.html" (
-  echo   Собираю интерфейс, это пара минут...
-  pushd frontend
-  call npm ci
-  call npm run build
+rem Собранный интерфейс устаревает молча: после обновления кода в
+rem frontend\dist лежит вчерашняя сборка, а скрипт видел «файл на месте» и
+rem сборку пропускал. Человек обновлял платформу и не понимал, почему на
+rem экране ничего не изменилось. Сравниваем время сборки с исходниками.
+rem Если проверить не удалось — пересобираем: лишняя минута безопаснее
+rem вчерашнего интерфейса.
+set "FRONT_STALE=1"
+if exist "frontend\dist\index.html" call :check_front
+if "%FRONT_STALE%"=="0" goto front_ready
+
+echo   Собираю интерфейс, это пара минут...
+pushd frontend
+if not exist "node_modules" call npm ci
+call npm run build
+if errorlevel 1 (
   popd
-  if not exist "frontend\dist\index.html" (
-    echo   Интерфейс не собрался. Покажите текст выше разработчику.
-    pause
-    exit /b 1
-  )
+  echo.
+  echo   Интерфейс не собрался. Если в обновлении появились новые
+  echo   библиотеки — удалите папку frontend\node_modules и запустите
+  echo   этот файл снова. Иначе покажите текст выше разработчику.
+  pause
+  exit /b 1
 )
+popd
+
+:front_ready
 
 rem Пути абсолютные: иначе база и файлы разъедутся между шагами.
 set DATABASE_URL=sqlite+pysqlite:///%~dp0nestor.db
@@ -88,3 +102,12 @@ echo.
 start http://localhost:8080
 backend\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8080
 pause
+
+exit /b 0
+
+rem Сборка считается свежей, только если её файл новее всех исходников.
+rem Любая осечка проверки — это «пересобрать», а не «оставить как есть».
+:check_front
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$b=(Get-Item 'frontend\dist\index.html').LastWriteTimeUtc;$s=@(Get-ChildItem -File -Recurse 'frontend\src' -ErrorAction SilentlyContinue)+@(Get-Item 'frontend\index.html','frontend\package.json','frontend\package-lock.json','frontend\vite.config.ts' -ErrorAction SilentlyContinue);if(@($s|Where-Object{$_.LastWriteTimeUtc -gt $b}).Count -gt 0){exit 1};exit 0}catch{exit 1}" >nul 2>nul
+if errorlevel 1 (set "FRONT_STALE=1") else (set "FRONT_STALE=0")
+exit /b

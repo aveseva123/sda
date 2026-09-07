@@ -13,10 +13,25 @@ command -v npm >/dev/null || { echo "Не найден Node.js." >&2; exit 1; }
   backend/.venv/bin/pip install -q -e backend
 }
 
-[ -f frontend/dist/index.html ] || {
-  echo "Собираю интерфейс…"
-  (cd frontend && npm ci && npm run build)
+# Собранный интерфейс устаревает молча: после обновления кода в
+# frontend/dist лежит вчерашняя сборка, а скрипт видел «файл на месте» и
+# пропускал сборку. Человек обновлял платформу и не понимал, почему ничего
+# не изменилось. Сравниваем время сборки с исходниками.
+frontend_stale() {
+  [ -f frontend/dist/index.html ] || return 0
+  [ -n "$(find frontend/src frontend/index.html frontend/package.json \
+               frontend/package-lock.json frontend/vite.config.ts \
+               -newer frontend/dist/index.html -print 2>/dev/null | head -n 1)" ]
 }
+
+if frontend_stale; then
+  echo "Собираю интерфейс…"
+  (
+    cd frontend
+    [ -d node_modules ] || npm ci
+    npm run build
+  )
+fi
 
 export DATABASE_URL="sqlite+pysqlite:///$PWD/nestor.db"
 export STORAGE_DIR="$PWD/storage"
