@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Collision, Layout, Selection, ToolpathPreset, VectorView } from '../../editor/types'
 import { vectorKey } from '../../editor/types'
 import { rotatedSize } from '../../editor/geometry'
+import { partTone } from '../../editor/palette'
 import type { Move } from './CanvasStage'
 
 interface Props {
@@ -330,7 +331,7 @@ export default function PropertiesPanel({
     <div className="panel-scroll">
       <div className="sec">
         <div className="sec-head" style={{ marginBottom: 3 }}>
-          <span className="swatch" style={{ background: part.style?.fill ?? 'var(--ink-2)' }} />
+          <span className="swatch" style={{ background: partTone(part) }} />
           <span className="ellipsis grow" style={{ fontSize: 14, fontWeight: 600 }} title={part.name}>
             {part.name}
           </span>
@@ -453,12 +454,17 @@ export default function PropertiesPanel({
                 )}
                 {preset && !vector.assigned_manually && <span className="badge auto">АВТО</span>}
                 {!preset && <span className="badge warn">нет</span>}
+                {/* У присадки стоял только диаметр, а карта теперь говорит про
+                    неё «насквозь» или «на глубину» заливкой кружка. Проверить
+                    это можно только здесь, поэтому у отверстия видно и
+                    диаметр, и глубину. */}
                 <span className="mono" style={{ color: 'var(--ink-2)', fontSize: 11 }}>
-                  {vector.diameter
-                    ? `⌀${vector.diameter}`
-                    : depth !== null
-                      ? `${String(depth).replace('.', ',')} мм`
-                      : '—'}
+                  {[
+                    vector.diameter ? `⌀${vector.diameter}` : '',
+                    depth !== null ? `${String(depth).replace('.', ',')} мм` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || '—'}
                 </span>
               </button>
             )

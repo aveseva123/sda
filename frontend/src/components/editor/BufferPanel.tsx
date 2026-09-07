@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 
 import type { SourceFile } from '../../api/types'
 import type { Layout, Selection } from '../../editor/types'
+import { partTone } from '../../editor/palette'
 
 interface Props {
   files: SourceFile[]
@@ -263,7 +264,7 @@ export default function BufferPanel({
                 className="frow warn"
                 title="Деталь не влезла ни на один лист: добавьте лист или уменьшите зазор"
               >
-                <span className="swatch" style={{ background: part.style?.fill ?? 'var(--ink-2)' }} />
+                <span className="swatch" style={{ background: partTone(part) }} />
                 <span className="grow mono ellipsis" style={{ fontSize: 11.5 }}>
                   {part.name}
                 </span>

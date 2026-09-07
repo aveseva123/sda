@@ -216,3 +216,20 @@ export function fileColors(
   if (step === 0) return tone
   return { fill: shade(tone.fill, step), edge: tone.edge }
 }
+
+/**
+ * Заливка детали такой, какой её рисует холст, — для образцов в панелях.
+ *
+ * Сервер отдаёт ещё и ``style.fill``, но он посчитан осветлением к белому:
+ * это верно для стикера на белой бумаге и неверно для светлого интерфейса,
+ * где такой цвет уходит в фон. Образец в панели обязан совпадать с деталью
+ * на карте — иначе он не образец, а другой цвет рядом.
+ */
+export function partTone(part: {
+  style?: { base?: string; fill: string } | null
+  source_sheet_index?: number
+}): string {
+  const base = part.style?.base ?? part.style?.fill
+  if (!base) return themeColor('--ink-3', '#59636f')
+  return fileColors(base, part.source_sheet_index ?? 0).fill
+}
