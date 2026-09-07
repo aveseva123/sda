@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+uv.lock
+
+# Данные пользователя (SQLite, бэкапы, библиотеки) — не в репозитории
+data/
+
+# IDE
+.idea/
+.vscode/

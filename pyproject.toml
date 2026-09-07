@@ -1,0 +1,89 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "furniture-cam"
+version = "0.0.1"
+description = "Настольная CAM-система для мебельного ЧПУ-фрезера (Weihong NC-Studio)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+dependencies = [
+    "pydantic>=2.7,<3",
+    "SQLAlchemy>=2.0.30,<3",
+    "alembic>=1.13,<2",
+    "PyYAML>=6.0",
+    "Jinja2>=3.1",
+    "numpy>=1.26",
+    "ezdxf>=1.3",
+    "shapely>=2.0",
+    "pyclipper>=1.3",
+    "reportlab>=4.0",
+    "qrcode>=7.4",
+    "openpyxl>=3.1",
+    "PySide6>=6.7",
+    "pywin32>=306; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "pytest-qt>=4.4",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "types-PyYAML",
+]
+
+[project.scripts]
+cam = "cam.__main__:main"
+cam-cli = "cam.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cam"]
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+# RUF001-003: кириллица в строках и комментариях — это норма для проекта.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic-миграции генерируются и живут по своим правилам.
+"cam/core/storage/migrations/versions/*.py" = ["E501"]
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.12"
+packages = ["cam", "tests"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# Ядро — строгая типизация без исключений.
+module = "cam.core.*"
+strict = true
+
+# Ловушка 4.1.7 ТЗ: для shapely/pyclipper/ezdxf/reportlab добавлять точечные
+# overrides с ignore_missing_imports по мере подключения библиотек (M1+).
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+qt_api = "pyside6"
+filterwarnings = ["error::DeprecationWarning:cam.*"]
