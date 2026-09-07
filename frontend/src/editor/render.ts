@@ -88,6 +88,10 @@ const PART_EDGE = () => ink('--part-edge', '#5A646F')
 const LABEL_PLATE = () => ink('--canvas-plate', 'rgba(255,255,255,0.88)')
 const GUIDE = () => ink('--canvas-guide', '#1668D6')
 const GRAIN_INK = () => ink('--canvas-grain', '#7C8794')
+const GRAIN_WARN = () => ink('--canvas-grain-warn', '#A4620A')
+/** Деталь вне изоляции: выведена из работы, а не «полупрозрачна». */
+const IDLE_FILL = () => ink('--canvas-idle', '#DEE2E7')
+const IDLE_EDGE = () => ink('--canvas-idle-edge', '#A8B0BA')
 
 const patternCache = new Map<string, CanvasPattern | null>()
 
@@ -97,18 +101,33 @@ const patternCache = new Map<string, CanvasPattern | null>()
  * краской с другой прозрачностью: полупрозрачный штрих был подобран под
  * чёрный холст, на светлом листе он почти исчезал.
  */
+/**
+ * Шаг штриховки задан в экранных пикселях и от зума не зависит. На общем
+ * виде деталь шириной 300 мм — это полсотни пикселей, и штриховка на ней
+ * превращается в две-три полосы, которые читаются как дефект картинки, а не
+ * как признак листа. Ниже этого порога штриховки нет: на общем виде
+ * спрашивают «сколько влезло», а не «с какого листа исходника».
+ */
+const HATCH_MIN_SCALE = 0.33
+
 function hatch(
   ctx: CanvasRenderingContext2D,
   fill: string,
   edge: string,
   pattern: string,
+  scale: number,
 ): CanvasPattern | string {
-  if (pattern === 'solid') return fill
+  if (pattern === 'solid' || scale < HATCH_MIN_SCALE) return fill
   const key = `${pattern}|${fill}|${edge}`
   const cached = patternCache.get(key)
   if (cached !== undefined) return cached ?? fill
 
-  const size = 10
+  // Шаг был 10 пикселей при плотности штриха 0,55 — на детали с присадкой и
+  // пазами штриховка выходила по весу вровень с траекториями, и глаз
+  // цеплялся за фактуру вместо обработки. Штриховка отвечает на вопрос
+  // второй очереди («с какого листа исходника»), значит и весить должна
+  // меньше: шаг реже, штрих бледнее.
+  const size = 15
   const tile = document.createElement('canvas')
   tile.width = size
   tile.height = size
@@ -119,9 +138,9 @@ function hatch(
   }
   tctx.fillStyle = fill
   tctx.fillRect(0, 0, size, size)
-  tctx.strokeStyle = alphaOf(edge, 0.55)
-  tctx.fillStyle = alphaOf(edge, 0.55)
-  tctx.lineWidth = 1.1
+  tctx.strokeStyle = alphaOf(edge, 0.34)
+  tctx.fillStyle = alphaOf(edge, 0.34)
+  tctx.lineWidth = 1
   tctx.beginPath()
   switch (pattern) {
     case 'diagonal':
@@ -153,7 +172,7 @@ function hatch(
       tctx.lineTo(size / 2, size)
       break
     case 'dots':
-      tctx.arc(size / 2, size / 2, 1.8, 0, Math.PI * 2)
+      tctx.arc(size / 2, size / 2, 1.9, 0, Math.PI * 2)
       tctx.fill()
       break
     default:
@@ -296,24 +315,47 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     ctx.strokeRect(...usable)
     ctx.setLineDash([])
 
-    // Подпись листа пишется только если помещается над ним: на общем виде
-    // подписи соседних листов иначе наезжают друг на друга.
+    // Шапка листа. Раньше в ней стояли только номер и габарит — то есть всё,
+    // кроме того, что оператор проверяет, кладя лист на стол: тот ли это
+    // материал и та ли толщина. Карту печатают и несут к станку, где спросить
+    // уже не у кого, поэтому материал и толщина стоят в шапке.
+    //
+    // Строка длинная и над узким листом не помещается, поэтому у неё есть
+    // ступени: сначала уходит габарит (он читается по самому листу), потом
+    // материал. Номер листа и процент не уходят никогда.
     ctx.font = '500 11px "IBM Plex Mono", ui-monospace, monospace'
-    const title = `Лист ${sheet.index + 1} · ${sheet.w.toFixed(0)} × ${sheet.h.toFixed(0)}`
+    const total = layout.sheets.length
+    const number = total > 1 ? `Лист ${sheet.index + 1} из ${total}` : 'Лист'
+    const kind = sheet.is_offcut ? 'обрезок' : ''
+    const material = [layout.job.material_name, `${layout.job.thickness.toFixed(0)} мм`]
+      .filter(Boolean)
+      .join(' ')
+    const size = `${sheet.w.toFixed(0)} × ${sheet.h.toFixed(0)}`
     const percent = sheet.utilization
       ? `${(sheet.utilization * 100).toFixed(1)} %`.replace('.', ',')
       : ''
-    const titleWidth = ctx.measureText(title).width
-    const fullWidth = titleWidth + (percent ? ctx.measureText(percent).width + 10 : 0)
+    const percentWidth = percent ? ctx.measureText(percent).width + 10 : 0
 
-    if (fullWidth <= w) {
+    let title = ''
+    for (const variant of [
+      [number, kind, material, size],
+      [number, kind, material],
+      [number, kind, size],
+      [number, kind],
+    ]) {
+      title = variant.filter(Boolean).join(' · ')
+      if (ctx.measureText(title).width + percentWidth <= w) break
+      title = ''
+    }
+
+    if (title) {
       ctx.fillStyle = DIM_INK()
       ctx.fillText(title, topLeft[0], topLeft[1] - 8)
       if (percent) {
         ctx.fillStyle = FAINT_INK()
-        ctx.fillText(percent, topLeft[0] + titleWidth + 10, topLeft[1] - 8)
+        ctx.fillText(percent, topLeft[0] + ctx.measureText(title).width + 10, topLeft[1] - 8)
       }
-    } else if (percent && ctx.measureText(percent).width <= w) {
+    } else if (percent && percentWidth - 10 <= w) {
       ctx.fillStyle = FAINT_INK()
       ctx.fillText(percent, topLeft[0], topLeft[1] - 8)
     }
@@ -356,16 +398,23 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
       ? fileColors(style.base ?? style.fill, part.source_sheet_index ?? 0)
       : null
 
+    // Изоляция гасит деталь заменой цвета, а не прозрачностью. Общая альфа
+    // бледнит вместе с заливкой и контур, и деталь теряет форму — а форма
+    // как раз и нужна: по соседям видно, куда эту деталь двигать. Здесь
+    // деталь остаётся объектом с чёткой границей, просто выведенным из
+    // работы: ровная серая заливка вместо цвета файла.
+    const dimmed = isolating && !isFocused
+
     ctx.save()
-    if (isolating && !isFocused) ctx.globalAlpha = 0.22
 
     const outline = input.view === 'outline'
 
     if (!outline) {
       tracePath(ctx, placed.outer, toScreen, true)
-      ctx.fillStyle =
-        style && tone
-          ? hatch(ctx, tone.fill, tone.edge, style.pattern)
+      ctx.fillStyle = dimmed
+        ? IDLE_FILL()
+        : style && tone
+          ? hatch(ctx, tone.fill, tone.edge, style.pattern, viewport.scale)
           : alphaOf(PART_EDGE(), 0.2)
       ctx.fill()
 
@@ -374,7 +423,7 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
         tracePath(ctx, ring, toScreen, true)
         ctx.fillStyle = SHEET_FILL()
         ctx.fill()
-        ctx.strokeStyle = operationColor('INNER')
+        ctx.strokeStyle = dimmed ? IDLE_EDGE() : operationColor('INNER')
         ctx.lineWidth = vectorStyle('INNER').width
         ctx.stroke()
       }
@@ -383,7 +432,7 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
       // цветом листа незачем, под ним ничего не прячется.
       for (const ring of placed.inners) {
         tracePath(ctx, ring, toScreen, true)
-        ctx.strokeStyle = operationColor('INNER')
+        ctx.strokeStyle = dimmed ? IDLE_EDGE() : operationColor('INNER')
         ctx.lineWidth = vectorStyle('INNER').width
         ctx.stroke()
       }
@@ -395,9 +444,11 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     tracePath(ctx, placed.outer, toScreen, true)
     ctx.strokeStyle = isColliding
       ? DANGER()
-      : outline
-        ? tone?.edge ?? PART_EDGE()
-        : PART_EDGE()
+      : dimmed
+        ? IDLE_EDGE()
+        : outline
+          ? tone?.edge ?? PART_EDGE()
+          : PART_EDGE()
     ctx.lineWidth = isColliding ? 3 : vectorStyle('OUTER').width
     ctx.stroke()
 
@@ -410,7 +461,11 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     // Выделение — белая рамка с угловыми маркерами, как в векторном редакторе.
     if (isSelected) drawSelection(ctx, placed, toScreen)
 
-    drawOperations(ctx, input, part, placed, toScreen, selectedVectors, isFocused)
+    // У приглушённой детали обработка не рисуется вовсе: приглушать её было
+    // бы возвратом к той же полупрозрачной каше, от которой ушли.
+    if (!dimmed) {
+      drawOperations(ctx, input, part, placed, toScreen, selectedVectors, isFocused)
+    }
 
     if (input.hoveredInstance === instance.id && !isSelected) {
       tracePath(ctx, placed.outer, toScreen, true)
@@ -423,8 +478,10 @@ export function render(ctx: CanvasRenderingContext2D, input: RenderInput): void 
     }
 
     if (instance.pinned) drawPin(ctx, placed, toScreen)
-    if (labelScale && (!isolating || isFocused)) labels.push({ part, instance, placed })
-    if (labelScale && part.grain !== 'none') {
+    if (labelScale && !dimmed) labels.push({ part, instance, placed })
+    // Стрелка волокна имеет смысл только на материале с текстурой: на ЛДСП
+    // без рисунка она бы говорила о запрете, которого нет.
+    if (labelScale && !dimmed && layout.job.has_grain && part.grain !== 'none') {
       drawGrainArrow(ctx, placed, toScreen, instance.rotation ?? 0)
     }
     ctx.restore()
@@ -454,6 +511,16 @@ function tracePath(
   close: boolean,
 ): void {
   ctx.beginPath()
+  addPath(ctx, points, toScreen, close)
+}
+
+/** Добавляет ломаную к уже начатому пути — для составных фигур и обрезки. */
+function addPath(
+  ctx: CanvasRenderingContext2D,
+  points: Point[],
+  toScreen: (p: Point) => Point,
+  close: boolean,
+): void {
   points.forEach((p, index) => {
     const s = toScreen(p)
     if (index === 0) ctx.moveTo(s[0], s[1])
@@ -564,14 +631,203 @@ function decoratePath(
   ctx.fillStyle = SHEET_FILL()
   ctx.strokeStyle = color
   ctx.lineWidth = 1
-  const last = options.closed ? points.length - 1 : points.length
-  for (let i = 0; i < last; i += 1) {
-    const [x, y] = toScreen(points[i])
+  for (const index of nodeIndices(points, toScreen, options.closed)) {
+    const [x, y] = toScreen(points[index])
     ctx.beginPath()
     ctx.rect(Math.round(x) - 2.5, Math.round(y) - 2.5, 5, 5)
     ctx.fill()
     ctx.stroke()
   }
+}
+
+/**
+ * Где ставить узлы контура.
+ *
+ * Дуги приходят из DXF уже разложенными в ломаную, и узел на каждой точке
+ * означал бы, что скруглённый угол детали состоит из двух десятков вершин.
+ * Это неправда о геометрии, и выглядит она как чёрная клякса ровно на том
+ * углу, который пришли рассмотреть.
+ *
+ * Узел ставится там, где геометрия действительно меняется: в остром углу и
+ * в точках касания скругления — то есть там же, где его показал бы CorelDRAW,
+ * у которого дуга осталась дугой.
+ */
+function nodeIndices(
+  points: Point[],
+  toScreen: (p: Point) => Point,
+  closed: boolean,
+): number[] {
+  const screen = points.map(toScreen)
+  const n = screen.length
+  if (n < 3) return points.map((_, i) => i)
+
+  // Поворот в каждой точке, радианы.
+  const turn = screen.map((_, i) => {
+    const prev = screen[(i - 1 + n) % n]
+    const next = screen[(i + 1) % n]
+    const a = Math.atan2(screen[i][1] - prev[1], screen[i][0] - prev[0])
+    const b = Math.atan2(next[1] - screen[i][1], next[0] - screen[i][0])
+    let delta = b - a
+    while (delta > Math.PI) delta -= Math.PI * 2
+    while (delta < -Math.PI) delta += Math.PI * 2
+    return Math.abs(delta)
+  })
+
+  const SHARP = 0.35 // ~20°: настоящий угол детали
+  const FLAT = 0.02 // ~1°: участок считается прямым
+  const result: number[] = []
+  for (let i = 0; i < n; i += 1) {
+    if (!closed && (i === 0 || i === n - 1)) {
+      result.push(i)
+      continue
+    }
+    if (turn[i] > SHARP) {
+      result.push(i)
+      continue
+    }
+    // Переход «прямая ↔ скругление» — точка касания.
+    if (turn[i] > FLAT !== turn[(i - 1 + n) % n] > FLAT) result.push(i)
+  }
+  return result
+}
+
+/**
+ * Полоса реза: какую полосу материала действительно снимет фреза.
+ *
+ * Это единственное, ради чего режим «ширина реза» включают, — и до сих пор
+ * он врал: полоса рисовалась по центру вектора, независимо от коррекции.
+ * А коррекция и есть суть: у внешнего контура фреза идёт СНАРУЖИ линии, у
+ * выреза и кармана — ВНУТРИ, у паза и гравировки — по оси. Половина полосы
+ * ложилась на материал, который на самом деле остаётся целым, и по такой
+ * карте нельзя было ответить ни «влезет ли деталь», ни «не съест ли рез
+ * соседнюю».
+ *
+ * Считается без построения эквидистанты: линия обводится удвоенной толщиной
+ * и обрезается по самому контуру — остаётся ровно та половина, по которой
+ * пойдёт инструмент. Точно, и стоит один clip.
+ */
+function kerfBand(
+  ctx: CanvasRenderingContext2D,
+  input: RenderInput,
+  points: Point[],
+  toScreen: (p: Point) => Point,
+  color: string,
+  diameterPx: number,
+  side: string,
+  closed: boolean,
+): void {
+  if (points.length < 2 || diameterPx <= 0) return
+  ctx.save()
+  ctx.strokeStyle = alphaOf(color, 0.3)
+  ctx.lineJoin = 'round'
+  ctx.lineCap = closed ? 'butt' : 'round'
+
+  if (side === 'outside' || side === 'inside') {
+    ctx.beginPath()
+    // Для наружной коррекции область — «весь холст без детали»: чётно-нечётное
+    // правило заполнения вырезает контур из прямоугольника экрана.
+    if (side === 'outside') ctx.rect(0, 0, input.width, input.height)
+    addPath(ctx, points, toScreen, true)
+    ctx.clip(side === 'outside' ? 'evenodd' : 'nonzero')
+    ctx.lineWidth = Math.max(diameterPx * 2, 2)
+  } else {
+    ctx.lineWidth = Math.max(diameterPx, 1)
+  }
+
+  tracePath(ctx, points, toScreen, closed)
+  ctx.stroke()
+  ctx.restore()
+}
+
+/**
+ * Глубина обработки, мм, по тому же приоритету, что считает сервер:
+ * глубина из имени слоя, затем «насквозь», затем фикс из пресета.
+ * null — глубина неизвестна: пресет не назначен, а источник её не нёс.
+ */
+function cutDepth(
+  declared: number | undefined,
+  preset: ToolpathPreset | undefined,
+  thickness: number,
+): number | null {
+  if (typeof declared === 'number') return declared
+  const spec = preset?.depth as
+    | { mode?: string; value?: number; fallback?: string }
+    | undefined
+  if (!spec) return null
+  const mode = spec.mode === 'from_layer' ? spec.fallback : spec.mode
+  if (mode === 'through') return thickness
+  if (typeof spec.value === 'number') return spec.value
+  return null
+}
+
+/**
+ * Гребёнка по контуру выреза — короткие штрихи в сторону отхода.
+ *
+ * Внешний контур и внутренний вырез различались только светлотой и толщиной
+ * линии: на распечатке в цеху, где карту копируют на чёрно-белом МФУ, они
+ * становились одной и той же линией. Штрихи внутрь — чертёжный способ
+ * показать, с какой стороны линии материал уходит; заодно это второй канал
+ * различия к цвету и сразу видно, куда пойдёт фреза.
+ */
+function combPath(
+  ctx: CanvasRenderingContext2D,
+  points: Point[],
+  toScreen: (p: Point) => Point,
+  color: string,
+): void {
+  if (points.length < 3) return
+  const screen = points.map(toScreen)
+  // Штрих длиной 4 пикселя в проёме шириной 15 превращает вырез в лесенку:
+  // штрихи с двух сторон почти смыкаются, и вместо «материал отсюда уходит»
+  // получается орнамент. На узком вырезе и так очевидно, что внутри отход,
+  // — гребёнка нужна крупным проёмам.
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const [x, y] of screen) {
+    if (x < minX) minX = x
+    if (x > maxX) maxX = x
+    if (y < minY) minY = y
+    if (y > maxY) maxY = y
+  }
+  if (Math.min(maxX - minX, maxY - minY) < 26) return
+
+  // Знак площади говорит, с какой стороны от направления обхода внутренность.
+  let area = 0
+  for (let i = 0; i < screen.length; i += 1) {
+    const a = screen[i]
+    const b = screen[(i + 1) % screen.length]
+    area += a[0] * b[1] - b[0] * a[1]
+  }
+  const inward = area > 0 ? 1 : -1
+
+  ctx.save()
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  const step = 13
+  let carry = step / 2
+  for (let i = 0; i < screen.length; i += 1) {
+    const a = screen[i]
+    const b = screen[(i + 1) % screen.length]
+    const dx = b[0] - a[0]
+    const dy = b[1] - a[1]
+    const seg = Math.hypot(dx, dy)
+    if (seg <= 0) continue
+    const nx = (-dy / seg) * inward
+    const ny = (dx / seg) * inward
+    for (let at = carry; at < seg; at += step) {
+      const t = at / seg
+      const x = a[0] + dx * t
+      const y = a[1] + dy * t
+      ctx.moveTo(x, y)
+      ctx.lineTo(x + nx * 4, y + ny * 4)
+    }
+    carry = ((carry - seg) % step + step) % step
+  }
+  ctx.stroke()
+  ctx.restore()
 }
 
 /** Самый крупный размер операции на экране, в пикселях. */
@@ -605,8 +861,57 @@ function drawOperations(
   isFocused: boolean,
 ): void {
   const byTarget = new Map(part.vectors.map((v) => [v.target, v]))
+  const scale = input.viewport.scale
+  const thickness = input.layout.job.thickness
+  const presetOf = (target: string) => {
+    const vector = byTarget.get(target)
+    if (!vector || vector.enabled === false) return undefined
+    return vector.preset_id ? input.presets.get(vector.preset_id) : undefined
+  }
 
   ctx.save()
+
+  // Полоса реза по контуру детали и по вырезам. Раньше её здесь не было
+  // вовсе: полосу рисовали только у пазов и присадки, то есть у всего, кроме
+  // главного реза — того, которым деталь отделяют от листа и который решает,
+  // встанут ли две детали рядом.
+  if (input.showToolpaths) {
+    const outerPreset = presetOf('outer')
+    if (outerPreset?.tool_diameter) {
+      kerfBand(
+        ctx,
+        input,
+        placed.outer,
+        toScreen,
+        operationColor('OUTER'),
+        outerPreset.tool_diameter * scale,
+        outerPreset.side,
+        true,
+      )
+    }
+    placed.inners.forEach((ring, index) => {
+      const preset = presetOf(`inner:${index}`)
+      if (!preset?.tool_diameter) return
+      kerfBand(
+        ctx,
+        input,
+        ring,
+        toScreen,
+        operationColor('INNER'),
+        preset.tool_diameter * scale,
+        preset.side,
+        true,
+      )
+    })
+  }
+
+  // Гребёнка по вырезам: показывает, что материал внутри уйдёт в отход, и
+  // отличает вырез от внешнего контура без опоры на цвет.
+  if (scale > 0.18) {
+    for (const ring of placed.inners) {
+      combPath(ctx, ring, toScreen, alphaOf(operationColor('INNER'), 0.75))
+    }
+  }
 
   // Порог видимости. На общем виде (0,17 пикселя на миллиметр) отверстие ⌀8
   // — это полтора пикселя: сотня деталей даёт семьсот красных точек, которые
@@ -627,23 +932,30 @@ function drawOperations(
     const selected = selectedVectors.has(vectorKey(part.id, op.target))
     const enabled = vector?.enabled !== false
 
-    // Ширина фрезы: видно, что реально снимет инструмент. Рисуется ДО самой
-    // линии, иначе след закрывает вектор, который он поясняет.
-    if (input.showToolpaths && preset?.tool_diameter && enabled) {
-      ctx.strokeStyle = alphaOf(color, 0.32)
-      ctx.lineWidth = Math.max(preset.tool_diameter * input.viewport.scale, 1)
-      ctx.lineCap = 'round'
-      ctx.lineJoin = 'round'
+    // Полоса реза. Рисуется ДО самой линии, иначе след закрывает вектор,
+    // который он поясняет. Сторона коррекции берётся из пресета: паз снимается
+    // по оси, карман — внутрь своего контура, отверстие — своим диаметром.
+    if (input.showToolpaths && enabled) {
       if (op.center && op.diameter) {
+        // Сверление: инструмент выбирает ровно круг отверстия, полосы вдоль
+        // линии здесь нет.
         const c = toScreen(op.center)
         ctx.beginPath()
-        ctx.arc(c[0], c[1], Math.max((op.diameter / 2) * input.viewport.scale, 0.5), 0, Math.PI * 2)
-        ctx.stroke()
-      } else if (op.points?.length) {
-        tracePath(ctx, op.points, toScreen, false)
-        ctx.stroke()
+        ctx.arc(c[0], c[1], Math.max((op.diameter / 2) * scale, 0.5), 0, Math.PI * 2)
+        ctx.fillStyle = alphaOf(color, 0.3)
+        ctx.fill()
+      } else if (op.points?.length && preset?.tool_diameter) {
+        kerfBand(
+          ctx,
+          input,
+          op.points,
+          toScreen,
+          color,
+          preset.tool_diameter * scale,
+          preset.side,
+          op.semantic.toUpperCase() === 'POCKET',
+        )
       }
-      ctx.lineCap = 'butt'
     }
 
     // Начертание — второй канал различия к цвету: сплошная режется насквозь,
@@ -653,9 +965,26 @@ function drawOperations(
     ctx.lineWidth = selected ? style.width + 1.7 : style.width
     ctx.setLineDash(enabled ? style.dash : [2, 3])
     if (op.center && op.diameter) {
+      // Отверстие: правило карты «сплошная — насквозь, штриховая — на
+      // глубину» на кружок штрихом не переносится, он для этого слишком мал.
+      // Роль штриха берёт заливка: пустой кружок — насквозь, залитый — глухое
+      // на глубину. Раньше все отверстия рисовались одинаково, и глухая
+      // присадка ⌀8 на 12 мм читалась как сквозная дыра в детали.
       const c = toScreen(op.center)
+      const depth = cutDepth(op.depth, preset, thickness)
       ctx.beginPath()
-      ctx.arc(c[0], c[1], Math.max((op.diameter / 2) * input.viewport.scale, 1.5), 0, Math.PI * 2)
+      ctx.arc(c[0], c[1], Math.max((op.diameter / 2) * scale, 1.5), 0, Math.PI * 2)
+      if (depth === null) {
+        // Глубина не назначена — это не «насквозь» и не «на глубину», а
+        // незакрытый вопрос, и цвет у него тот же, что у нераспознанного типа.
+        ctx.strokeStyle = enabled ? operationColor('NONE') : SKIP_INK()
+      } else if (depth < thickness - 0.2) {
+        ctx.fillStyle = alphaOf(enabled ? color : SKIP_INK(), 0.32)
+        ctx.fill()
+      } else {
+        ctx.fillStyle = SHEET_FILL()
+        ctx.fill()
+      }
       ctx.stroke()
     } else if (op.points?.length) {
       tracePath(ctx, op.points, toScreen, false)
@@ -807,6 +1136,20 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number):
 }
 
 
+/**
+ * Стрелка направления волокна.
+ *
+ * Волокно листа идёт вдоль его длинной стороны, то есть по X, и укладчик
+ * поворачивает деталь с текстурой только на 0 или 180°. Значит, деталь,
+ * повёрнутая на 90°, легла ПОПЕРЁК волокна — на ЛДСП с рисунком это брак,
+ * который замечают уже после реза. Такая стрелка красится тревожным цветом:
+ * серой стрелкой раньше одинаково помечались и правильно лежащая деталь, и
+ * неправильно.
+ *
+ * Длина стрелки считается по той стороне, ВДОЛЬ которой она идёт. Раньше
+ * бралась меньшая сторона габарита, и на стойке 1954 × 630 стрелка выходила
+ * длиной в шестую часть от того, что она обозначает.
+ */
 function drawGrainArrow(
   ctx: CanvasRenderingContext2D,
   placed: PlacedPart,
@@ -814,17 +1157,17 @@ function drawGrainArrow(
   rotation: number,
 ): void {
   const [minX, minY, maxX, maxY] = placed.bbox
-  const along = Math.abs(rotation % 180) === 90
+  const across = Math.abs(rotation % 180) === 90
   const cx = (minX + maxX) / 2
   const cy = (minY + maxY) / 2
-  const len = Math.min(maxX - minX, maxY - minY) * 0.3
-  const a: Point = along ? [cx, cy - len] : [cx - len, cy]
-  const b: Point = along ? [cx, cy + len] : [cx + len, cy]
+  const len = (across ? maxY - minY : maxX - minX) * 0.3
+  const a: Point = across ? [cx, cy - len] : [cx - len, cy]
+  const b: Point = across ? [cx, cy + len] : [cx + len, cy]
   const sa = toScreen(a)
   const sb = toScreen(b)
 
-  ctx.strokeStyle = GRAIN_INK()
-  ctx.lineWidth = 1.2
+  ctx.strokeStyle = across ? GRAIN_WARN() : GRAIN_INK()
+  ctx.lineWidth = across ? 1.8 : 1.2
   ctx.beginPath()
   ctx.moveTo(sa[0], sa[1])
   ctx.lineTo(sb[0], sb[1])

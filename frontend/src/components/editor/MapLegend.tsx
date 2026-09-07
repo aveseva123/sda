@@ -24,10 +24,18 @@ interface Props {
  * последним. Так легенда заодно напоминает порядок резания.
  */
 const LINES: Array<{ semantic: string; title: string; means: string }> = [
-  { semantic: 'DRILL', title: 'Присадка', means: 'отверстия под фурнитуру, на глубину' },
+  {
+    semantic: 'DRILL',
+    title: 'Присадка',
+    means: 'отверстия под фурнитуру: пустой кружок — насквозь, залитый — на глубину',
+  },
   { semantic: 'GROOVE', title: 'Паз', means: 'канавка на глубину: задняя стенка, полкодержатель' },
   { semantic: 'POCKET', title: 'Выборка', means: 'карман: выбирается площадь на глубину' },
-  { semantic: 'INNER', title: 'Внутренний вырез', means: 'проём внутри детали, насквозь' },
+  {
+    semantic: 'INNER',
+    title: 'Внутренний вырез',
+    means: 'проём внутри детали, насквозь; штрихи — в сторону отхода',
+  },
   { semantic: 'OUTER', title: 'Контур', means: 'рез насквозь по краю детали, режется последним' },
   { semantic: 'MARK', title: 'Разметка', means: 'гравировка: метка, номер, надпись' },
 ]
@@ -36,10 +44,40 @@ const LINES: Array<{ semantic: string; title: string; means: string }> = [
 function LineSample({ semantic }: { semantic: string }) {
   const style = vectorStyle(semantic)
   if (semantic === 'DRILL') {
+    // Оба состояния сразу: пустой кружок — насквозь, залитый — глухое.
     return (
       <svg width="22" height="10" viewBox="0 0 22 10" aria-hidden style={{ flex: 'none' }}>
-        <circle cx="7" cy="5" r="2.6" fill="none" stroke={style.color} strokeWidth={style.width} />
-        <circle cx="16" cy="5" r="2.6" fill="none" stroke={style.color} strokeWidth={style.width} />
+        <circle
+          cx="7"
+          cy="5"
+          r="2.6"
+          fill="var(--sheet-fill)"
+          stroke={style.color}
+          strokeWidth={style.width}
+        />
+        <circle
+          cx="16"
+          cy="5"
+          r="2.6"
+          fill={style.color}
+          fillOpacity="0.32"
+          stroke={style.color}
+          strokeWidth={style.width}
+        />
+      </svg>
+    )
+  }
+  if (semantic === 'INNER') {
+    // Гребёнка внутрь: с этой стороны линии материал уходит в отход.
+    return (
+      <svg width="22" height="10" viewBox="0 0 22 10" aria-hidden style={{ flex: 'none' }}>
+        <line x1="1" y1="3.5" x2="21" y2="3.5" stroke={style.color} strokeWidth={style.width} />
+        <path
+          d="M3 3.5v3M7 3.5v3M11 3.5v3M15 3.5v3M19 3.5v3"
+          stroke={style.color}
+          strokeOpacity="0.75"
+          strokeWidth="1"
+        />
       </svg>
     )
   }
@@ -177,6 +215,7 @@ export default function MapLegend({ layout, files, scale }: Props) {
               <div className="legend-section">Линии</div>
               <div className="legend-rule">
                 Сплошная — насквозь, штриховая — на глубину, кружок — отверстие.
+                Пустой кружок — сквозное, залитый — глухое.
               </div>
               {present.map((line) => (
                 <div

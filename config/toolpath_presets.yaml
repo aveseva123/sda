@@ -84,7 +84,7 @@ presets:
     tool: {type: drill, diameter: null}   # берётся по диаметру отверстия
     peck: 0.0                             # 0 — без клевков
     tabs: never
-    color: "#be1414"
+    color: "#a01a5f"
 
   - id: groove_center
     name: "Паз по центру"

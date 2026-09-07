@@ -804,13 +804,17 @@ export default function EditorPage() {
                 </button>
               ))}
             </span>
-            <label className="chip" style={{ cursor: 'pointer' }}>
+            <label
+              className="chip"
+              style={{ cursor: 'pointer' }}
+              title="Полоса материала, которую снимет фреза: у контура — снаружи линии, у выреза и кармана — внутри, у паза — по оси"
+            >
               <input
                 type="checkbox"
                 checked={showToolpaths}
                 onChange={(event) => setShowToolpaths(event.target.checked)}
               />
-              Ширина фрезы
+              Полоса реза
             </label>
           </div>
           )}
