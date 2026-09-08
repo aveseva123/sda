@@ -169,12 +169,14 @@ export function referenceFromParts(parts) {
   return parts.map((p, i) => ({ id: `S${i + 1}`, lengthMm: Math.max(p.w, p.h), widthMm: Math.min(p.w, p.h) }));
 }
 
+// Six parts of different sizes around the target. S4 (y 215) and S5 (y 360) are spaced so that the
+// rotated rectangles keep a >= 40 mm gap (at y 230 / 330 they touch and segment as one blob).
 const SIX_PARTS = [
   { x: 330, y: 60, w: 250, h: 120, angleDeg: 0 },
   { x: 330, y: 230, w: 100, h: 50, angleDeg: 30 },
   { x: -140, y: 40, w: 150, h: 150, angleDeg: 0 },
-  { x: -140, y: 230, w: 200, h: 80, angleDeg: -15 },
-  { x: 65, y: 330, w: 400, h: 90, angleDeg: 5 },
+  { x: -140, y: 215, w: 200, h: 80, angleDeg: -15 },
+  { x: 65, y: 360, w: 400, h: 90, angleDeg: 5 },
   { x: 330, y: 330, w: 80, h: 40, angleDeg: 60 },
 ];
 
@@ -195,7 +197,7 @@ export function syntheticScenes() {
     {
       name: '6 деталей, наклон 15°',
       // 2.0 px/mm: the six-part layout is 670 mm wide and does not fit the frame at 2.2 px/mm.
-      spec: { ...base, pxPerMm: 2.0, tiltDeg: 15, centerMm: [120, 170], parts: SIX_PARTS },
+      spec: { ...base, pxPerMm: 2.0, tiltDeg: 15, centerMm: [120, 175], parts: SIX_PARTS },
       reference: referenceFromParts(SIX_PARTS),
     },
   ];

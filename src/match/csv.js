@@ -70,26 +70,31 @@ export function parseCsv(text, { delimiter = null } = {}) {
 
 // ---------- rows -> parts ----------
 
-const HEADER_PATTERNS = {
-  id: { words: ['артикул', 'деталь', 'наименование', 'название', 'обозначение', 'позиция', 'name', 'part', 'label', 'id', 'код'], letters: ['id', '№'] },
-  length: { words: ['длина', 'length', 'len', 'long'], letters: ['l', 'a', 'д'] },
-  width: { words: ['ширина', 'width', 'wid'], letters: ['w', 'b', 'ш'] },
-  qty: { words: ['кол', 'штук', 'количество', 'qty', 'quantity', 'count', 'pcs', 'шт'], letters: ['n', 'q'] },
-};
+// Header words are matched as token prefixes ("Длина, мм" -> "длина"; "кол-во" -> "кол"), single letters exactly.
+// Order matters: length/width/qty are tested before id so that e.g. "width" is never taken for "id".
+const HEADER_PATTERNS = [
+  ['length', { words: ['длина', 'length', 'len', 'long'], letters: ['l', 'a'] }],
+  ['width', { words: ['ширина', 'width', 'wid'], letters: ['w', 'b'] }],
+  ['qty', { words: ['кол', 'штук', 'количество', 'qty', 'quantity', 'count', 'pcs', 'шт'], letters: ['q'], weak: ['n'] }],
+  ['id', { words: ['артикул', 'деталь', 'наименование', 'название', 'обозначение', 'позиция', 'name', 'part', 'label', 'код', 'ident'], letters: ['id'], weak: ['№', 'no', 'п/п'] }],
+];
+const UNIT_TOKENS = new Set(['мм', 'mm', 'см', 'дюйм', 'дюймы', 'in', 'inch', 'inches']);
 
-function normHeader(cell) {
-  return String(cell ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+function headerTokens(cell) {
+  const h = String(cell ?? '').toLowerCase().trim();
+  if (!h) return [];
+  return h.split(/[^\p{L}\p{N}№/]+/u).filter((t) => t && !UNIT_TOKENS.has(t));
 }
 
+// -> { kind, weak } | null
 function headerKind(cell) {
-  const h = normHeader(cell);
-  if (!h) return null;
-  const bare = h.replace(/[.,;:()\[\]]/g, ' ').replace(/\b(мм|mm|см|дюйм|in|inch)\b/g, ' ').replace(/\s+/g, ' ').trim();
-  for (const [kind, pat] of Object.entries(HEADER_PATTERNS)) {
-    if (pat.letters.includes(bare)) return kind;
+  const tokens = headerTokens(cell);
+  if (!tokens.length) return null;
+  for (const [kind, pat] of HEADER_PATTERNS) {
+    if (tokens.some((t) => pat.letters.includes(t) || pat.words.some((w) => t.startsWith(w)))) return { kind, weak: false };
   }
-  for (const [kind, pat] of Object.entries(HEADER_PATTERNS)) {
-    for (const w of pat.words) if (bare.includes(w)) return kind;
+  for (const [kind, pat] of HEADER_PATTERNS) {
+    if (pat.weak && tokens.some((t) => pat.weak.includes(t))) return { kind, weak: true };
   }
   return null;
 }
@@ -98,11 +103,17 @@ function headerKind(cell) {
 // like a header (has both length and width or at least two recognised columns), else null.
 function detectHeader(row) {
   const cols = { id: -1, length: -1, width: -1, qty: -1 };
-  let hits = 0;
+  const weak = { id: -1, length: -1, width: -1, qty: -1 };
   row.forEach((cell, i) => {
-    const kind = headerKind(cell);
-    if (kind && cols[kind] === -1) { cols[kind] = i; hits++; }
+    const k = headerKind(cell);
+    if (!k) return;
+    if (k.weak) { if (weak[k.kind] === -1) weak[k.kind] = i; } else if (cols[k.kind] === -1) cols[k.kind] = i;
   });
+  let hits = 0;
+  for (const kind of Object.keys(cols)) {
+    if (cols[kind] === -1 && weak[kind] !== -1 && !Object.values(cols).includes(weak[kind])) cols[kind] = weak[kind];
+    if (cols[kind] !== -1) hits++;
+  }
   if (cols.length !== -1 && cols.width !== -1) return cols;
   if (hits >= 2) return cols;
   return null;
