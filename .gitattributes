@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Test fixtures keep their original line endings (CRLF DXF is intentional)
+tests/fixtures/** -text
