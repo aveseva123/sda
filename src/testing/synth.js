@@ -131,7 +131,7 @@ export function renderScene(spec, dictBits = DICT_4X4_50) {
       r = inPart.gray; g = inPart.gray + 2; b = inPart.gray + 8;
       for (const gl of glare) {
         const dx = (X - gl.x) / gl.rx; const dy = (Y - gl.y) / gl.ry;
-        if (dx * dx + dy * dy <= 1) { r = 238; g = 240; b = 242; break; }
+        if (dx * dx + dy * dy <= 1) { r = 255; g = 255; b = 255; break; }
       }
       return [r, g, b];
     }

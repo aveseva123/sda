@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "serve": "node tools/serve.mjs",
-    "test": "node --test tests/",
+    "test": "node --test \"tests/*.test.mjs\"",
     "test:e2e": "node tests/e2e/run.mjs",
     "gen:icons": "node tools/gen-icons.mjs",
     "gen:target": "node tools/gen-target.mjs",
