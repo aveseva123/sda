@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     borderMarginMm: 3,
     useOtsu: true,
   },
-  raster: { maxPxPerMm: 4, maxPixels: 10e6, maxExtentMm: 3000 },
+  raster: { maxPxPerMm: 4, maxPixels: 6e6, maxExtentMm: 3000 },
   edgeRefine: { enabled: true, searchMm: 3, stepPx: 2, endTrimFrac: 0.1 },
   match: { toleranceMm: 3, ambiguityMm: 5 },
   thickness: { thicknessMm: 0, shootHeightMm: 0 },

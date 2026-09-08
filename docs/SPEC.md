@@ -96,7 +96,7 @@ export const DEFAULT_SETTINGS = {
   },
   segmentation: { bgMinV: 140, bgMaxS: 70, closeKernelMm: 12, minAreaMm2: 400, minSideMm: 15,
                   borderMarginMm: 3, useOtsu: true },
-  raster: { maxPxPerMm: 4, maxPixels: 10e6, maxExtentMm: 3000 },
+  raster: { maxPxPerMm: 4, maxPixels: 6e6, maxExtentMm: 3000 },   // 6 MP: ~1.3 s на 12-Мп кадр в Node, точность не страдает (субпиксельное уточнение)
   edgeRefine: { enabled: true, searchMm: 3, stepPx: 2, endTrimFrac: 0.1 },
   match: { toleranceMm: 3, ambiguityMm: 5 },
   thickness: { thicknessMm: 0, shootHeightMm: 0 }, // 0 = высота авто из гомографии
