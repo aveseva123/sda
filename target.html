@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1115">
+  <title>Мишень для замера деталей — печать</title>
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; padding: 0; background: #0f1115; color: #f2f4f8; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 18px; line-height: 1.35; }
+    .wrap { display: flex; flex-direction: column; gap: 14px; padding: 14px; max-width: 900px; margin: 0 auto; }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .btn { min-height: 64px; padding: 10px 22px; border: 0; border-radius: 14px; font: inherit; font-size: 20px; font-weight: 700; background: #4cc2ff; color: #06121a; cursor: pointer; flex: 1 1 200px; }
+    .btn-secondary { background: #20242e; color: #f2f4f8; border: 1px solid #2c313d; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+    .note { background: #171a21; border-radius: 14px; padding: 12px 14px; color: #aab1c0; font-size: 17px; }
+    .note b { color: #f2f4f8; }
+    .sheet { background: #fff; box-shadow: 0 8px 32px rgba(0,0,0,.6); width: 210mm; max-width: 100%; margin: 0 auto; }
+    .sheet svg { display: block; width: 100%; height: auto; }
+    @media print {
+      @page { size: A4 portrait; margin: 0; }
+      html, body { background: #fff; color: #000; }
+      button, .btn, .toolbar, .note { display: none !important; }
+      .wrap { padding: 0; gap: 0; max-width: none; }
+      .sheet { box-shadow: none; width: 210mm; max-width: none; margin: 0; }
+      .sheet svg { width: 210mm !important; height: 297mm !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="toolbar">
+      <button class="btn" type="button" id="print">Печать</button>
+      <a class="btn btn-secondary" href="./target.svg" download="target.svg">Скачать SVG</a>
+      <a class="btn btn-secondary" href="./index.html">В приложение</a>
+    </div>
+    <div class="note">
+      Печатайте на <b>A4 в масштабе 100 %</b> («Фактический размер», без «подогнать под страницу»).
+      После печати измерьте линейкой контрольный отрезок внизу листа: если он не равен 100 мм,
+      введите фактическое значение в приложении (Ещё → Настройки → Мишень). Мишень должна лежать
+      на той же плоскости, что и детали, ровно и без изгибов.
+    </div>
+    <div class="sheet" id="sheet"></div>
+  </div>
+  <script type="module">
+    import { targetSvg } from './src/testing/targetSvg.js';
+    const sheet = document.getElementById('sheet');
+    try {
+      sheet.innerHTML = targetSvg({});
+    } catch (e) {
+      sheet.textContent = 'Не удалось построить мишень: ' + (e && e.message || e);
+      console.error(e);
+    }
+    document.getElementById('print').addEventListener('click', () => window.print());
+  </script>
+</body>
+</html>

@@ -1,0 +1,420 @@
+  0
+SECTION
+  2
+HEADER
+  9
+$ACADVER
+  1
+AC1015
+  9
+$INSUNITS
+ 70
+     4
+  9
+$EXTMIN
+ 10
+0.0
+ 20
+0.0
+ 30
+0.0
+  9
+$EXTMAX
+ 10
+3000.0
+ 20
+1500.0
+ 30
+0.0
+  0
+ENDSEC
+  0
+SECTION
+  2
+TABLES
+  0
+TABLE
+  2
+LAYER
+ 70
+2
+  0
+LAYER
+  2
+SHEET
+ 70
+0
+ 62
+7
+  6
+CONTINUOUS
+  0
+LAYER
+  2
+PARTS
+ 70
+0
+ 62
+3
+  6
+CONTINUOUS
+  0
+ENDTAB
+  0
+ENDSEC
+  0
+SECTION
+  2
+ENTITIES
+  0
+LWPOLYLINE
+  5
+100
+  8
+SHEET
+100
+AcDbEntity
+100
+AcDbPolyline
+ 90
+4
+ 70
+1
+ 10
+0.0
+ 20
+0.0
+ 10
+3000.0
+ 20
+0.0
+ 10
+3000.0
+ 20
+1500.0
+ 10
+0.0
+ 20
+1500.0
+  0
+LWPOLYLINE
+  5
+101
+  8
+PARTS
+100
+AcDbEntity
+100
+AcDbPolyline
+ 90
+4
+ 70
+1
+ 10
+100.0
+ 20
+100.0
+ 10
+480.0
+ 20
+100.0
+ 10
+480.0
+ 20
+340.0
+ 10
+100.0
+ 20
+340.0
+  0
+TEXT
+  5
+102
+  8
+LABELS
+100
+AcDbEntity
+100
+AcDbText
+ 10
+200.0
+ 20
+200.0
+ 30
+0.0
+ 40
+12.0
+  1
+  BRACKET-1
+  0
+LWPOLYLINE
+  5
+103
+  8
+PARTS
+100
+AcDbEntity
+100
+AcDbPolyline
+ 90
+4
+ 70
+1
+ 10
+600.0
+ 20
+100.0
+ 10
+980.0
+ 20
+100.0
+ 10
+980.0
+ 20
+340.0
+ 10
+600.0
+ 20
+340.0
+  0
+TEXT
+  5
+104
+  8
+LABELS
+100
+AcDbEntity
+100
+AcDbText
+ 10
+700.0
+ 20
+200.0
+ 30
+0.0
+ 40
+12.0
+  1
+BRACKET-1
+  0
+LWPOLYLINE
+  5
+105
+  8
+PARTS
+100
+AcDbEntity
+100
+AcDbPolyline
+ 90
+4
+ 70
+1
+ 10
+100.0
+ 20
+500.0
+ 10
+600.0
+ 20
+500.0
+ 10
+600.0
+ 20
+620.5
+ 10
+100.0
+ 20
+620.5
+  0
+CIRCLE
+  5
+106
+  8
+HOLES
+100
+AcDbEntity
+100
+AcDbCircle
+ 10
+350.0
+ 20
+560.0
+ 30
+0.0
+ 40
+10.0
+  0
+TEXT
+  5
+107
+  8
+LABELS
+100
+AcDbEntity
+100
+AcDbText
+ 10
+120.0
+ 20
+530.0
+ 30
+0.0
+ 40
+8.0
+  1
+SHELF-04
+  0
+LWPOLYLINE
+  5
+108
+  8
+PARTS
+100
+AcDbEntity
+100
+AcDbPolyline
+ 90
+4
+ 70
+1
+ 10
+1200.0
+ 20
+100.0
+ 10
+1300.0
+ 20
+100.0
+ 10
+1300.0
+ 20
+200.0
+ 10
+1200.0
+ 20
+200.0
+  0
+MTEXT
+  5
+109
+  8
+LABELS
+100
+AcDbEntity
+100
+AcDbMText
+ 10
+1220.0
+ 20
+150.0
+ 30
+0.0
+ 40
+10.0
+ 41
+80.0
+ 71
+1
+ 72
+5
+  1
+\A1;{\fArial|b0|i0|c204|p34;PLATE-A}
+  0
+LWPOLYLINE
+  5
+110
+  8
+PARTS
+100
+AcDbEntity
+100
+AcDbPolyline
+ 90
+5
+ 70
+1
+ 10
+1200.0
+ 20
+500.0
+ 10
+1450.0
+ 20
+500.0
+ 42
+0.41421356237
+ 10
+1500.0
+ 20
+550.0
+ 10
+1500.0
+ 20
+700.0
+ 10
+1200.0
+ 20
+700.0
+  0
+TEXT
+  5
+111
+  8
+NOTES
+100
+AcDbEntity
+100
+AcDbText
+ 10
+2000.0
+ 20
+1400.0
+ 30
+0.0
+ 40
+20.0
+  1
+Лист 1500x3000 AISI 304 2 мм
+  0
+POINT
+  5
+112
+  8
+NOTES
+100
+AcDbEntity
+100
+AcDbPoint
+ 10
+2500.0
+ 20
+1000.0
+ 30
+0.0
+  0
+LINE
+  5
+113
+  8
+NOTES
+100
+AcDbEntity
+100
+AcDbLine
+ 10
+2500.0
+ 20
+200.0
+ 30
+0.0
+ 11
+2600.0
+ 21
+300.0
+ 31
+0.0
+  0
+ENDSEC
+  0
+EOF
