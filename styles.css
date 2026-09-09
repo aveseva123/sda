@@ -18,6 +18,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 18px; line-height: 1.35; height: 100%; overscroll-behavior: none; }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--accent); }

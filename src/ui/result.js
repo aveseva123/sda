@@ -173,7 +173,8 @@ export async function mount(root, ctx, params) {
     if (!p) return;
     const ov = (m.overrides[index] = m.overrides[index] || {});
     const body = h('div', { class: 'page', style: { padding: '0' } });
-    const dimsRow = h('div', { class: 'row' },
+    // Steppers are stacked: two side by side do not fit a 360-412 px phone width with 64 px buttons.
+    const dimsRow = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
       numberStepper({ label: 'Длина, мм', value: p.lengthMm, step: 0.5, min: 0, digits: 1, onChange: async (v) => { ov.lengthMm = v; await afterEdit(); } }),
       numberStepper({ label: 'Ширина, мм', value: p.widthMm, step: 0.5, min: 0, digits: 1, onChange: async (v) => { ov.widthMm = v; await afterEdit(); } }));
     body.appendChild(dimsRow);
