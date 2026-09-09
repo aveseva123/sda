@@ -161,6 +161,10 @@ export async function mount(root, ctx) {
 
   const captureBtn = h('button', { class: 'btn-capture', type: 'button', 'aria-label': 'Снять', disabled: true }, 'Снять');
   const fileInput = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });
+  // Native camera capture (iOS Safari/Chrome have no ImageCapture and cap video frames at 1080p;
+  // <input capture> opens the system camera and returns the full-resolution photo).
+  const captureInput = h('input', { type: 'file', accept: 'image/*', capture: 'environment', style: { display: 'none' } });
+  const useNativeCapture = () => typeof ImageCapture === 'undefined';
   const galleryBtn = h('button', { class: 'cam-side', type: 'button', 'on:click': () => fileInput.click() }, h('span', { class: 'btn-icon' }, '🖼'), h('span', {}, 'Файл'));
   const torchBtn = h('button', { class: 'cam-side', type: 'button', hidden: true }, h('span', { class: 'btn-icon' }, '🔦'), h('span', {}, 'Фонарь'));
   let torchOn = false;
@@ -171,7 +175,7 @@ export async function mount(root, ctx) {
   const progress = h('div', { class: 'cam-progress', hidden: true }, h('div', { class: 'spinner' }), h('div', {}, 'Идёт замер…'), stageEl);
 
   const top = h('div', { class: 'cam-top' }, modeCtl, chip);
-  const el = h('div', { class: 'cam' }, top, view, bottom, progress, fileInput);
+  const el = h('div', { class: 'cam' }, top, view, bottom, progress, fileInput, captureInput);
   root.appendChild(el);
 
   function setHint(text, kind) {
@@ -241,11 +245,12 @@ export async function mount(root, ctx) {
       toast((e.message || 'Замер не удался') + extra, 'error', 5000);
     } finally {
       progress.hidden = true;
-      captureBtn.disabled = !ctx.vision.isReady;
+      captureBtn.disabled = !ctx.vision.isReady || !(cam || useNativeCapture());
     }
   }
 
   captureBtn.addEventListener('click', async () => {
+    if (useNativeCapture()) { captureInput.click(); return; }
     if (!cam) { toast('Камера не запущена — используйте кнопку «Файл»', 'error'); return; }
     captureBtn.disabled = true;
     try {
@@ -258,18 +263,20 @@ export async function mount(root, ctx) {
       captureBtn.disabled = !ctx.vision.isReady;
     }
   });
-  fileInput.addEventListener('change', async () => {
-    const file = fileInput.files && fileInput.files[0];
-    fileInput.value = '';
+  const onPickedFile = (input, source) => async () => {
+    const file = input.files && input.files[0];
+    input.value = '';
     if (!file) return;
     try {
       const bitmap = await bitmapFromFile(file);
-      await runAnalysis(bitmap, 'file');
+      await runAnalysis(bitmap, source);
     } catch (e) { toast('Не удалось открыть файл: ' + (e.message || e), 'error'); }
-  });
+  };
+  fileInput.addEventListener('change', onPickedFile(fileInput, 'file'));
+  captureInput.addEventListener('change', onPickedFile(captureInput, 'native-camera'));
 
-  // Enable capture once vision is ready
-  ctx.vision.ready.then(() => { if (running) captureBtn.disabled = !cam; }).catch(() => { setHint('Модуль зрения не загрузился', 'fatal'); });
+  // Enable capture once vision is ready (with native capture the button works even without a preview stream)
+  ctx.vision.ready.then(() => { if (running) captureBtn.disabled = !(cam || useNativeCapture()); }).catch(() => { setHint('Модуль зрения не загрузился', 'fatal'); });
 
   loadOrder();
   (async () => {
@@ -278,11 +285,12 @@ export async function mount(root, ctx) {
       if (!running) { cam.stop(); return; }
       torchBtn.hidden = !cam.hasTorch;
       if (!cam.isMainCameraGuess) toast('Похоже, выбрана не основная камера — переключите на 1×', 'info', 4000);
-      setHint(ctx.vision.isReady ? 'Наведите на мишень' : 'Загрузка модуля зрения…', '');
+      setHint(ctx.vision.isReady ? (useNativeCapture() ? 'Наведите на мишень — кнопка откроет камеру телефона' : 'Наведите на мишень') : 'Загрузка модуля зрения…', '');
       captureBtn.disabled = !ctx.vision.isReady;
     } catch (e) {
       console.warn(e);
-      setHint('Камера недоступна — снимите через «Файл»', 'warn');
+      setHint(useNativeCapture() ? 'Превью недоступно — кнопка откроет камеру телефона' : 'Камера недоступна — снимите через «Файл»', 'warn');
+      captureBtn.disabled = !(ctx.vision.isReady && useNativeCapture());
     }
     previewTick();
   })();
