@@ -1,10 +1,11 @@
-# Deploys the static app to GitHub Pages. Enable once in the repository settings:
-# Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Deploys the static app to GitHub Pages (https://<owner>.github.io/<repo>/).
+# configure-pages with `enablement: true` switches the repository to "GitHub Actions" Pages
+# automatically on the first run; otherwise enable it in Settings → Pages → Source: GitHub Actions.
 name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/mobile-part-measurement-app-ps6ojn]
   workflow_dispatch:
 
 permissions:
@@ -34,6 +35,8 @@ jobs:
           mkdir -p dist
           cp -r index.html target.html target.svg manifest.webmanifest styles.css sw.js sw-manifest.js src vendor icons dist/
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
