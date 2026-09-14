@@ -221,3 +221,58 @@ describe('инвестиция и окупаемость', () => {
     expect(m.optimistic.label).toBe('+100% загрузки')
   })
 })
+
+describe('показатели для инвестора', () => {
+  const p = { ...financeDefaults, anchorPerYear: 8, externalPerYear: 12 }
+
+  it('накопленный поток к 36 и 60 месяцам растет при большем потоке', async () => {
+    const { computeModel: cm } = await import('./finance')
+    const m = cm(p, equipment, team)
+    expect(m.base.cumulative60).toBeGreaterThan(m.base.cumulative36)
+    expect(m.optimistic.cumulative60).toBeGreaterThan(m.base.cumulative60)
+  })
+
+  it('нужный поток для окупаемости: с ним окупаемость укладывается в срок, без него нет', async () => {
+    const { flowForPayback, paybackMonth: pb } = await import('./finance')
+    const flow = flowForPayback(financeDefaults, equipment, team, 36)
+    expect(flow).not.toBeNull()
+    const k = flow! / (financeDefaults.anchorPerYear + financeDefaults.externalPerYear)
+    const scaled = { ...financeDefaults, anchorPerYear: financeDefaults.anchorPerYear * k, externalPerYear: financeDefaults.externalPerYear * k }
+    expect(pb(scaled, equipment, team)!).toBeLessThanOrEqual(36)
+    expect(pb(financeDefaults, equipment, team)).toBeNull()
+    expect(flowForPayback({ ...financeDefaults, anchorPerYear: 0, externalPerYear: 0 }, equipment, team, 36)).toBeNull()
+  })
+
+  it('транши: сумма равна нужной инвестиции и покрывает минимум кассы', async () => {
+    const { tranches, computeInvestment: ci, computeCashCurve: cc } = await import('./finance')
+    for (const pp of [p, financeDefaults]) {
+      const inv = ci(pp, equipment, team)
+      const curve = cc(pp, equipment, team)
+      const t = tranches(pp, inv, curve)
+      expect(t).toHaveLength(3)
+      expect(t[0].amount + t[1].amount + t[2].amount).toBeCloseTo(inv.total.mid, 0)
+      const minCum = Math.min(0, ...curve.map((x) => x.cumulative))
+      expect(t[0].amount + t[1].amount).toBeGreaterThanOrEqual(-minCum - 1)
+      expect(t[2].amount).toBeCloseTo(inv.reserve.mid)
+    }
+  })
+
+  it('чувствительность: рост бюджета снижает точку безубыточности, рост зарплат повышает', async () => {
+    const { sensitivity, computeModel: cm } = await import('./finance')
+    const base = cm(p, equipment, team)
+    const rows = sensitivity(p, equipment, team)
+    expect(rows).toHaveLength(10)
+    const budgetUp = rows.find((r) => r.title === 'Бюджет объекта' && r.change === '+10%')!
+    const salaryUp = rows.find((r) => r.title === 'Зарплаты' && r.change === '+10%')!
+    expect(budgetUp.breakEven).toBeLessThan(base.breakEven)
+    expect(salaryUp.breakEven).toBeGreaterThan(base.breakEven)
+    const flowUp = rows.find((r) => r.title === 'Поток заказов' && r.change === '+10%')!
+    const flowDown = rows.find((r) => r.title === 'Поток заказов' && r.change === '−10%')!
+    expect(flowUp.cumulative36).toBeGreaterThan(flowDown.cumulative36)
+  })
+
+  it('загрузка мощности', async () => {
+    const { capacityUtilization } = await import('./finance')
+    expect(capacityUtilization(1.5, { ...C, capacityObjectsPerMonth: 3 })).toBeCloseTo(0.5)
+  })
+})

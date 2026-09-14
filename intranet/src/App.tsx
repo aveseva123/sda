@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Aurora } from './components/Aurora'
 import { Sidebar, TopNav } from './components/Nav'
+import { LiveBar } from './components/LiveBar'
 import { useConfig } from './hooks/useConfig'
 import { useActiveSection } from './hooks/useActiveSection'
 import { sections } from './data/sections'
@@ -32,6 +33,8 @@ export default function App() {
     [params, equipmentRows, teamRows, constants],
   )
   const active = useActiveSection(ids)
+  // Режим правки живет только в памяти: по ссылке страница всегда открывается в режиме чтения
+  const [edit, setEdit] = useState(false)
 
   // Ссылка с якорем (#finance) открывается на нужном разделе: контент появляется после загрузки
   useEffect(() => {
@@ -44,20 +47,20 @@ export default function App() {
   return (
     <>
       <Aurora />
-      <Sidebar active={active} />
+      <Sidebar active={active} edit={edit} onEdit={setEdit} />
       <div className="relative z-10 px-4 sm:px-6 lg:px-10 lg:ml-60 print-main">
-        <TopNav active={active} />
-        <main className="mx-auto max-w-6xl pb-16">
+        <TopNav active={active} edit={edit} onEdit={setEdit} />
+        <main className={`mx-auto max-w-6xl pb-16 ${edit ? 'pb-28 lg:pb-16' : ''}`}>
           <Summary model={model} />
           <About />
           <Market />
           <Product />
-          <Premises />
-          <Equipment config={config} />
-          <Team config={config} />
+          <Premises edit={edit} />
+          <Equipment config={config} edit={edit} />
+          <Team config={config} edit={edit} />
           <Operations />
-          <Finance model={model} config={config} />
-          <Investor />
+          <Finance model={model} config={config} edit={edit} onEdit={setEdit} />
+          <Investor model={model} />
           <Roadmap />
           <Risks />
           <NextSteps />
@@ -66,6 +69,7 @@ export default function App() {
           </footer>
         </main>
       </div>
+      <LiveBar model={model} visible={edit && active === 'finance'} />
     </>
   )
 }

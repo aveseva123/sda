@@ -43,10 +43,21 @@ export function Summary({ model }: { model: ModelResult }) {
         <Stat
           className="lg:col-span-4"
           label="Срок окупаемости"
-          value={payback ? `${payback} мес` : 'не в горизонте'}
-          note={payback ? 'Вложенное возвращается полностью' : 'При текущих параметрах поток заказов не покрывает расходы — двигайте ползунки в финмодели'}
+          value={payback ? `${payback} мес` : `нет за ${model.constants.paybackSearchMonths} мес`}
+          note={
+            payback
+              ? 'Вложенное возвращается полностью'
+              : model.flowForPayback36
+                ? `Для окупаемости за 36 мес нужно ≈ ${num(model.flowForPayback36, 0)} объектов в год при текущей марже`
+                : 'При текущих марже и расходах не окупается'
+          }
         />
-        <Stat className="lg:col-span-4" label="Команда на старте" value={`${model.headcount} человек`} note="Технолог, ОТК, продажи и закупки закрываю сам" />
+        <Stat
+          className="lg:col-span-4"
+          label="Команда на старте"
+          value={`${model.headcount} человек`}
+          note={`Мощность ≈ ${num(model.constants.capacityObjectsPerMonth, 1)} объекта в месяц. Технолог, ОТК, продажи и закупки закрываю сам`}
+        />
         <Stat className="lg:col-span-4" label="Площадь" value={`${model.params.areaM2} м²`} note="С ростом до 600–800 м²" />
       </Bento>
 

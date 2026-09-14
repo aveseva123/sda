@@ -71,6 +71,12 @@ export const financeConstants = {
   pessimisticLoadPct: 70,
   optimisticLoadPct: 130,
 
+  // Мощность цеха при стартовом штате, объектов в месяц. Оценка по опыту московского цеха — к уточнению
+  capacityObjectsPerMonth: 3,
+
+  // Приоритетная цена для якорной группы, % скидки от рынка. Пример, обсуждается
+  groupDiscountPct: 10,
+
   // Общежитие и питание для сотрудников. По умолчанию выключено (нули): стоимость в Ереване — к уточнению.
   // Логика: часть штата живет в общежитии и питается за счет цеха, зато нанимается с меньшей зарплатой gross
   housingPerPerson: 0, // проживание, $ на человека в месяц
@@ -126,6 +132,13 @@ export const constantGroups: ConstantGroup[] = [
       { key: 'pessimisticLoadPct', label: 'Пессимистичная загрузка', unit: '%', min: 10, max: 100, step: 5 },
       { key: 'optimisticLoadPct', label: 'Оптимистичная загрузка', unit: '%', min: 100, max: 300, step: 5 },
       { key: 'paybackSearchMonths', label: 'Искать окупаемость до месяца', unit: '№', min: 18, max: 120, step: 6 },
+    ],
+  },
+  {
+    title: 'Мощность и условия группе',
+    fields: [
+      { key: 'capacityObjectsPerMonth', label: 'Мощность цеха, объектов в месяц', unit: 'шт', min: 0.5, max: 20, step: 0.5 },
+      { key: 'groupDiscountPct', label: 'Скидка якорной группе от рынка', unit: '%', min: 0, max: 40, step: 1 },
     ],
   },
   {

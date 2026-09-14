@@ -13,6 +13,9 @@ export type EquipmentRow = {
   source: Source
   condition: Condition
   comment: string
+  model?: string // конкретная модель, если выбрана (например, по каталогу stanki.ru)
+  link?: string // ссылка на страницу модели или коммерческое предложение
+  priceDate?: string // когда смотрели цену, например «сентябрь 2026»
 }
 
 export const equipment: EquipmentRow[] = [

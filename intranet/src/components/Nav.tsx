@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { sections, type SectionId } from '../data/sections'
 
-type Props = { active: SectionId }
+type Props = { active: SectionId; edit: boolean; onEdit: (v: boolean) => void }
 
 function printPage() {
   window.print()
 }
 
 /** Боковая навигация для десктопа */
-export function Sidebar({ active }: Props) {
+export function Sidebar({ active, edit, onEdit }: Props) {
   return (
     <aside className="print-hide hidden lg:flex fixed inset-y-0 left-0 w-60 flex-col px-5 py-8 z-20">
       <a href="#summary" className="text-base font-semibold tracking-tight leading-tight">
@@ -36,10 +36,17 @@ export function Sidebar({ active }: Props) {
           })}
         </ol>
       </nav>
+      <label className="mt-6 flex items-center gap-3 text-sm cursor-pointer">
+        <input type="checkbox" className="toggle" checked={edit} onChange={(e) => onEdit(e.target.checked)} />
+        <span>
+          Режим правки
+          <span className="block text-xs text-muted">{edit ? 'Ползунки и таблицы открыты' : 'Чистый вид для чтения'}</span>
+        </span>
+      </label>
       <button
         type="button"
         onClick={printPage}
-        className="mt-6 rounded-xl border border-white/20 px-4 py-2.5 text-sm font-medium hover:border-amber hover:text-amber"
+        className="mt-4 rounded-xl border border-white/20 px-4 py-2.5 text-sm font-medium hover:border-amber hover:text-amber"
       >
         Экспорт в PDF
       </button>
@@ -48,7 +55,7 @@ export function Sidebar({ active }: Props) {
 }
 
 /** Верхнее меню с горизонтальной прокруткой для мобильного */
-export function TopNav({ active }: Props) {
+export function TopNav({ active, edit, onEdit }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
 
   // Активная кнопка всегда в поле зрения
@@ -67,9 +74,19 @@ export function TopNav({ active }: Props) {
         <a href="#summary" className="text-sm font-semibold tracking-tight">
           Цех HoReCa · Ереван
         </a>
-        <button type="button" onClick={printPage} className="text-xs rounded-lg border border-white/20 px-2.5 py-1.5">
-          PDF
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onEdit(!edit)}
+            aria-pressed={edit}
+            className={`text-xs rounded-lg border px-2.5 py-1.5 ${edit ? 'border-amber text-amber font-semibold' : 'border-white/20'}`}
+          >
+            Правка
+          </button>
+          <button type="button" onClick={printPage} className="text-xs rounded-lg border border-white/20 px-2.5 py-1.5">
+            PDF
+          </button>
+        </div>
       </div>
       <nav aria-label="Разделы" ref={scroller} className="mt-2 -mx-4 px-4 overflow-x-auto no-scrollbar">
         <ol className="flex gap-1.5 w-max">

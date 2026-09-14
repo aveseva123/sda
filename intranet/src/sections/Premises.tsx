@@ -18,7 +18,7 @@ const columns: { key: keyof Candidate; title: string; placeholder: string; width
   { key: 'comment', title: 'Комментарий', placeholder: 'Что важно', width: 'min-w-44' },
 ]
 
-export function Premises() {
+export function Premises({ edit }: { edit: boolean }) {
   // Состояние только в памяти: перезагрузка страницы сбрасывает добавленные строки
   const [rows, setRows] = useState<Candidate[]>(premises.candidates)
   const [draft, setDraft] = useState<Candidate>(empty)
@@ -76,9 +76,11 @@ export function Premises() {
                 {columns.map((c) => (
                   <th key={c.key}>{c.title}</th>
                 ))}
-                <th className="print-hide">
-                  <span className="sr-only">Действия</span>
-                </th>
+                {edit && (
+                  <th className="print-hide">
+                    <span className="sr-only">Действия</span>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -89,16 +91,18 @@ export function Premises() {
                       {r[c.key] || <span className="text-muted">—</span>}
                     </td>
                   ))}
-                  <td className="print-hide text-right">
-                    <button type="button" onClick={() => remove(i)} className="text-xs text-muted hover:text-amber" aria-label={`Удалить ${r.address}`}>
-                      Удалить
-                    </button>
-                  </td>
+                  {edit && (
+                    <td className="print-hide text-right">
+                      <button type="button" onClick={() => remove(i)} className="text-xs text-muted hover:text-amber" aria-label={`Удалить ${r.address}`}>
+                        Удалить
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={columns.length + 1} className="text-muted">
+                  <td colSpan={columns.length + (edit ? 1 : 0)} className="text-muted">
                     Пока нет кандидатов
                   </td>
                 </tr>
@@ -106,6 +110,7 @@ export function Premises() {
             </tbody>
           </table>
         </div>
+        {edit && (
         <form onSubmit={add} className="print-hide border-t border-white/10 p-4 sm:p-5">
           <p className="text-sm text-muted mb-3">Добавить строку. Данные живут только в памяти страницы</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
@@ -141,6 +146,7 @@ export function Premises() {
             Добавить кандидата
           </button>
         </form>
+        )}
       </Card>
 
       <h3 className="mt-10 mb-3 text-xl font-semibold tracking-tight">План поиска</h3>

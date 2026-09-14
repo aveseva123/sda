@@ -302,6 +302,8 @@ export type LoadResult = {
   payback: number | null
   objectsAtEnd: number
   cashAtEnd: number
+  cumulative36: number // накопленный поток к 36 месяцу, без стартовой кассы
+  cumulative60: number
 }
 
 export type ModelResult = {
@@ -315,6 +317,8 @@ export type ModelResult = {
   optimistic: LoadResult
   startCash: number // базовая нужная инвестиция (mid)
   headcount: number
+  flowForPayback36: number | null // объектов в год, чтобы окупиться за 36 мес
+  utilizationAtEnd: number // загрузка мощности потоком заказов к концу горизонта, доля
 }
 
 export function computeModel(params: FinanceParams, equipment: EquipmentRow[], team: TeamRow[], C: Constants = financeConstants): ModelResult {
@@ -340,6 +344,8 @@ export function computeModel(params: FinanceParams, equipment: EquipmentRow[], t
       payback: paybackMonth(params, equipment, team, s.load, C),
       objectsAtEnd: last.objects,
       cashAtEnd: last.cash,
+      cumulative36: cumulativeAt(params, equipment, team, s.load, 36, C),
+      cumulative60: cumulativeAt(params, equipment, team, s.load, 60, C),
     }
   })
 
@@ -356,7 +362,89 @@ export function computeModel(params: FinanceParams, equipment: EquipmentRow[], t
     optimistic: byId('optimistic'),
     startCash,
     headcount: opex.headcount,
+    flowForPayback36: flowForPayback(params, equipment, team, 36, C),
+    utilizationAtEnd: capacityUtilization(byId('base').objectsAtEnd, C),
   }
 }
 
 export const toAmd = (usd: number, rate: number): number => usd * rate
+
+// ---------- Дополнительные показатели для инвестора ----------
+
+/** Накопленный денежный поток к месяцу m (без стартовой кассы) */
+export function cumulativeAt(params: FinanceParams, equipment: EquipmentRow[], team: TeamRow[], load: number, m: number, C: Constants = financeConstants): number {
+  const curve = computeCashCurve(params, equipment, team, load, 0, Math.max(m, 1), C)
+  return curve[Math.min(m, curve.length) - 1].cumulative
+}
+
+/** Сколько объектов в год нужно, чтобы окупиться за months. Ищем множитель к текущему потоку. null — не достигается даже при 10-кратном потоке */
+export function flowForPayback(params: FinanceParams, equipment: EquipmentRow[], team: TeamRow[], months: number, C: Constants = financeConstants): number | null {
+  const baseFlow = params.anchorPerYear + params.externalPerYear
+  if (baseFlow <= 0) return null
+  const ok = (k: number) => {
+    const p = { ...params, anchorPerYear: params.anchorPerYear * k, externalPerYear: params.externalPerYear * k }
+    const pb = paybackMonth(p, equipment, team, 1, C)
+    return pb !== null && pb <= months
+  }
+  if (!ok(10)) return null
+  let lo = 0
+  let hi = 10
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2
+    if (ok(mid)) hi = mid
+    else lo = mid
+  }
+  return baseFlow * hi
+}
+
+export type Tranche = { title: string; months: string; amount: number; note: string }
+
+/** Когда нужны деньги. Сумма траншей и резерва равна нужной инвестиции (середина диапазона) */
+export function tranches(params: FinanceParams, investment: Investment, curve: CurvePoint[]): Tranche[] {
+  const prep = params.monthsToFirstOrder
+  const zero = investment.zeroMonth ?? curve.length
+  const prepOpex = curve.slice(0, prep).reduce((s, p) => s + p.opex, 0)
+  const first = investment.capex.total.mid + prepOpex
+  const second = investment.materials.mid + Math.max(0, investment.opexUntilZero - prepOpex)
+  return [
+    { title: 'Транш 1: запуск', months: prep > 0 ? `месяцы 1–${prep}` : 'месяц 1', amount: first, note: 'Оборудование с доставкой, подготовка помещения, депозит, регистрация, OPEX до первого заказа' },
+    { title: 'Транш 2: оборотка', months: zero > prep ? `месяцы ${prep + 1}–${zero}` : '—', amount: second, note: 'Материалы на первые заказы и OPEX до выхода в ноль, без зачета валовой прибыли' },
+    { title: 'Резерв', months: 'по необходимости', amount: investment.reserve.mid, note: `${params.reservePct}% от CAPEX и оборотки на задержки оплат и курс` },
+  ]
+}
+
+export type SensitivityRow = { title: string; change: string; breakEven: number; investment: number; cumulative36: number }
+
+/** Чувствительность: как изменение одного входа меняет точку безубыточности, нужную инвестицию и поток к 36 мес */
+export function sensitivity(params: FinanceParams, equipment: EquipmentRow[], team: TeamRow[], C: Constants = financeConstants): SensitivityRow[] {
+  const run = (p: FinanceParams, t: TeamRow[], c: Constants) => {
+    const opex = computeOpex(p, t, c)
+    return {
+      breakEven: breakEvenObjects(opex.total, p.avgBudget, p.marginPct),
+      investment: computeInvestment(p, equipment, t, 1, c).total.mid,
+      cumulative36: cumulativeAt(p, equipment, t, 1, 36, c),
+    }
+  }
+  const scaleTeam = (k: number) => team.map((r) => ({ ...r, salary: r.salary * k }))
+  const cases: { title: string; change: string; p?: FinanceParams; t?: TeamRow[]; c?: Constants }[] = [
+    { title: 'Бюджет объекта', change: '+10%', p: { ...params, avgBudget: params.avgBudget * 1.1 } },
+    { title: 'Бюджет объекта', change: '−10%', p: { ...params, avgBudget: params.avgBudget * 0.9 } },
+    { title: 'Валовая маржа', change: '+5 п.п.', p: { ...params, marginPct: params.marginPct + 5 } },
+    { title: 'Валовая маржа', change: '−5 п.п.', p: { ...params, marginPct: Math.max(1, params.marginPct - 5) } },
+    { title: 'Поток заказов', change: '+10%', p: { ...params, anchorPerYear: params.anchorPerYear * 1.1, externalPerYear: params.externalPerYear * 1.1 } },
+    { title: 'Поток заказов', change: '−10%', p: { ...params, anchorPerYear: params.anchorPerYear * 0.9, externalPerYear: params.externalPerYear * 0.9 } },
+    { title: 'Зарплаты', change: '+10%', t: scaleTeam(1.1) },
+    { title: 'Зарплаты', change: '−10%', t: scaleTeam(0.9) },
+    { title: 'Аренда', change: '+10%', p: { ...params, rentPerM2: params.rentPerM2 * 1.1 } },
+    { title: 'Аренда', change: '−10%', p: { ...params, rentPerM2: params.rentPerM2 * 0.9 } },
+  ]
+  return cases.map((k) => {
+    const r = run(k.p ?? params, k.t ?? team, k.c ?? C)
+    return { title: k.title, change: k.change, breakEven: r.breakEven, investment: r.investment, cumulative36: r.cumulative36 }
+  })
+}
+
+/** Загрузка мощности потоком заказов к концу горизонта, доля от 1 */
+export function capacityUtilization(objectsPerMonth: number, C: Constants = financeConstants): number {
+  return C.capacityObjectsPerMonth > 0 ? objectsPerMonth / C.capacityObjectsPerMonth : Infinity
+}
