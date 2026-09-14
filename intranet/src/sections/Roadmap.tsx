@@ -5,7 +5,7 @@ import { milestones, roadmapBars, roadmapMonths } from '../data/roadmap'
 export function Roadmap() {
   const cols = `repeat(${roadmapMonths}, minmax(0, 1fr))`
   return (
-    <Section id="roadmap" index={11} title="Дорожная карта" lead="18 месяцев от регистрации до расширения. Полосы — этапы, точки — вехи">
+    <Section id="roadmap" index={11} title="Дорожная карта" lead="18 месяцев от регистрации до стабильной загрузки. Полосы — этапы, точки — вехи">
       <Card className="p-0! sm:p-0!">
         <div className="overflow-x-auto">
           <div className="min-w-[860px] p-5 sm:p-6">
