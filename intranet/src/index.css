@@ -1,0 +1,361 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+/* ---------- Токены дизайна ---------- */
+@theme {
+  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --color-ink: #000000;          /* фон страницы */
+  --color-text: #ffffff;         /* основной текст */
+  --color-muted: #e4e4e8;        /* второстепенный текст, не темнее */
+  --color-amber: #f5b53f;        /* единственный акцент: интерактив и ключевые цифры */
+  --color-amber-deep: #d9961f;
+
+  --color-aurora-amber: #f5a623;
+  --color-aurora-copper: #c1663a;
+  --color-aurora-teal: #1fb6a6;
+  --color-aurora-indigo: #4b45c6;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01', 'tnum';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@media (min-width: 1024px) {
+  html {
+    scroll-padding-top: 2rem;
+  }
+}
+
+/* ---------- Аврора: фиксированные размытые пятна ---------- */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.aurora span {
+  position: absolute;
+  display: block;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.7;
+  will-change: transform;
+  transform: translateZ(0);
+}
+.aurora .a1 {
+  width: 60vw;
+  height: 60vw;
+  max-width: 820px;
+  max-height: 820px;
+  left: -12vw;
+  top: -18vh;
+  background: radial-gradient(circle at 40% 40%, var(--color-aurora-amber), transparent 65%);
+}
+.aurora .a2 {
+  width: 50vw;
+  height: 50vw;
+  max-width: 700px;
+  max-height: 700px;
+  right: -14vw;
+  top: 8vh;
+  background: radial-gradient(circle at 50% 50%, var(--color-aurora-copper), transparent 65%);
+}
+.aurora .a3 {
+  width: 55vw;
+  height: 55vw;
+  max-width: 760px;
+  max-height: 760px;
+  right: 6vw;
+  bottom: -22vh;
+  background: radial-gradient(circle at 50% 50%, var(--color-aurora-teal), transparent 65%);
+  opacity: 0.5;
+}
+.aurora .a4 {
+  width: 58vw;
+  height: 58vw;
+  max-width: 800px;
+  max-height: 800px;
+  left: 4vw;
+  bottom: -18vh;
+  background: radial-gradient(circle at 50% 50%, var(--color-aurora-indigo), transparent 65%);
+  opacity: 0.65;
+}
+@media (max-width: 640px) {
+  .aurora span {
+    filter: blur(44px);
+    width: 90vw;
+    height: 90vw;
+    opacity: 0.6;
+  }
+  .aurora .a1 {
+    left: -30vw;
+    top: -10vh;
+  }
+  .aurora .a2 {
+    right: -40vw;
+    top: 22vh;
+  }
+  .aurora .a3 {
+    right: -20vw;
+    bottom: -12vh;
+  }
+  .aurora .a4 {
+    left: -35vw;
+    bottom: 8vh;
+  }
+}
+
+/* ---------- Стекло ---------- */
+.glass {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-radius: 1.5rem;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+.glass-soft {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+}
+
+/* ---------- Фокус для клавиатуры ---------- */
+:focus-visible {
+  outline: 2px solid var(--color-amber);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* ---------- Ползунок ---------- */
+input[type='range'].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range'].slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-amber) 0%,
+    var(--color-amber) var(--fill, 0%),
+    rgba(255, 255, 255, 0.18) var(--fill, 0%),
+    rgba(255, 255, 255, 0.18) 100%
+  );
+}
+input[type='range'].slider::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+input[type='range'].slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-amber);
+}
+input[type='range'].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--color-amber);
+  border: 3px solid #000;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+input[type='range'].slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-amber);
+  border: 3px solid #000;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+input[type='range'].slider:focus-visible {
+  outline: none;
+}
+input[type='range'].slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(245, 181, 63, 0.45);
+}
+input[type='range'].slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px rgba(245, 181, 63, 0.45);
+}
+
+/* ---------- Таблицы ---------- */
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.tbl th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-muted);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  white-space: nowrap;
+}
+.tbl td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  vertical-align: top;
+}
+.tbl tr:last-child td {
+  border-bottom: none;
+}
+.tbl .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tbl tfoot td {
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom: none;
+  font-weight: 600;
+}
+
+/* Поле ввода в стеклянном стиле */
+.field {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.6rem;
+  color: var(--color-text);
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  min-width: 0;
+  width: 100%;
+}
+.field::placeholder {
+  color: rgba(228, 228, 232, 0.55);
+}
+
+/* Скрытие полосы прокрутки в мобильном меню */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------- Печать ---------- */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+  :root {
+    color-scheme: light;
+  }
+  html {
+    scroll-padding-top: 0;
+  }
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    font-size: 11pt;
+  }
+  .aurora,
+  .print-hide {
+    display: none !important;
+  }
+  .print-main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  section.section {
+    break-before: page;
+    padding: 0 !important;
+    margin: 0 0 8mm !important;
+  }
+  section.section:first-of-type {
+    break-before: auto;
+  }
+  .glass,
+  .glass-soft {
+    background: #fff !important;
+    border: 1px solid #cfcfd4 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    color: #111 !important;
+  }
+  .text-muted,
+  .tbl th {
+    color: #444 !important;
+  }
+  .text-amber {
+    color: #9a6400 !important;
+  }
+  .tbl td,
+  .tbl th {
+    border-color: #d9d9de !important;
+  }
+  .field {
+    border-color: #cfcfd4 !important;
+    color: #111 !important;
+    background: #fff !important;
+  }
+  a {
+    color: #111 !important;
+    text-decoration: none;
+  }
+  .print-white {
+    color: #111 !important;
+  }
+  .print-bg-line {
+    background: #cfcfd4 !important;
+  }
+  .print-bar {
+    background: #9a6400 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-bar-soft {
+    background: #e9d9b5 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  svg text {
+    fill: #111 !important;
+  }
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+}

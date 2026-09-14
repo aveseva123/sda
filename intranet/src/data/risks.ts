@@ -1,0 +1,49 @@
+// Риски. probability и impact: 'low' | 'mid' | 'high' — подписи задаются в интерфейсе
+export type Level = 'low' | 'mid' | 'high'
+
+export type Risk = { risk: string; probability: Level; impact: Level; mitigation: string }
+
+export const risks: Risk[] = [
+  {
+    risk: 'Закрытие Верхнего Ларса зимой',
+    probability: 'high',
+    impact: 'mid',
+    mitigation: 'Отправка станков из России май — октябрь. Зимой — море через Поти или запас на складе',
+  },
+  {
+    risk: 'Задержка помещения',
+    probability: 'mid',
+    impact: 'high',
+    mitigation: 'Параллельный поиск в 3 районах, шорт-лист из 2–3 площадок, договор с датой доступа и штрафом',
+  },
+  {
+    risk: 'Кадры: нет операторов и маляров',
+    probability: 'mid',
+    impact: 'mid',
+    mitigation: 'Обучение на месте по регламентам московского цеха, наставник на 2 месяца, зарплата выше рынка на ключевых ролях',
+  },
+  {
+    risk: 'Курс драма',
+    probability: 'mid',
+    impact: 'mid',
+    mitigation: 'Цены заказчикам в долларах или с привязкой, закупки материалов под конкретный заказ',
+  },
+  {
+    risk: 'Зависимость от одного клиента',
+    probability: 'high',
+    impact: 'high',
+    mitigation: 'Внешние заказы с 3-го месяца, работа со студиями, цель — не больше 50% выручки от одной группы к концу года',
+  },
+  {
+    risk: 'Задержка оплат',
+    probability: 'mid',
+    impact: 'mid',
+    mitigation: 'Аванс 50–70%, остаток до монтажа, резерв в кассе на 2 месяца OPEX',
+  },
+  {
+    risk: 'Поломка ключевого станка',
+    probability: 'low',
+    impact: 'high',
+    mitigation: 'Запас расходников и запчастей, сервис дилера, договоренность о резервных мощностях у соседних цехов',
+  },
+]
