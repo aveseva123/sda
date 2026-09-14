@@ -13,7 +13,7 @@ export const roadmapBars: RoadmapBar[] = [
   { title: 'Найм', start: 2, end: 4 },
   { title: 'Первый заказ', start: 4, end: 5 },
   { title: 'Выход в ноль', start: 9, end: 12 },
-  { title: 'Расширение до B', start: 10, end: 18 },
+  { title: 'Стабильная загрузка', start: 12, end: 18 },
 ]
 
 export const milestones: Milestone[] = [
@@ -22,6 +22,6 @@ export const milestones: Milestone[] = [
   { title: 'Станки в цехе', month: 3 },
   { title: 'Первый заказ', month: 4 },
   { title: 'Первый монтаж', month: 5 },
-  { title: 'Второй ЧПУ', month: 10 },
-  { title: 'Лазер и листогиб', month: 16 },
+  { title: 'Второй якорный клиент', month: 9 },
+  { title: 'Итоги года', month: 16 },
 ]

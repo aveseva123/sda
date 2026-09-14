@@ -2,7 +2,7 @@
 // Все суммы в USD. Месяцы считаются с 1 (первый месяц подготовки).
 // Константы передаются последним аргументом; по умолчанию берутся из data/finance.ts.
 
-import type { EquipmentRow, Phase, Scenario } from '../data/equipment'
+import type { EquipmentRow } from '../data/equipment'
 import type { TeamRow } from '../data/team'
 import { financeConstants, type Constants, type FinanceParams, type LoadScenarioId } from '../data/finance'
 
@@ -17,11 +17,6 @@ export const addRanges = (...rs: Range[]): Range =>
 export const scaleRange = (r: Range, k: number): Range => range(r.min * k, r.max * k)
 export const fixed = (n: number): Range => range(n, n)
 
-const PHASES: Phase[] = ['start', 'm6', 'm12']
-
-/** Смещение фаз в месяцах после первого заказа */
-export const phaseOffset = (C: Constants): Record<Phase, number> => ({ start: 0, m6: C.phaseOffsetM6, m12: C.phaseOffsetM12 })
-
 /** Три сценария загрузки из констант */
 export function loadScenarios(C: Constants): { id: LoadScenarioId; title: string; load: number; label: string }[] {
   const pct = (load: number) => `${load >= 1 ? '+' : '−'}${Math.round(Math.abs(load - 1) * 100)}% загрузки`
@@ -35,18 +30,6 @@ export function loadScenarios(C: Constants): { id: LoadScenarioId; title: string
 }
 
 // ---------- Оборудование ----------
-
-/** Фазы, которые входят в сценарий: A — только старт, B — старт и расширение */
-export function phasesForScenario(scenario: Scenario): Phase[] {
-  return scenario === 'A' ? ['start'] : PHASES
-}
-
-/** Строки оборудования для сценария (B включает A) и, если задано, до фазы включительно */
-export function equipmentRows(rows: EquipmentRow[], scenario: Scenario, upToPhase?: Phase): EquipmentRow[] {
-  const allowedScenarios: Scenario[] = scenario === 'A' ? ['A'] : ['A', 'B']
-  const allowedPhases = upToPhase ? PHASES.slice(0, PHASES.indexOf(upToPhase) + 1) : phasesForScenario(scenario)
-  return rows.filter((r) => allowedScenarios.includes(r.scenario) && allowedPhases.includes(r.phase))
-}
 
 /** Сумма оборудования: количество × цена */
 export function equipmentTotal(rows: EquipmentRow[]): Range {
@@ -98,23 +81,6 @@ export function housingEffect(rows: TeamRow[], C: Constants = financeConstants):
   return { headcount, housed: headcount * (C.housedSharePct / 100), cost, payrollSaving, net: payrollSaving - cost }
 }
 
-/** ФОТ одной фазы (только ее строки) */
-export function payrollByPhase(team: TeamRow[], phase: Phase, C: Constants = financeConstants): Payroll {
-  return payrollOf(
-    team.filter((r) => r.phase === phase),
-    C,
-  )
-}
-
-/** ФОТ накопительно до фазы включительно */
-export function payrollUpTo(team: TeamRow[], phase: Phase, C: Constants = financeConstants): Payroll {
-  const allowed = PHASES.slice(0, PHASES.indexOf(phase) + 1)
-  return payrollOf(
-    team.filter((r) => allowed.includes(r.phase)),
-    C,
-  )
-}
-
 // ---------- CAPEX ----------
 
 export type Capex = {
@@ -124,21 +90,10 @@ export type Capex = {
   deposit: Range
   registration: Range
   total: Range
-  byPhase: Record<Phase, Range> // оборудование + доставка по фазам
 }
 
 export function computeCapex(params: FinanceParams, equipment: EquipmentRow[], C: Constants = financeConstants): Capex {
-  const rows = equipmentRows(equipment, params.scenario)
-  const eq = equipmentCapex(rows, C)
-  const byPhase = Object.fromEntries(
-    PHASES.map((p) => [
-      p,
-      equipmentCapex(
-        rows.filter((r) => r.phase === p),
-        C,
-      ).total,
-    ]),
-  ) as Record<Phase, Range>
+  const eq = equipmentCapex(equipment, C)
   const fitOut = range(C.fitOutMin, C.fitOutMax)
   const deposit = fixed(params.areaM2 * params.rentPerM2 * C.depositMonths)
   const registration = range(C.registrationMin, C.registrationMax)
@@ -149,7 +104,6 @@ export function computeCapex(params: FinanceParams, equipment: EquipmentRow[], C
     deposit,
     registration,
     total: addRanges(eq.equipment, eq.shipping, fitOut, deposit, registration),
-    byPhase,
   }
 }
 
@@ -167,12 +121,9 @@ export type Opex = {
   total: number
 }
 
-/** OPEX в месяц при полном штате указанных фаз */
-export function computeOpex(params: FinanceParams, team: TeamRow[], phases: Phase[] = ['start'], C: Constants = financeConstants): Opex {
-  const p = payrollOf(
-    team.filter((r) => phases.includes(r.phase)),
-    C,
-  )
+/** OPEX в месяц при полном штате */
+export function computeOpex(params: FinanceParams, team: TeamRow[], C: Constants = financeConstants): Opex {
+  const p = payrollOf(team, C)
   const rent = params.areaM2 * params.rentPerM2
   const electricity = C.electricityPerMonth
   const other = C.otherPerMonth
@@ -224,44 +175,25 @@ export type CurvePoint = {
   cash: number // startCash + cumulative
 }
 
-/** Активные фазы штата в календарном месяце m */
-export function activePhases(params: FinanceParams, m: number, C: Constants = financeConstants): Phase[] {
-  const first = params.monthsToFirstOrder + 1
-  const offset = phaseOffset(C)
-  return phasesForScenario(params.scenario).filter((p) => m >= first + offset[p])
-}
-
-/** OPEX конкретного месяца: в подготовительный период часть ФОТ, дальше по активным фазам */
+/** OPEX конкретного месяца: в подготовительный период часть ФОТ и общежития, дальше полный */
 export function opexInMonth(params: FinanceParams, team: TeamRow[], m: number, C: Constants = financeConstants): number {
   const first = params.monthsToFirstOrder + 1
   const rent = params.areaM2 * params.rentPerM2
   const fixedPart = rent + C.electricityPerMonth + C.otherPerMonth
-  if (m < first) {
-    const p = payrollUpTo(team, 'start', C)
-    return fixedPart + (p.total + housingCost(p.headcount, C)) * (C.prepPayrollSharePct / 100)
-  }
-  const phases = activePhases(params, m, C)
-  const p = payrollOf(
-    team.filter((r) => phases.includes(r.phase)),
-    C,
-  )
-  return fixedPart + p.total + housingCost(p.headcount, C)
+  const p = payrollOf(team, C)
+  const people = p.total + housingCost(p.headcount, C)
+  return fixedPart + (m < first ? people * (C.prepPayrollSharePct / 100) : people)
 }
 
-/** CAPEX конкретного месяца: старт равномерно по подготовительным месяцам, фазы — в месяц начала фазы */
+/** CAPEX конкретного месяца: оборудование, подготовка и регистрация равномерно по подготовительным месяцам, депозит — в первый */
 export function capexInMonth(params: FinanceParams, equipment: EquipmentRow[], m: number, C: Constants = financeConstants): number {
   const capex = computeCapex(params, equipment, C)
   const prep = Math.max(1, params.monthsToFirstOrder)
-  const first = params.monthsToFirstOrder + 1
-  const offset = phaseOffset(C)
   let out = 0
   if (m <= prep) {
-    out += (capex.byPhase.start.mid + capex.fitOut.mid + capex.registration.mid) / prep
+    out += (capex.equipment.mid + capex.shipping.mid + capex.fitOut.mid + capex.registration.mid) / prep
   }
   if (m === 1) out += capex.deposit.mid
-  for (const p of phasesForScenario(params.scenario)) {
-    if (p !== 'start' && m === first + offset[p]) out += capex.byPhase[p].mid
-  }
   return out
 }
 
@@ -376,21 +308,18 @@ export type ModelResult = {
   params: FinanceParams
   constants: Constants
   capex: Capex
-  opexStart: Opex // при стартовом штате
-  opexFull: Opex // при полном штате сценария
-  breakEvenStart: number // объектов в месяц при стартовом OPEX
-  breakEvenFull: number // при полном штате сценария
+  opex: Opex
+  breakEven: number // объектов в месяц
   base: LoadResult
   pessimistic: LoadResult
   optimistic: LoadResult
   startCash: number // базовая нужная инвестиция (mid)
-  headcountStart: number
+  headcount: number
 }
 
 export function computeModel(params: FinanceParams, equipment: EquipmentRow[], team: TeamRow[], C: Constants = financeConstants): ModelResult {
   const capex = computeCapex(params, equipment, C)
-  const opexStart = computeOpex(params, team, ['start'], C)
-  const opexFull = computeOpex(params, team, phasesForScenario(params.scenario), C)
+  const opex = computeOpex(params, team, C)
   const baseInvestment = computeInvestment(params, equipment, team, 1, C)
   const startCash = baseInvestment.total.mid
 
@@ -420,15 +349,13 @@ export function computeModel(params: FinanceParams, equipment: EquipmentRow[], t
     params,
     constants: C,
     capex,
-    opexStart,
-    opexFull,
-    breakEvenStart: breakEvenObjects(opexStart.total, params.avgBudget, params.marginPct),
-    breakEvenFull: breakEvenObjects(opexFull.total, params.avgBudget, params.marginPct),
+    opex,
+    breakEven: breakEvenObjects(opex.total, params.avgBudget, params.marginPct),
     base: byId('base'),
     pessimistic: byId('pessimistic'),
     optimistic: byId('optimistic'),
     startCash,
-    headcountStart: opexStart.headcount,
+    headcount: opex.headcount,
   }
 }
 

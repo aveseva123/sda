@@ -1,10 +1,7 @@
 // Параметры финансовой модели: значения по умолчанию, диапазоны ползунков и константы.
 // Все суммы — USD. Ползунки меняют defaults, константы правятся только здесь.
 
-import type { Scenario } from './equipment'
-
 export type FinanceParams = {
-  scenario: Scenario
   areaM2: number // площадь, м²
   rentPerM2: number // аренда, $/м²/мес
   avgBudget: number // средний бюджет мебели на объект, $
@@ -17,7 +14,6 @@ export type FinanceParams = {
 }
 
 export const financeDefaults: FinanceParams = {
-  scenario: 'A',
   areaM2: 400,
   rentPerM2: 5.5,
   avgBudget: 35000,
@@ -30,7 +26,7 @@ export const financeDefaults: FinanceParams = {
 }
 
 // Диапазоны ползунков
-export const financeRanges: Record<Exclude<keyof FinanceParams, 'scenario'>, { min: number; max: number; step: number }> = {
+export const financeRanges: Record<keyof FinanceParams, { min: number; max: number; step: number }> = {
   areaM2: { min: 300, max: 800, step: 10 },
   rentPerM2: { min: 3, max: 9, step: 0.25 },
   avgBudget: { min: 10000, max: 90000, step: 1000 },
@@ -70,10 +66,6 @@ export const financeConstants = {
   // Поток заказов
   externalStartMonthOfOps: 3, // внешние заказы появляются с 3-го месяца работы (после первого заказа)
   externalRampMonths: 6, // и линейно растут до полной скорости за 6 месяцев
-
-  // Фазы расширения, месяцев после первого заказа
-  phaseOffsetM6: 6,
-  phaseOffsetM12: 12,
 
   // Сценарии загрузки, % от базовой
   pessimisticLoadPct: 70,
@@ -129,10 +121,8 @@ export const constantGroups: ConstantGroup[] = [
     ],
   },
   {
-    title: 'Фазы и сценарии',
+    title: 'Сценарии загрузки',
     fields: [
-      { key: 'phaseOffsetM6', label: 'Фаза «+6 мес» после первого заказа', unit: 'мес', min: 0, max: 24, step: 1 },
-      { key: 'phaseOffsetM12', label: 'Фаза «+12 мес» после первого заказа', unit: 'мес', min: 0, max: 36, step: 1 },
       { key: 'pessimisticLoadPct', label: 'Пессимистичная загрузка', unit: '%', min: 10, max: 100, step: 5 },
       { key: 'optimisticLoadPct', label: 'Оптимистичная загрузка', unit: '%', min: 100, max: 300, step: 5 },
       { key: 'paybackSearchMonths', label: 'Искать окупаемость до месяца', unit: '№', min: 18, max: 120, step: 6 },

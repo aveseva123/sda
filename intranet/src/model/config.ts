@@ -2,26 +2,19 @@
 // правки строк оборудования и штата, свои строки и переопределенные константы.
 // Чистые функции: кодирование в query-строку, разбор и наложение на данные по умолчанию.
 
-import type { Condition, EquipmentRow, Phase, Scenario, Source } from '../data/equipment'
+import type { Condition, EquipmentRow, Source } from '../data/equipment'
 import type { TeamRow } from '../data/team'
 import { financeConstants, financeDefaults, financeRanges, constantGroups, type ConstantKey, type Constants, type FinanceParams } from '../data/finance'
 
 // ---------- Типы ----------
 
 /** Правка базовой строки оборудования: какие поля можно менять на сайте */
-export type EquipmentEdit = {
-  enabled: boolean
-  qty: number
-  priceMin: number
-  priceMax: number
-  phase: Phase
-  scenario: Scenario
-}
+export type EquipmentEdit = { enabled: boolean; qty: number; priceMin: number; priceMax: number }
 
 /** Своя строка оборудования, добавленная на сайте */
 export type CustomEquipment = EquipmentEdit & { name: string; source: Source; condition: Condition }
 
-export type TeamEdit = { enabled: boolean; qty: number; salary: number; phase: Phase }
+export type TeamEdit = { enabled: boolean; qty: number; salary: number }
 export type CustomTeam = TeamEdit & { role: string }
 
 export type Config = {
@@ -48,8 +41,6 @@ export const emptyConfig = (): Config => ({
 
 // ---------- Справочники ----------
 
-export const PHASES: Phase[] = ['start', 'm6', 'm12']
-export const SCENARIOS: Scenario[] = ['A', 'B']
 export const SOURCES: Source[] = ['Россия б/у', 'Россия дилер', 'Китай']
 export const CONDITIONS: Condition[] = ['новый', 'б/у']
 export const CUSTOM_PREFIX = 'x'
@@ -61,7 +52,6 @@ const constantFields = Object.fromEntries(constantGroups.flatMap((g) => g.fields
 
 // Ключи в адресе
 const paramKeys: Record<keyof FinanceParams, string> = {
-  scenario: 'sc',
   areaM2: 'area',
   rentPerM2: 'rent',
   avgBudget: 'budget',
@@ -90,8 +80,8 @@ const flag = (b: boolean) => (b ? '1' : '0')
 const enc = (s: string) => s.replace(/%/g, '%25').replace(/\|/g, '%7C').replace(/,/g, '%2C')
 const dec = (s: string) => s.replace(/%7C/gi, FIELD).replace(/%2C/gi, ROW).replace(/%25/g, '%')
 
-const eqTuple = (e: EquipmentEdit) => [flag(e.enabled), num(e.qty), num(e.priceMin), num(e.priceMax), e.phase, e.scenario]
-const tmTuple = (e: TeamEdit) => [flag(e.enabled), num(e.qty), num(e.salary), e.phase]
+const eqTuple = (e: EquipmentEdit) => [flag(e.enabled), num(e.qty), num(e.priceMin), num(e.priceMax)]
+const tmTuple = (e: TeamEdit) => [flag(e.enabled), num(e.qty), num(e.salary)]
 
 /** Серилизует конфигурацию в query-строку. Пусто, если все по умолчанию */
 export function encodeConfig(cfg: Config): string {
@@ -121,8 +111,6 @@ const toNum = (raw: string | undefined, fallback: number, min = 0, max = 10_000_
   const v = Number((raw ?? '').replace(',', '.'))
   return Number.isFinite(v) ? clamp(v, min, max) : fallback
 }
-const toPhase = (raw: string | undefined, fallback: Phase): Phase => (PHASES.includes(raw as Phase) ? (raw as Phase) : fallback)
-const toScenario = (raw: string | undefined, fallback: Scenario): Scenario => (SCENARIOS.includes(raw as Scenario) ? (raw as Scenario) : fallback)
 
 function parseEquipmentEdit(f: string[], base: EquipmentEdit): EquipmentEdit {
   return {
@@ -130,8 +118,6 @@ function parseEquipmentEdit(f: string[], base: EquipmentEdit): EquipmentEdit {
     qty: toNum(f[1], base.qty, 0, 99),
     priceMin: toNum(f[2], base.priceMin),
     priceMax: toNum(f[3], base.priceMax),
-    phase: toPhase(f[4], base.phase),
-    scenario: toScenario(f[5], base.scenario),
   }
 }
 
@@ -140,33 +126,21 @@ function parseTeamEdit(f: string[], base: TeamEdit): TeamEdit {
     enabled: f[0] === undefined ? base.enabled : f[0] !== '0',
     qty: toNum(f[1], base.qty, 0, 99),
     salary: toNum(f[2], base.salary, 0, 100_000),
-    phase: toPhase(f[3], base.phase),
   }
 }
 
-export const baseEquipmentEdit = (r: EquipmentRow): EquipmentEdit => ({
-  enabled: true,
-  qty: r.qty,
-  priceMin: r.priceMin,
-  priceMax: r.priceMax,
-  phase: r.phase,
-  scenario: r.scenario,
-})
-
-export const baseTeamEdit = (r: TeamRow): TeamEdit => ({ enabled: true, qty: r.qty, salary: r.salary, phase: r.phase })
+export const baseEquipmentEdit = (r: EquipmentRow): EquipmentEdit => ({ enabled: true, qty: r.qty, priceMin: r.priceMin, priceMax: r.priceMax })
+export const baseTeamEdit = (r: TeamRow): TeamEdit => ({ enabled: true, qty: r.qty, salary: r.salary })
 
 export const sameEquipmentEdit = (a: EquipmentEdit, b: EquipmentEdit) =>
-  a.enabled === b.enabled && a.qty === b.qty && a.priceMin === b.priceMin && a.priceMax === b.priceMax && a.phase === b.phase && a.scenario === b.scenario
-
-export const sameTeamEdit = (a: TeamEdit, b: TeamEdit) => a.enabled === b.enabled && a.qty === b.qty && a.salary === b.salary && a.phase === b.phase
+  a.enabled === b.enabled && a.qty === b.qty && a.priceMin === b.priceMin && a.priceMax === b.priceMax
+export const sameTeamEdit = (a: TeamEdit, b: TeamEdit) => a.enabled === b.enabled && a.qty === b.qty && a.salary === b.salary
 
 /** Разбирает query-строку. Неизвестные ключи и битые значения игнорируются */
 export function decodeConfig(search: string, baseEquipment: EquipmentRow[], baseTeam: TeamRow[]): Config {
   const q = new URLSearchParams(search)
   const cfg = emptyConfig()
 
-  const sc = q.get(paramKeys.scenario)
-  if (sc === 'A' || sc === 'B') cfg.params.scenario = sc
   for (const key of Object.keys(financeRanges) as (keyof typeof financeRanges)[]) {
     const raw = q.get(paramKeys[key])
     if (raw === null) continue
@@ -187,9 +161,9 @@ export function decodeConfig(search: string, baseEquipment: EquipmentRow[], base
     const [name, ...f] = row.split(FIELD)
     const title = dec(name).trim()
     if (!title) continue
-    const edit = parseEquipmentEdit(f, { enabled: true, qty: 1, priceMin: 0, priceMax: 0, phase: 'start', scenario: 'A' })
-    const source = dec(f[6] ?? '')
-    const condition = dec(f[7] ?? '')
+    const edit = parseEquipmentEdit(f, { enabled: true, qty: 1, priceMin: 0, priceMax: 0 })
+    const source = dec(f[4] ?? '')
+    const condition = dec(f[5] ?? '')
     cfg.customEquipment.push({
       name: title,
       ...edit,
@@ -208,7 +182,7 @@ export function decodeConfig(search: string, baseEquipment: EquipmentRow[], base
     const [role, ...f] = row.split(FIELD)
     const title = dec(role).trim()
     if (!title) continue
-    cfg.customTeam.push({ role: title, ...parseTeamEdit(f, { enabled: true, qty: 1, salary: 0, phase: 'start' }) })
+    cfg.customTeam.push({ role: title, ...parseTeamEdit(f, { enabled: true, qty: 1, salary: 0 }) })
   }
   for (const row of rows(KEY_C)) {
     const [key, raw] = row.split(FIELD)
@@ -240,8 +214,6 @@ export function effectiveEquipment(base: EquipmentRow[], cfg: Config): Effective
       priceMax: c.priceMax,
       source: c.source,
       condition: c.condition,
-      scenario: c.scenario,
-      phase: c.phase,
       comment: 'Добавлено на сайте',
       enabled: c.enabled,
       custom: true,
@@ -262,7 +234,6 @@ export function effectiveTeam(base: TeamRow[], cfg: Config): EffectiveTeam[] {
       role: c.role,
       qty: c.qty,
       salary: c.salary,
-      phase: c.phase,
       when: '',
       where: '',
       note: 'Добавлено на сайте',

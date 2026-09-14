@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  activePhases,
   breakEvenObjects,
   computeCapex,
   computeCashCurve,
@@ -9,18 +8,15 @@ import {
   computeOpex,
   housingEffect,
   equipmentCapex,
-  equipmentRows,
   objectsInOpsMonth,
   operatingZeroMonth,
   paybackMonth,
-  payrollByPhase,
   payrollOf,
-  payrollUpTo,
   range,
 } from './finance'
 import { equipment } from '../data/equipment'
 import { team } from '../data/team'
-import { financeConstants as C, financeConstants, financeDefaults } from '../data/finance'
+import { financeConstants as C, financeDefaults } from '../data/finance'
 import type { EquipmentRow } from '../data/equipment'
 import type { TeamRow } from '../data/team'
 
@@ -32,8 +28,6 @@ const row = (over: Partial<EquipmentRow>): EquipmentRow => ({
   priceMax: 200,
   source: 'Китай',
   condition: 'новый',
-  scenario: 'A',
-  phase: 'start',
   comment: '',
   ...over,
 })
@@ -43,26 +37,12 @@ const person = (over: Partial<TeamRow>): TeamRow => ({
   role: 'x',
   qty: 1,
   salary: 1000,
-  phase: 'start',
   when: '',
   where: '',
   ...over,
 })
 
 describe('оборудование', () => {
-  it('сценарий A берет только строки A, B — строки A и B', () => {
-    const rows = [row({ id: 'a' }), row({ id: 'b', scenario: 'B', phase: 'm6' })]
-    expect(equipmentRows(rows, 'A').map((r) => r.id)).toEqual(['a'])
-    expect(equipmentRows(rows, 'B').map((r) => r.id)).toEqual(['a', 'b'])
-  })
-
-  it('фильтр по фазе — накопительный', () => {
-    const rows = [row({ id: 'a' }), row({ id: 'b', scenario: 'B', phase: 'm6' }), row({ id: 'c', scenario: 'B', phase: 'm12' })]
-    expect(equipmentRows(rows, 'B', 'start').map((r) => r.id)).toEqual(['a'])
-    expect(equipmentRows(rows, 'B', 'm6').map((r) => r.id)).toEqual(['a', 'b'])
-    expect(equipmentRows(rows, 'B', 'm12').map((r) => r.id)).toEqual(['a', 'b', 'c'])
-  })
-
   it('итог считает количество и доставку 15–20%', () => {
     const c = equipmentCapex([row({ qty: 2, priceMin: 100, priceMax: 200 })])
     expect(c.equipment).toEqual(range(200, 400))
@@ -72,10 +52,16 @@ describe('оборудование', () => {
     expect(c.total.max).toBeCloseTo(480)
   })
 
-  it('стартовые данные сценария A совпадают с ТЗ: $74–120k', () => {
-    const c = equipmentCapex(equipmentRows(equipment, 'A'))
-    expect(c.equipment.min).toBe(74000)
-    expect(c.equipment.max).toBe(120000)
+  it('стартовые данные без металл-поста: $68–110k', () => {
+    const c = equipmentCapex(equipment)
+    expect(c.equipment.min).toBe(68000)
+    expect(c.equipment.max).toBe(110000)
+    expect(equipment.some((r) => /металл|лазер|листогиб|сварк/i.test(r.name))).toBe(false)
+  })
+
+  it('доставка берется из констант', () => {
+    const c = equipmentCapex([row({ priceMin: 1000, priceMax: 1000 })], { ...C, shippingPctMin: 10, shippingPctMax: 10 })
+    expect(c.shipping).toEqual(range(100, 100))
   })
 })
 
@@ -85,20 +71,17 @@ describe('ФОТ', () => {
     expect(p).toEqual({ headcount: 2, gross: 2000, taxes: 500, total: 2500 })
   })
 
-  it('стартовый штат из ТЗ: 9 человек, $7 300 gross', () => {
-    const p = payrollByPhase(team, 'start')
+  it('стартовый штат из ТЗ: 9 человек, $7 300 gross, без сварщика', () => {
+    const p = payrollOf(team)
     expect(p.headcount).toBe(9)
     expect(p.gross).toBe(7300)
     expect(p.total).toBe(9125)
-  })
-
-  it('накопительно до +12 мес — 16 человек', () => {
-    expect(payrollUpTo(team, 'm12').headcount).toBe(16)
+    expect(team.some((r) => /сварщик/i.test(r.role))).toBe(false)
   })
 })
 
 describe('общежитие и питание', () => {
-  const C = { ...financeConstants, housingPerPerson: 150, mealsPerPerson: 120, housedSharePct: 50, housedSalaryDiscountPct: 15 }
+  const H = { ...C, housingPerPerson: 150, mealsPerPerson: 120, housedSharePct: 50, housedSalaryDiscountPct: 15 }
   const rows = [person({ qty: 10, salary: 1000 })]
 
   it('по умолчанию выключено и ничего не меняет', () => {
@@ -108,9 +91,9 @@ describe('общежитие и питание', () => {
   })
 
   it('снижает gross на долю × скидку и добавляет расход на проживание и питание', () => {
-    const p = payrollOf(rows, C)
+    const p = payrollOf(rows, H)
     expect(p.gross).toBeCloseTo(10000 * (1 - 0.5 * 0.15))
-    const e = housingEffect(rows, C)
+    const e = housingEffect(rows, H)
     expect(e.housed).toBe(5)
     expect(e.cost).toBeCloseTo(5 * 270)
     expect(e.payrollSaving).toBeCloseTo(10000 * 0.075 * 1.25)
@@ -119,7 +102,7 @@ describe('общежитие и питание', () => {
 
   it('OPEX содержит строку общежития и учитывает ее в итоге', () => {
     const params = { ...financeDefaults, areaM2: 400, rentPerM2: 5 }
-    const o = computeOpex(params, rows, ['start'], C)
+    const o = computeOpex(params, rows, H)
     expect(o.housing).toBeCloseTo(5 * 270)
     expect(o.total).toBeCloseTo(o.payroll + o.rent + o.electricity + o.other + o.housing)
   })
@@ -173,8 +156,8 @@ describe('кэш-кривая', () => {
     expect(curve[curve.length - 1].cash).toBeCloseTo(100000 + curve[curve.length - 1].cumulative)
   })
 
-  it('стартовый CAPEX распределяется по подготовительным месяцам, потом ноль в сценарии A', () => {
-    const p = { ...financeDefaults, scenario: 'A' as const, monthsToFirstOrder: 3 }
+  it('CAPEX распределяется по подготовительным месяцам, потом ноль', () => {
+    const p = { ...financeDefaults, monthsToFirstOrder: 3 }
     const curve = computeCashCurve(p, equipment, team)
     const capex = computeCapex(p, equipment)
     const spent = curve.slice(0, 3).reduce((s, x) => s + x.capex, 0)
@@ -182,22 +165,11 @@ describe('кэш-кривая', () => {
     expect(curve.slice(3).every((x) => x.capex === 0)).toBe(true)
   })
 
-  it('в сценарии B фазы включаются через 6 и 12 месяцев после первого заказа', () => {
-    const p = { ...financeDefaults, scenario: 'B' as const, monthsToFirstOrder: 2 }
-    expect(activePhases(p, 3)).toEqual(['start'])
-    expect(activePhases(p, 8)).toEqual(['start'])
-    expect(activePhases(p, 9)).toEqual(['start', 'm6'])
-    expect(activePhases(p, 15)).toEqual(['start', 'm6', 'm12'])
-    const curve = computeCashCurve(p, equipment, team)
-    expect(curve[8].capex).toBeGreaterThan(0)
-    expect(curve[14].capex).toBeGreaterThan(0)
-    expect(curve[9].opex).toBeGreaterThan(curve[7].opex)
-  })
-
   it('в подготовительный период ФОТ учитывается частично', () => {
     const p = { ...financeDefaults, monthsToFirstOrder: 2 }
     const curve = computeCashCurve(p, equipment, team)
     expect(curve[0].opex).toBeLessThan(curve[2].opex)
+    expect(curve[2].opex).toBeCloseTo(curve[10].opex)
   })
 })
 
@@ -239,5 +211,13 @@ describe('инвестиция и окупаемость', () => {
   it('минимальный остаток кассы в базовом сценарии не ниже резерва', () => {
     const m = computeModel(financeDefaults, equipment, team)
     expect(m.base.minCash.value).toBeGreaterThanOrEqual(m.base.investment.reserve.mid - 1)
+  })
+
+  it('сценарии загрузки берутся из констант', () => {
+    const m = computeModel(financeDefaults, equipment, team, { ...C, pessimisticLoadPct: 50, optimisticLoadPct: 200 })
+    expect(m.pessimistic.load).toBe(0.5)
+    expect(m.optimistic.load).toBe(2)
+    expect(m.pessimistic.label).toBe('−50% загрузки')
+    expect(m.optimistic.label).toBe('+100% загрузки')
   })
 })

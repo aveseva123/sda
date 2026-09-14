@@ -94,8 +94,8 @@ export function useConfig(): ConfigApi {
       if (!base) return c
       const original = baseEquipmentEdit(base)
       const current = c.equipment[id] ?? original
-      const { enabled, qty, priceMin, priceMax, phase, scenario } = { ...current, ...patch }
-      const edit = { enabled, qty, priceMin, priceMax, phase, scenario }
+      const { enabled, qty, priceMin, priceMax } = { ...current, ...patch }
+      const edit = { enabled, qty, priceMin, priceMax }
       const equipment = { ...c.equipment }
       if (sameEquipmentEdit(edit, original)) delete equipment[id]
       else equipment[id] = edit
@@ -125,8 +125,8 @@ export function useConfig(): ConfigApi {
       if (!base) return c
       const original = baseTeamEdit(base)
       const current = c.team[id] ?? original
-      const { enabled, qty, salary, phase } = { ...current, ...patch }
-      const edit = { enabled, qty, salary, phase }
+      const { enabled, qty, salary } = { ...current, ...patch }
+      const edit = { enabled, qty, salary }
       const team = { ...c.team }
       if (sameTeamEdit(edit, original)) delete team[id]
       else team[id] = edit

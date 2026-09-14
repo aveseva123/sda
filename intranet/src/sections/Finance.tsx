@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Section } from '../components/Section'
 import { Bento, Card, Tag } from '../components/Card'
 import { Slider } from '../components/Slider'
-import { Segmented } from '../components/Segmented'
 import { CashChart } from '../components/CashChart'
 import { GhostButton, NumInput, PrimaryButton } from '../components/Inputs'
 import { constantGroups, financeConstants, financeRanges } from '../data/finance'
@@ -67,7 +66,7 @@ export function Finance({ model, config }: Props) {
   const [copied, setCopied] = useState(false)
   const inv = model.base.investment
   const capex = model.capex
-  const opex = model.opexStart
+  const opex = model.opex
   const firstOrder = params.monthsToFirstOrder + 1
   const r = financeRanges
 
@@ -86,17 +85,6 @@ export function Finance({ model, config }: Props) {
       <Bento>
         {/* Параметры */}
         <Card className="lg:col-span-5 lg:row-span-2" title="Параметры">
-          <div className="print-hide mb-4">
-            <Segmented
-              label="Сценарий"
-              value={params.scenario}
-              options={[
-                { id: 'A', title: 'Сценарий A' },
-                { id: 'B', title: 'Сценарий B' },
-              ]}
-              onChange={(v) => set('scenario', v)}
-            />
-          </div>
           <div className="space-y-4">
             <Slider label="Площадь" value={params.areaM2} {...r.areaM2} onChange={(v) => set('areaM2', v)} unit="м²" />
             <Slider label="Аренда" value={params.rentPerM2} {...r.rentPerM2} onChange={(v) => set('rentPerM2', v)} format={(v) => `$${num(v, 2)}`} unit="за м² в мес" />
@@ -124,14 +112,14 @@ export function Finance({ model, config }: Props) {
         {/* Ключевые результаты */}
         <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div className="glass p-5 sm:p-6 sm:col-span-2">
-            <p className="text-sm text-muted">Нужная инвестиция, сценарий {params.scenario}</p>
+            <p className="text-sm text-muted">Нужная инвестиция</p>
             <p className="mt-1 text-4xl sm:text-5xl font-semibold tracking-tight text-amber tabular-nums break-words">{usdRangeShort(inv.total.min, inv.total.max)}</p>
             <p className="mt-2 text-sm text-muted">
               В модели {usd(inv.total.mid)} ≈ {amd(inv.total.mid * params.amdRate)}. CAPEX {usdShort(capex.total.mid)} + оборотка {usdShort(inv.workingCapital.mid)} + резерв {params.reservePct}%
             </p>
           </div>
           <div className="glass p-5 sm:p-6">
-            <p className="text-sm text-muted">OPEX в месяц на старте</p>
+            <p className="text-sm text-muted">OPEX в месяц</p>
             <p className="mt-1 text-3xl font-semibold tracking-tight text-amber tabular-nums">{usdShort(opex.total)}</p>
             <p className="mt-1 text-sm text-muted">
               {opex.headcount} человек, {usdShort(opex.payroll)} ФОТ с налогами
@@ -139,11 +127,8 @@ export function Finance({ model, config }: Props) {
           </div>
           <div className="glass p-5 sm:p-6">
             <p className="text-sm text-muted">Точка безубыточности</p>
-            <p className="mt-1 text-3xl font-semibold tracking-tight text-amber tabular-nums">{num(model.breakEvenStart, 2)} объекта в мес</p>
-            <p className="mt-1 text-sm text-muted">
-              {num(model.breakEvenStart * 12, 1)} в год
-              {params.scenario === 'B' && `; при полном штате B — ${num(model.breakEvenFull, 2)} в мес`}
-            </p>
+            <p className="mt-1 text-3xl font-semibold tracking-tight text-amber tabular-nums">{num(model.breakEven, 2)} объекта в мес</p>
+            <p className="mt-1 text-sm text-muted">{num(model.breakEven * 12, 1)} в год</p>
           </div>
           <div className="glass p-5 sm:p-6">
             <p className="text-sm text-muted">Операционный ноль</p>
@@ -173,17 +158,11 @@ export function Finance({ model, config }: Props) {
           <div className="overflow-x-auto mt-3">
             <table className="tbl">
               <tbody>
-                <Row label="Оборудование" note={`сценарий ${params.scenario}, все фазы, включенные строки`} value={usdRange(capex.equipment.min, capex.equipment.max)} />
+                <Row label="Оборудование" note="включенные строки таблицы" value={usdRange(capex.equipment.min, capex.equipment.max)} />
                 <Row label="Доставка и таможня" note={`${C.shippingPctMin}–${C.shippingPctMax}%`} value={usdRange(capex.shipping.min, capex.shipping.max)} />
                 <Row label="Подготовка помещения" value={usdRange(capex.fitOut.min, capex.fitOut.max)} />
                 <Row label="Депозит по аренде" note={`${C.depositMonths} мес × ${params.areaM2} м² × $${num(params.rentPerM2, 2)}`} value={usd(capex.deposit.mid)} />
                 <Row label="Регистрация, ПО, юристы" value={usdRange(capex.registration.min, capex.registration.max)} />
-                {params.scenario === 'B' && (
-                  <>
-                    <Row label={`Из них расширение +${C.phaseOffsetM6} мес`} note="оборудование с доставкой" value={usdRange(capex.byPhase.m6.min, capex.byPhase.m6.max)} />
-                    <Row label={`Из них расширение +${C.phaseOffsetM12} мес`} note="можно вынести во второй транш" value={usdRange(capex.byPhase.m12.min, capex.byPhase.m12.max)} />
-                  </>
-                )}
               </tbody>
               <tfoot>
                 <Row label="CAPEX" value={usdRange(capex.total.min, capex.total.max)} strong />
@@ -198,7 +177,7 @@ export function Finance({ model, config }: Props) {
 
         {/* OPEX */}
         <Card className="lg:col-span-6 p-0! sm:p-0!">
-          <h3 className="px-5 sm:px-6 pt-5 text-xl font-semibold tracking-tight">OPEX в месяц, стартовый штат</h3>
+          <h3 className="px-5 sm:px-6 pt-5 text-xl font-semibold tracking-tight">OPEX в месяц</h3>
           <div className="overflow-x-auto mt-3">
             <table className="tbl">
               <tbody>
@@ -211,7 +190,6 @@ export function Finance({ model, config }: Props) {
               </tbody>
               <tfoot>
                 <Row label="OPEX в месяц" value={usd(opex.total)} strong />
-                {params.scenario === 'B' && <Row label="OPEX при полном штате B" note={`${model.opexFull.headcount} человек`} value={usd(model.opexFull.total)} />}
                 <Row label="В драмах" note={`курс ${params.amdRate}`} value={amd(opex.total * params.amdRate)} />
               </tfoot>
             </table>
@@ -261,15 +239,12 @@ export function Finance({ model, config }: Props) {
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm text-muted">
             <li>Цены оборудования и подготовки — диапазоны, в кривой берется середина</li>
             <li>Стартовый CAPEX распределен по месяцам подготовки, депозит — в первый месяц</li>
-            <li>В подготовительные месяцы ФОТ учтен на {C.prepPayrollSharePct}%: команда нанимается постепенно</li>
+            <li>В подготовительные месяцы ФОТ и общежитие учтены на {C.prepPayrollSharePct}%: команда нанимается постепенно</li>
             <li>
               Якорный клиент дает заказы с первого месяца работы, внешние — с {C.externalStartMonthOfOps}-го и растут до полной скорости за {C.externalRampMonths} мес
             </li>
             <li>Выручка признается в месяц заказа, валовая прибыль = выручка × маржа</li>
             <li>Оборотка = материалы на первые заказы + OPEX за месяцы до операционного нуля</li>
-            <li>
-              В сценарии B оборудование и штат фаз +6 и +12 включаются через {C.phaseOffsetM6} и {C.phaseOffsetM12} месяцев после первого заказа
-            </li>
             <li>Окупаемость — месяц, когда накопленный денежный поток возвращается к нулю</li>
             <li>Выключенные строки станков и штата в расчет не входят</li>
           </ul>

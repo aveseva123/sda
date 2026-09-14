@@ -17,11 +17,12 @@ export function Product() {
       <h3 className="mt-10 mb-3 text-xl font-semibold tracking-tight">Добавляем позже</h3>
       <Bento>
         {product.later.map((p) => (
-          <Card key={p.title} className="lg:col-span-4" title={p.title}>
+          <Card key={p.title} className="lg:col-span-6" title={p.title}>
             <p className="text-sm sm:text-base text-muted text-pretty">{p.text}</p>
           </Card>
         ))}
       </Bento>
+      <p className="mt-3 text-sm text-muted">{product.subcontract}</p>
 
       <h3 className="mt-10 mb-3 text-xl font-semibold tracking-tight">
         Ценовые диапазоны на объект <Tag>ориентир</Tag>

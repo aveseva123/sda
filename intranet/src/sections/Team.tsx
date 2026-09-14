@@ -1,37 +1,30 @@
 import { useState, type FormEvent } from 'react'
 import { Section } from '../components/Section'
 import { Bento, Card, ScrollHint, Tag } from '../components/Card'
-import { GhostButton, NumInput, PrimaryButton, SelectInput, TextInput, Toggle } from '../components/Inputs'
+import { GhostButton, NumInput, PrimaryButton, TextInput, Toggle } from '../components/Inputs'
 import { founderRoles } from '../data/team'
-import { phases, type Phase } from '../data/equipment'
 import { financeConstants, housingExample } from '../data/finance'
-import { housingEffect, payrollByPhase, payrollUpTo } from '../model/finance'
+import { housingEffect, payrollOf } from '../model/finance'
 import type { CustomTeam } from '../model/config'
 import type { ConfigApi } from '../hooks/useConfig'
 import { num, usd } from '../lib/format'
 
-const phaseLead: Record<Phase, string> = {
-  start: 'Кто нужен к первому заказу',
-  m6: 'Через 6 месяцев после первого заказа',
-  m12: 'Через 12 месяцев: по образцу текущего цеха',
-}
-const phaseOptions = phases.map((p) => ({ id: p.id, title: p.title }))
-const emptyDraft = (): CustomTeam => ({ role: '', enabled: true, qty: 1, salary: 0, phase: 'start' })
+const emptyDraft = (): CustomTeam => ({ role: '', enabled: true, qty: 1, salary: 0 })
 
 export function Team({ config }: { config: ConfigApi }) {
   const { teamRows: rows, constants, updateTeam, addTeam, removeTeam, resetTeam, teamEdited, setConstant } = config
   const tax = constants.payrollTaxPct
   const active = rows.filter((r) => r.enabled)
-  const total = payrollUpTo(active, 'm12', constants)
+  const total = payrollOf(active, constants)
   const [draft, setDraft] = useState<CustomTeam>(emptyDraft)
 
-  // Общежитие и питание: считаем для стартового штата
-  const startRows = active.filter((r) => r.phase === 'start')
-  const housing = housingEffect(startRows, constants)
+  // Общежитие и питание
+  const housing = housingEffect(active, constants)
   const housingOn = constants.housedSharePct > 0 && (constants.housingPerPerson > 0 || constants.mealsPerPerson > 0 || constants.housedSalaryDiscountPct > 0)
   const housingKeys = ['housingPerPerson', 'mealsPerPerson', 'housedSharePct', 'housedSalaryDiscountPct'] as const
   const setExample = () => housingKeys.forEach((k) => setConstant(k, housingExample[k]))
   const clearHousing = () => housingKeys.forEach((k) => setConstant(k, financeConstants[k]))
+  const salaryFactor = 1 - (constants.housedSharePct / 100) * (constants.housedSalaryDiscountPct / 100)
 
   const add = (e: FormEvent) => {
     e.preventDefault()
@@ -41,7 +34,7 @@ export function Team({ config }: { config: ConfigApi }) {
   }
 
   return (
-    <Section id="team" index={7} title="Команда" lead={`Штатное расписание по фазам. Налоги и взносы +${tax}% сверх gross, ФОТ считается автоматически. Роли можно выключать, менять и добавлять`}>
+    <Section id="team" index={7} title="Команда" lead={`Штат на старте. Налоги и взносы +${tax}% сверх gross, ФОТ считается автоматически. Роли можно выключать, менять и добавлять`}>
       <Bento className="mb-6">
         <Card className="lg:col-span-7" title="Что закрываю сам на первом этапе" big>
           <ul className="flex flex-wrap gap-2">
@@ -52,7 +45,7 @@ export function Team({ config }: { config: ConfigApi }) {
             ))}
           </ul>
         </Card>
-        <Card className="lg:col-span-5" title="Полный штат к +12 мес">
+        <Card className="lg:col-span-5" title="Штат на старте">
           <p className="text-3xl font-semibold tracking-tight text-amber tabular-nums">{total.headcount} человек</p>
           <p className="mt-1 text-muted">ФОТ с налогами {usd(total.total)} в месяц</p>
           {teamEdited && (
@@ -64,105 +57,90 @@ export function Team({ config }: { config: ConfigApi }) {
         </Card>
       </Bento>
 
-      <div className="space-y-4">
-        {phases.map((ph) => {
-          const group = rows.filter((r) => r.phase === ph.id)
-          const sub = payrollByPhase(active, ph.id, constants)
-          const cum = payrollUpTo(active, ph.id, constants)
-          return (
-            <Card key={ph.id} className="p-0! sm:p-0!">
-              <div className="px-5 sm:px-6 pt-5 flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-xl font-semibold tracking-tight">
-                  {ph.title} <span className="text-muted font-normal text-base">· {sub.headcount} человек</span>
-                </h3>
-                <p className="text-sm text-muted">{phaseLead[ph.id]}</p>
-              </div>
-              <ScrollHint />
-              <div className="overflow-x-auto mt-3">
-                <table className="tbl min-w-[1040px]">
-                  <thead>
-                    <tr>
-                      <th className="sticky-col">Роль</th>
-                      <th className="num">Кол-во</th>
-                      <th className="num">Зарплата gross</th>
-                      <th className="num">Налоги +{tax}%</th>
-                      <th className="num">Итого в месяц</th>
-                      <th>Фаза</th>
-                      <th>Когда нанимаем</th>
-                      <th>Где ищем</th>
-                      <th className="print-hide">
-                        <span className="sr-only">Действия</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.length === 0 && (
-                      <tr>
-                        <td colSpan={9} className="text-muted">
-                          В этой фазе никого нет
-                        </td>
-                      </tr>
-                    )}
-                    {group.map((r) => {
-                      const gross = r.qty * r.salary
-                      const taxes = gross * (tax / 100)
-                      return (
-                        <tr key={r.id} className={r.enabled ? '' : 'row-off'}>
-                          <td className="sticky-col min-w-56 max-w-64">
-                            <div className="flex items-start gap-2.5">
-                              <span className="pt-0.5">
-                                <Toggle checked={r.enabled} onChange={(v) => updateTeam(r.id, { enabled: v })} label={`${r.role}: учитывать`} />
-                              </span>
-                              <span>
-                                <span className="row-name font-semibold">{r.role}</span>
-                                {r.changed && !r.custom && <span className="changed-mark text-xs ml-1.5">изменено</span>}
-                                {r.custom && <span className="changed-mark text-xs ml-1.5">добавлено</span>}
-                                {r.note && !r.custom && <span className="block text-xs text-muted">{r.note}</span>}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="num">
-                            <NumInput value={r.qty} min={0} max={99} label={`${r.role}: количество`} onChange={(v) => updateTeam(r.id, { qty: v })} className="w-16" />
-                          </td>
-                          <td className="num">
-                            <NumInput value={r.salary} max={100000} step={50} label={`${r.role}: зарплата`} onChange={(v) => updateTeam(r.id, { salary: v })} className="w-28" />
-                          </td>
-                          <td className="num">{usd(taxes)}</td>
-                          <td className="num">{usd(gross + taxes)}</td>
-                          <td>
-                            <SelectInput value={r.phase} options={phaseOptions} label={`${r.role}: фаза`} onChange={(v: Phase) => updateTeam(r.id, { phase: v })} />
-                          </td>
-                          <td className="text-muted">{r.when || '—'}</td>
-                          <td className="text-muted">{r.where || '—'}</td>
-                          <td className="print-hide text-right">
-                            {r.custom && (
-                              <button type="button" onClick={() => removeTeam(r.id)} className="text-xs text-muted hover:text-amber" aria-label={`Удалить ${r.role}`}>
-                                Удалить
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td className="sticky-col">Итого по фазе</td>
-                      <td className="num">{sub.headcount}</td>
-                      <td className="num">{usd(sub.gross)}</td>
-                      <td className="num">{usd(sub.taxes)}</td>
-                      <td className="num text-amber">{usd(sub.total)}</td>
-                      <td colSpan={4} className="text-muted font-normal">
-                        {ph.id !== 'start' && `Накопительно: ${cum.headcount} человек, ФОТ ${usd(cum.total)} в месяц`}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </Card>
-          )
-        })}
-      </div>
+      <Card className="p-0! sm:p-0!">
+        <ScrollHint />
+        <div className="overflow-x-auto">
+          <table className="tbl min-w-[900px]">
+            <thead>
+              <tr>
+                <th className="sticky-col">Роль</th>
+                <th className="num">Кол-во</th>
+                <th className="num">Зарплата gross</th>
+                <th className="num">Налоги +{tax}%</th>
+                <th className="num">Итого в месяц</th>
+                <th>Когда нанимаем</th>
+                <th>Где ищем</th>
+                <th className="print-hide">
+                  <span className="sr-only">Действия</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const gross = r.qty * r.salary * salaryFactor
+                const taxes = gross * (tax / 100)
+                return (
+                  <tr key={r.id} className={r.enabled ? '' : 'row-off'}>
+                    <td className="sticky-col min-w-56 max-w-64">
+                      <div className="flex items-start gap-2.5">
+                        <span className="pt-0.5">
+                          <Toggle checked={r.enabled} onChange={(v) => updateTeam(r.id, { enabled: v })} label={`${r.role}: учитывать`} />
+                        </span>
+                        <span>
+                          <span className="row-name font-semibold">{r.role}</span>
+                          {r.changed && !r.custom && <span className="changed-mark text-xs ml-1.5">изменено</span>}
+                          {r.custom && <span className="changed-mark text-xs ml-1.5">добавлено</span>}
+                          {r.note && !r.custom && <span className="block text-xs text-muted">{r.note}</span>}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="num">
+                      <NumInput value={r.qty} min={0} max={99} label={`${r.role}: количество`} onChange={(v) => updateTeam(r.id, { qty: v })} className="w-16" />
+                    </td>
+                    <td className="num">
+                      <NumInput value={r.salary} max={100000} step={50} label={`${r.role}: зарплата`} onChange={(v) => updateTeam(r.id, { salary: v })} className="w-28" />
+                    </td>
+                    <td className="num">{usd(taxes)}</td>
+                    <td className="num">{usd(gross + taxes)}</td>
+                    <td className="text-muted">{r.when || '—'}</td>
+                    <td className="text-muted">{r.where || '—'}</td>
+                    <td className="print-hide text-right">
+                      {r.custom && (
+                        <button type="button" onClick={() => removeTeam(r.id)} className="text-xs text-muted hover:text-amber" aria-label={`Удалить ${r.role}`}>
+                          Удалить
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td className="sticky-col">Итого</td>
+                <td className="num">{total.headcount}</td>
+                <td className="num">{usd(total.gross)}</td>
+                <td className="num">{usd(total.taxes)}</td>
+                <td className="num text-amber">{usd(total.total)}</td>
+                <td colSpan={3} className="text-muted font-normal">
+                  {salaryFactor < 1 ? `Gross с поправкой на общежитие: −${Math.round((1 - salaryFactor) * 100)}% в среднем по штату` : 'Gross без поправок'}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <form onSubmit={add} className="print-hide border-t border-white/10 p-4 sm:p-5">
+          <p className="text-sm text-muted mb-3">Добавить роль. Попадет в адрес страницы вместе с остальными правками</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <TextInput value={draft.role} onChange={(v) => setDraft({ ...draft, role: v })} label="Роль" required className="col-span-2" />
+            <NumInput value={draft.qty} min={1} max={99} label="Количество" onChange={(v) => setDraft({ ...draft, qty: v })} className="w-full" />
+            <NumInput value={draft.salary} max={100000} step={50} label="Зарплата gross" onChange={(v) => setDraft({ ...draft, salary: v })} className="w-full" />
+          </div>
+          <div className="mt-3">
+            <PrimaryButton type="submit">Добавить роль</PrimaryButton>
+          </div>
+        </form>
+      </Card>
 
       <Bento className="mt-4">
         <Card className="lg:col-span-5" title="Общежитие и питание" big>
@@ -177,7 +155,7 @@ export function Team({ config }: { config: ConfigApi }) {
         </Card>
         <Card className="lg:col-span-7">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-lg sm:text-xl font-semibold tracking-tight">Эффект для стартового штата</h3>
+            <h3 className="text-lg sm:text-xl font-semibold tracking-tight">Эффект для штата</h3>
             <div className="flex gap-2 print-hide">
               <GhostButton onClick={setExample}>Подставить пример</GhostButton>
               {housingOn && <GhostButton onClick={clearHousing}>Выключить</GhostButton>}
@@ -228,7 +206,10 @@ export function Team({ config }: { config: ConfigApi }) {
             </div>
             <div className="glass-soft p-3">
               <dt className="text-xs text-muted">Чистый эффект в месяц</dt>
-              <dd className="mt-1 text-xl font-semibold tabular-nums text-amber">{housing.net >= 0 ? '+' : ''}{usd(housing.net)}</dd>
+              <dd className="mt-1 text-xl font-semibold tabular-nums text-amber">
+                {housing.net >= 0 ? '+' : ''}
+                {usd(housing.net)}
+              </dd>
             </div>
           </dl>
           <p className="mt-3 text-xs text-muted">
@@ -238,21 +219,6 @@ export function Team({ config }: { config: ConfigApi }) {
           </p>
         </Card>
       </Bento>
-
-      <Card className="mt-4">
-        <form onSubmit={add} className="print-hide">
-          <p className="text-sm text-muted mb-3">Добавить роль. Попадет в адрес страницы вместе с остальными правками</p>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            <TextInput value={draft.role} onChange={(v) => setDraft({ ...draft, role: v })} label="Роль" required className="col-span-2" />
-            <NumInput value={draft.qty} min={1} max={99} label="Количество" onChange={(v) => setDraft({ ...draft, qty: v })} className="w-full" />
-            <NumInput value={draft.salary} max={100000} step={50} label="Зарплата gross" onChange={(v) => setDraft({ ...draft, salary: v })} className="w-full" />
-            <SelectInput value={draft.phase} options={phaseOptions} label="Фаза" onChange={(v: Phase) => setDraft({ ...draft, phase: v })} className="w-full" />
-          </div>
-          <div className="mt-3">
-            <PrimaryButton type="submit">Добавить роль</PrimaryButton>
-          </div>
-        </form>
-      </Card>
     </Section>
   )
 }

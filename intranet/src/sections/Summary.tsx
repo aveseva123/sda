@@ -8,7 +8,7 @@ import { amd, num, usdRangeShort, usdShort } from '../lib/format'
 export function Summary({ model }: { model: ModelResult }) {
   const inv = model.base.investment.total
   const payback = model.base.payback
-  const bePerYear = model.breakEvenStart * 12
+  const bePerYear = model.breakEven * 12
   return (
     <Section id="summary" index={1} title={summary.title} lead={summary.lead}>
       <Bento>
@@ -26,18 +26,18 @@ export function Summary({ model }: { model: ModelResult }) {
           className="lg:col-span-4"
           label="Нужная инвестиция"
           value={usdRangeShort(inv.min, inv.max)}
-          note={`≈ ${amd(inv.mid * model.params.amdRate)} по курсу ${model.params.amdRate}. Сценарий ${model.params.scenario}`}
+          note={`≈ ${amd(inv.mid * model.params.amdRate)} по курсу ${model.params.amdRate}`}
         />
         <Stat
           className="lg:col-span-4"
           label="Расходы в месяц"
-          value={usdShort(model.opexStart.total)}
-          note={`ФОТ с налогами ${usdShort(model.opexStart.payroll)}, аренда ${usdShort(model.opexStart.rent)}`}
+          value={usdShort(model.opex.total)}
+          note={`ФОТ с налогами ${usdShort(model.opex.payroll)}, аренда ${usdShort(model.opex.rent)}`}
         />
         <Stat
           className="lg:col-span-4"
           label="Точка безубыточности"
-          value={`${num(model.breakEvenStart, 1)} объекта в месяц`}
+          value={`${num(model.breakEven, 1)} объекта в месяц`}
           note={`≈ ${num(bePerYear, 0)} объектов в год при бюджете ${usdShort(model.params.avgBudget)} и марже ${model.params.marginPct}%`}
         />
         <Stat
@@ -46,7 +46,7 @@ export function Summary({ model }: { model: ModelResult }) {
           value={payback ? `${payback} мес` : 'не в горизонте'}
           note={payback ? 'Вложенное возвращается полностью' : 'При текущих параметрах поток заказов не покрывает расходы — двигайте ползунки в финмодели'}
         />
-        <Stat className="lg:col-span-4" label="Команда на старте" value={`${model.headcountStart} человек`} note="Технолог, ОТК, продажи и закупки закрываю сам" />
+        <Stat className="lg:col-span-4" label="Команда на старте" value={`${model.headcount} человек`} note="Технолог, ОТК, продажи и закупки закрываю сам" />
         <Stat className="lg:col-span-4" label="Площадь" value={`${model.params.areaM2} м²`} note="С ростом до 600–800 м²" />
       </Bento>
 
