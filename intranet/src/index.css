@@ -17,6 +17,7 @@
   --color-aurora-indigo: #4b45c6;
 }
 
+@layer base {
 :root {
   color-scheme: dark;
 }
@@ -54,7 +55,9 @@ body {
     scroll-padding-top: 2rem;
   }
 }
+}
 
+@layer components {
 /* ---------- Аврора: фиксированные размытые пятна ---------- */
 .aurora {
   position: fixed;
@@ -218,6 +221,7 @@ input[type='range'].slider:focus-visible::-moz-range-thumb {
 
 /* ---------- Таблицы ---------- */
 .tbl {
+  position: relative; /* скрытые подписи (sr-only) позиционируются внутри таблицы, а не страницы */
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
@@ -249,6 +253,53 @@ input[type='range'].slider:focus-visible::-moz-range-thumb {
   font-weight: 600;
 }
 
+/* Первая колонка таблицы закреплена при горизонтальной прокрутке */
+.tbl .sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: rgba(14, 14, 16, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.tbl thead .sticky-col {
+  z-index: 2;
+}
+
+/* Включатель строки */
+.toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 2.1rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+  cursor: pointer;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 120ms ease;
+}
+.toggle:checked {
+  background: var(--color-amber);
+  border-color: var(--color-amber);
+}
+.toggle:checked::after {
+  transform: translateX(0.85rem);
+  background: #000;
+}
+
 /* Поле ввода в стеклянном стиле */
 .field {
   background: rgba(255, 255, 255, 0.06);
@@ -262,6 +313,49 @@ input[type='range'].slider:focus-visible::-moz-range-thumb {
 }
 .field::placeholder {
   color: rgba(228, 228, 232, 0.55);
+}
+.field-sm {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+}
+/* Числовые поля без стрелок: они съедают место под цифры */
+input[type='number'].field {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type='number'].field::-webkit-inner-spin-button,
+input[type='number'].field::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* Выпадающий список не сжимается уже своего текста */
+select.field {
+  width: auto;
+  min-width: 6rem;
+  padding-right: 1.5rem;
+}
+select.field option {
+  color: #111;
+  background: #fff;
+}
+.field:focus-visible {
+  outline: 2px solid var(--color-amber);
+  outline-offset: 1px;
+}
+/* Строка, которая не идет в расчет */
+.row-off {
+  opacity: 0.45;
+}
+.row-off .row-name {
+  text-decoration: line-through;
+}
+/* Строка вне выбранного сценария или фазы */
+.row-dim {
+  opacity: 0.55;
+}
+.changed-mark {
+  color: var(--color-amber);
 }
 
 /* Скрытие полосы прокрутки в мобильном меню */
@@ -332,6 +426,24 @@ input[type='range'].slider:focus-visible::-moz-range-thumb {
     color: #111 !important;
     background: #fff !important;
   }
+  .tbl .field {
+    border: 0 !important;
+    padding: 0 !important;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .tbl select.field {
+    background-image: none !important;
+  }
+  .tbl .sticky-col {
+    position: static;
+    background: #fff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .changed-mark {
+    color: #9a6400 !important;
+  }
   a {
     color: #111 !important;
     text-decoration: none;
@@ -358,4 +470,5 @@ input[type='range'].slider:focus-visible::-moz-range-thumb {
   .overflow-x-auto {
     overflow: visible !important;
   }
+}
 }

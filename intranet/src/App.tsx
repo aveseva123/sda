@@ -1,12 +1,11 @@
 import { useEffect, useMemo } from 'react'
 import { Aurora } from './components/Aurora'
 import { Sidebar, TopNav } from './components/Nav'
-import { useUrlParams } from './hooks/useUrlParams'
+import { useConfig } from './hooks/useConfig'
 import { useActiveSection } from './hooks/useActiveSection'
 import { sections } from './data/sections'
-import { equipment } from './data/equipment'
-import { team } from './data/team'
 import { computeModel } from './model/finance'
+import { activeRows } from './model/config'
 
 import { Summary } from './sections/Summary'
 import { About } from './sections/About'
@@ -25,8 +24,13 @@ import { NextSteps } from './sections/NextSteps'
 const ids = sections.map((s) => s.id)
 
 export default function App() {
-  const { params, set, reset, isDefault } = useUrlParams()
-  const model = useMemo(() => computeModel(params, equipment, team), [params])
+  const config = useConfig()
+  const { params, equipmentRows, teamRows, constants } = config
+  // В модель идут только включенные строки
+  const model = useMemo(
+    () => computeModel(params, activeRows(equipmentRows), activeRows(teamRows), constants),
+    [params, equipmentRows, teamRows, constants],
+  )
   const active = useActiveSection(ids)
 
   // Ссылка с якорем (#finance) открывается на нужном разделе: контент появляется после загрузки
@@ -49,10 +53,10 @@ export default function App() {
           <Market />
           <Product />
           <Premises />
-          <Equipment scenario={params.scenario} onScenario={(s) => set('scenario', s)} />
-          <Team />
+          <Equipment config={config} />
+          <Team config={config} />
           <Operations />
-          <Finance model={model} params={params} set={set} reset={reset} isDefault={isDefault} />
+          <Finance model={model} config={config} />
           <Investor />
           <Roadmap />
           <Risks />

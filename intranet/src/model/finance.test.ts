@@ -38,6 +38,7 @@ const row = (over: Partial<EquipmentRow>): EquipmentRow => ({
 })
 
 const person = (over: Partial<TeamRow>): TeamRow => ({
+  id: 'x',
   role: 'x',
   qty: 1,
   salary: 1000,

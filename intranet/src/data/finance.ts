@@ -42,6 +42,8 @@ export const financeRanges: Record<Exclude<keyof FinanceParams, 'scenario'>, { m
   amdRate: { min: 350, max: 450, step: 1 },
 }
 
+// Константы модели. Все значения числовые: их можно менять в панели «Константы модели» на сайте,
+// изменения попадают в адрес страницы. Здесь — значения по умолчанию.
 export const financeConstants = {
   horizonMonths: 18, // горизонт кэш-кривой
   paybackSearchMonths: 60, // до какого месяца ищем окупаемость
@@ -59,7 +61,7 @@ export const financeConstants = {
   payrollTaxPct: 25, // налоги и взносы сверх gross
   electricityPerMonth: 800,
   otherPerMonth: 1500, // связь, расходники, бухгалтерия, транспорт
-  prepPayrollShare: 0.5, // доля ФОТ в подготовительные месяцы: команда нанимается постепенно
+  prepPayrollSharePct: 50, // доля ФОТ в подготовительные месяцы: команда нанимается постепенно
 
   // Оборотка
   materialsMin: 20000, // материалы на первые заказы
@@ -70,14 +72,62 @@ export const financeConstants = {
   externalRampMonths: 6, // и линейно растут до полной скорости за 6 месяцев
 
   // Фазы расширения, месяцев после первого заказа
-  phaseOffset: { start: 0, m6: 6, m12: 12 } as const,
+  phaseOffsetM6: 6,
+  phaseOffsetM12: 12,
 
-  // Три сценария загрузки
-  loadScenarios: [
-    { id: 'pessimistic', title: 'Пессимистичный', load: 0.7, label: '−30% загрузки' },
-    { id: 'base', title: 'Базовый', load: 1, label: 'Как в параметрах' },
-    { id: 'optimistic', title: 'Оптимистичный', load: 1.3, label: '+30% загрузки' },
-  ] as const,
+  // Сценарии загрузки, % от базовой
+  pessimisticLoadPct: 70,
+  optimisticLoadPct: 130,
 }
 
-export type LoadScenarioId = (typeof financeConstants.loadScenarios)[number]['id']
+export type Constants = typeof financeConstants
+export type ConstantKey = keyof Constants
+
+// Описание констант для панели на сайте: подпись, единица, диапазон
+export type ConstantField = { key: ConstantKey; label: string; unit?: string; min: number; max: number; step: number }
+export type ConstantGroup = { title: string; fields: ConstantField[] }
+
+export const constantGroups: ConstantGroup[] = [
+  {
+    title: 'CAPEX',
+    fields: [
+      { key: 'shippingPctMin', label: 'Доставка и таможня, от', unit: '%', min: 0, max: 50, step: 1 },
+      { key: 'shippingPctMax', label: 'Доставка и таможня, до', unit: '%', min: 0, max: 50, step: 1 },
+      { key: 'fitOutMin', label: 'Подготовка помещения, от', unit: '$', min: 0, max: 200000, step: 1000 },
+      { key: 'fitOutMax', label: 'Подготовка помещения, до', unit: '$', min: 0, max: 200000, step: 1000 },
+      { key: 'registrationMin', label: 'Регистрация и ПО, от', unit: '$', min: 0, max: 50000, step: 500 },
+      { key: 'registrationMax', label: 'Регистрация и ПО, до', unit: '$', min: 0, max: 50000, step: 500 },
+      { key: 'depositMonths', label: 'Депозит по аренде', unit: 'мес', min: 0, max: 6, step: 1 },
+    ],
+  },
+  {
+    title: 'OPEX',
+    fields: [
+      { key: 'payrollTaxPct', label: 'Налоги и взносы сверх gross', unit: '%', min: 0, max: 60, step: 1 },
+      { key: 'electricityPerMonth', label: 'Электричество в месяц', unit: '$', min: 0, max: 10000, step: 50 },
+      { key: 'otherPerMonth', label: 'Прочее в месяц', unit: '$', min: 0, max: 10000, step: 50 },
+      { key: 'prepPayrollSharePct', label: 'ФОТ в подготовительные месяцы', unit: '%', min: 0, max: 100, step: 5 },
+    ],
+  },
+  {
+    title: 'Оборотка и поток заказов',
+    fields: [
+      { key: 'materialsMin', label: 'Материалы на первые заказы, от', unit: '$', min: 0, max: 200000, step: 1000 },
+      { key: 'materialsMax', label: 'Материалы на первые заказы, до', unit: '$', min: 0, max: 200000, step: 1000 },
+      { key: 'externalStartMonthOfOps', label: 'Внешние заказы с месяца работы', unit: '№', min: 1, max: 12, step: 1 },
+      { key: 'externalRampMonths', label: 'Разгон внешних заказов', unit: 'мес', min: 1, max: 24, step: 1 },
+    ],
+  },
+  {
+    title: 'Фазы и сценарии',
+    fields: [
+      { key: 'phaseOffsetM6', label: 'Фаза «+6 мес» после первого заказа', unit: 'мес', min: 0, max: 24, step: 1 },
+      { key: 'phaseOffsetM12', label: 'Фаза «+12 мес» после первого заказа', unit: 'мес', min: 0, max: 36, step: 1 },
+      { key: 'pessimisticLoadPct', label: 'Пессимистичная загрузка', unit: '%', min: 10, max: 100, step: 5 },
+      { key: 'optimisticLoadPct', label: 'Оптимистичная загрузка', unit: '%', min: 100, max: 300, step: 5 },
+      { key: 'paybackSearchMonths', label: 'Искать окупаемость до месяца', unit: '№', min: 18, max: 120, step: 6 },
+    ],
+  },
+]
+
+export type LoadScenarioId = 'pessimistic' | 'base' | 'optimistic'

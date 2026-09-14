@@ -1,20 +1,16 @@
 import { useState } from 'react'
 import { Section } from '../components/Section'
-import { Bento, Card } from '../components/Card'
+import { Bento, Card, Tag } from '../components/Card'
 import { Slider } from '../components/Slider'
 import { Segmented } from '../components/Segmented'
 import { CashChart } from '../components/CashChart'
-import { financeConstants as C, financeRanges, type FinanceParams } from '../data/finance'
+import { GhostButton, NumInput, PrimaryButton } from '../components/Inputs'
+import { constantGroups, financeConstants, financeRanges } from '../data/finance'
 import type { LoadResult, ModelResult } from '../model/finance'
+import type { ConfigApi } from '../hooks/useConfig'
 import { amd, num, usd, usdRange, usdRangeShort, usdShort } from '../lib/format'
 
-type Props = {
-  model: ModelResult
-  params: FinanceParams
-  set: <K extends keyof FinanceParams>(key: K, value: FinanceParams[K]) => void
-  reset: () => void
-  isDefault: boolean
-}
+type Props = { model: ModelResult; config: ConfigApi }
 
 function Row({ label, value, note, strong = false }: { label: string; value: string; note?: string; strong?: boolean }) {
   return (
@@ -28,7 +24,7 @@ function Row({ label, value, note, strong = false }: { label: string; value: str
   )
 }
 
-function ScenarioCard({ r, base }: { r: LoadResult; base: boolean }) {
+function ScenarioCard({ r, base, horizon, paybackSearch }: { r: LoadResult; base: boolean; horizon: number; paybackSearch: number }) {
   const inv = r.investment.total
   return (
     <Card className={`lg:col-span-4 ${base ? 'border-amber/50!' : ''}`}>
@@ -45,7 +41,7 @@ function ScenarioCard({ r, base }: { r: LoadResult; base: boolean }) {
         </div>
         <div className="flex justify-between gap-3">
           <dt className="text-muted">Окупаемость</dt>
-          <dd className="tabular-nums">{r.payback ? `${r.payback} мес` : `нет за ${C.paybackSearchMonths} мес`}</dd>
+          <dd className="tabular-nums">{r.payback ? `${r.payback} мес` : `нет за ${paybackSearch} мес`}</dd>
         </div>
         <div className="flex justify-between gap-3">
           <dt className="text-muted">Минимум кассы</dt>
@@ -54,7 +50,7 @@ function ScenarioCard({ r, base }: { r: LoadResult; base: boolean }) {
           </dd>
         </div>
         <div className="flex justify-between gap-3">
-          <dt className="text-muted">Касса к {C.horizonMonths} мес</dt>
+          <dt className="text-muted">Касса к {horizon} мес</dt>
           <dd className="tabular-nums">{usdShort(r.cashAtEnd)}</dd>
         </div>
         <div className="flex justify-between gap-3">
@@ -66,12 +62,14 @@ function ScenarioCard({ r, base }: { r: LoadResult; base: boolean }) {
   )
 }
 
-export function Finance({ model, params, set, reset, isDefault }: Props) {
+export function Finance({ model, config }: Props) {
+  const { params, setParam: set, resetAll, isDefault, constants: C, setConstant, resetConstants, constantsEdited, equipmentEdited, teamEdited } = config
   const [copied, setCopied] = useState(false)
   const inv = model.base.investment
   const capex = model.capex
   const opex = model.opexStart
   const firstOrder = params.monthsToFirstOrder + 1
+  const r = financeRanges
 
   const copyLink = async () => {
     try {
@@ -83,10 +81,8 @@ export function Finance({ model, params, set, reset, isDefault }: Props) {
     }
   }
 
-  const r = financeRanges
-
   return (
-    <Section id="finance" index={9} title="Финансовая модель" lead="Все цифры считаются на лету. Параметры хранятся в адресе страницы: ссылку со сценарием можно отправить как есть">
+    <Section id="finance" index={9} title="Финансовая модель" lead="Все цифры считаются на лету. Параметры, правки станков, штата и констант хранятся в адресе страницы: ссылку со сценарием можно отправить как есть">
       <Bento>
         {/* Параметры */}
         <Card className="lg:col-span-5 lg:row-span-2" title="Параметры">
@@ -112,14 +108,17 @@ export function Finance({ model, params, set, reset, isDefault }: Props) {
             <Slider label="Резерв" value={params.reservePct} {...r.reservePct} onChange={(v) => set('reservePct', v)} unit="%" />
             <Slider label="Курс драма к доллару" value={params.amdRate} {...r.amdRate} onChange={(v) => set('amdRate', v)} unit="драм за $1" />
           </div>
-          <div className="print-hide mt-5 flex flex-wrap gap-2">
-            <button type="button" onClick={copyLink} className="rounded-xl bg-amber px-4 py-2 text-sm font-semibold text-black hover:bg-amber-deep">
-              {copied ? 'Ссылка скопирована' : 'Скопировать ссылку'}
-            </button>
-            <button type="button" onClick={reset} disabled={isDefault} className="rounded-xl border border-white/20 px-4 py-2 text-sm disabled:opacity-40 hover:border-amber">
-              Сбросить
-            </button>
+          <div className="print-hide mt-5 flex flex-wrap items-center gap-2">
+            <PrimaryButton onClick={copyLink}>{copied ? 'Ссылка скопирована' : 'Скопировать ссылку'}</PrimaryButton>
+            <GhostButton onClick={resetAll} disabled={isDefault}>
+              Сбросить все
+            </GhostButton>
           </div>
+          {(equipmentEdited || teamEdited || constantsEdited) && (
+            <p className="mt-3 text-xs text-muted">
+              Учтены правки: {[equipmentEdited && 'станки', teamEdited && 'штат', constantsEdited && 'константы'].filter(Boolean).join(', ')}
+            </p>
+          )}
         </Card>
 
         {/* Ключевые результаты */}
@@ -134,7 +133,9 @@ export function Finance({ model, params, set, reset, isDefault }: Props) {
           <div className="glass p-5 sm:p-6">
             <p className="text-sm text-muted">OPEX в месяц на старте</p>
             <p className="mt-1 text-3xl font-semibold tracking-tight text-amber tabular-nums">{usdShort(opex.total)}</p>
-            <p className="mt-1 text-sm text-muted">{opex.headcount} человек, {usdShort(opex.payroll)} ФОТ с налогами</p>
+            <p className="mt-1 text-sm text-muted">
+              {opex.headcount} человек, {usdShort(opex.payroll)} ФОТ с налогами
+            </p>
           </div>
           <div className="glass p-5 sm:p-6">
             <p className="text-sm text-muted">Точка безубыточности</p>
@@ -147,16 +148,12 @@ export function Finance({ model, params, set, reset, isDefault }: Props) {
           <div className="glass p-5 sm:p-6">
             <p className="text-sm text-muted">Операционный ноль</p>
             <p className="mt-1 text-3xl font-semibold tracking-tight text-amber tabular-nums">{inv.zeroMonth ? `мес ${inv.zeroMonth}` : 'не в горизонте'}</p>
-            <p className="mt-1 text-sm text-muted">
-              {inv.zeroMonth ? 'Валовая прибыль месяца покрывает OPEX' : `Заказов мало: оборотка заложена на все ${C.horizonMonths} мес`}
-            </p>
+            <p className="mt-1 text-sm text-muted">{inv.zeroMonth ? 'Валовая прибыль месяца покрывает OPEX' : `Заказов мало: оборотка заложена на все ${C.horizonMonths} мес`}</p>
           </div>
           <div className="glass p-5 sm:p-6">
             <p className="text-sm text-muted">Срок окупаемости</p>
             <p className="mt-1 text-3xl font-semibold tracking-tight text-amber tabular-nums">{model.base.payback ? `${model.base.payback} мес` : 'нет'}</p>
-            <p className="mt-1 text-sm text-muted">
-              {model.base.payback ? 'Накопленный поток возвращается к нулю' : `Не окупается за ${C.paybackSearchMonths} мес при этих параметрах`}
-            </p>
+            <p className="mt-1 text-sm text-muted">{model.base.payback ? 'Накопленный поток возвращается к нулю' : `Не окупается за ${C.paybackSearchMonths} мес при этих параметрах`}</p>
           </div>
         </div>
 
@@ -166,9 +163,9 @@ export function Finance({ model, params, set, reset, isDefault }: Props) {
         </Card>
 
         {/* Три сценария */}
-        <ScenarioCard r={model.pessimistic} base={false} />
-        <ScenarioCard r={model.base} base />
-        <ScenarioCard r={model.optimistic} base={false} />
+        <ScenarioCard r={model.pessimistic} base={false} horizon={C.horizonMonths} paybackSearch={C.paybackSearchMonths} />
+        <ScenarioCard r={model.base} base horizon={C.horizonMonths} paybackSearch={C.paybackSearchMonths} />
+        <ScenarioCard r={model.optimistic} base={false} horizon={C.horizonMonths} paybackSearch={C.paybackSearchMonths} />
 
         {/* CAPEX */}
         <Card className="lg:col-span-6 p-0! sm:p-0!">
@@ -176,15 +173,15 @@ export function Finance({ model, params, set, reset, isDefault }: Props) {
           <div className="overflow-x-auto mt-3">
             <table className="tbl">
               <tbody>
-                <Row label="Оборудование" note={`сценарий ${params.scenario}, все фазы`} value={usdRange(capex.equipment.min, capex.equipment.max)} />
+                <Row label="Оборудование" note={`сценарий ${params.scenario}, все фазы, включенные строки`} value={usdRange(capex.equipment.min, capex.equipment.max)} />
                 <Row label="Доставка и таможня" note={`${C.shippingPctMin}–${C.shippingPctMax}%`} value={usdRange(capex.shipping.min, capex.shipping.max)} />
                 <Row label="Подготовка помещения" value={usdRange(capex.fitOut.min, capex.fitOut.max)} />
                 <Row label="Депозит по аренде" note={`${C.depositMonths} мес × ${params.areaM2} м² × $${num(params.rentPerM2, 2)}`} value={usd(capex.deposit.mid)} />
                 <Row label="Регистрация, ПО, юристы" value={usdRange(capex.registration.min, capex.registration.max)} />
                 {params.scenario === 'B' && (
                   <>
-                    <Row label="Из них расширение +6 мес" note="оборудование с доставкой" value={usdRange(capex.byPhase.m6.min, capex.byPhase.m6.max)} />
-                    <Row label="Из них расширение +12 мес" note="можно вынести во второй транш" value={usdRange(capex.byPhase.m12.min, capex.byPhase.m12.max)} />
+                    <Row label={`Из них расширение +${C.phaseOffsetM6} мес`} note="оборудование с доставкой" value={usdRange(capex.byPhase.m6.min, capex.byPhase.m6.max)} />
+                    <Row label={`Из них расширение +${C.phaseOffsetM12} мес`} note="можно вынести во второй транш" value={usdRange(capex.byPhase.m12.min, capex.byPhase.m12.max)} />
                   </>
                 )}
               </tbody>
@@ -220,16 +217,60 @@ export function Finance({ model, params, set, reset, isDefault }: Props) {
           </div>
         </Card>
 
+        {/* Константы */}
+        <Card className="lg:col-span-12">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h3 className="text-xl font-semibold tracking-tight">
+              Константы модели {constantsEdited && <Tag>изменены</Tag>}
+            </h3>
+            {constantsEdited && (
+              <span className="print-hide">
+                <GhostButton onClick={resetConstants}>Вернуть по умолчанию</GhostButton>
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-muted">Все, что не вынесено на ползунки. Измененные значения подсвечены, значение по умолчанию показано рядом</p>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
+            {constantGroups.map((g) => (
+              <div key={g.title}>
+                <h4 className="text-sm font-semibold mb-2">{g.title}</h4>
+                <ul className="space-y-2">
+                  {g.fields.map((f) => {
+                    const changed = C[f.key] !== financeConstants[f.key]
+                    return (
+                      <li key={f.key} className="flex items-center justify-between gap-3 text-sm">
+                        <span className={changed ? 'changed-mark' : 'text-muted'}>
+                          {f.label}
+                          {changed && <span className="block text-xs text-muted">по умолчанию {financeConstants[f.key]}</span>}
+                        </span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <NumInput value={C[f.key]} min={f.min} max={f.max} step={f.step} label={f.label} onChange={(v) => setConstant(f.key, v)} className="w-24" />
+                          {f.unit && <span className="text-xs text-muted w-8">{f.unit}</span>}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </Card>
+
         <Card className="lg:col-span-12" title="Как считает модель">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm text-muted">
             <li>Цены оборудования и подготовки — диапазоны, в кривой берется середина</li>
             <li>Стартовый CAPEX распределен по месяцам подготовки, депозит — в первый месяц</li>
-            <li>В подготовительные месяцы ФОТ учтен на {Math.round(C.prepPayrollShare * 100)}%: команда нанимается постепенно</li>
-            <li>Якорный клиент дает заказы с первого месяца работы, внешние — с {C.externalStartMonthOfOps}-го и растут до полной скорости за {C.externalRampMonths} мес</li>
+            <li>В подготовительные месяцы ФОТ учтен на {C.prepPayrollSharePct}%: команда нанимается постепенно</li>
+            <li>
+              Якорный клиент дает заказы с первого месяца работы, внешние — с {C.externalStartMonthOfOps}-го и растут до полной скорости за {C.externalRampMonths} мес
+            </li>
             <li>Выручка признается в месяц заказа, валовая прибыль = выручка × маржа</li>
             <li>Оборотка = материалы на первые заказы + OPEX за месяцы до операционного нуля</li>
-            <li>В сценарии B оборудование и штат фаз +6 и +12 включаются через 6 и 12 месяцев после первого заказа</li>
+            <li>
+              В сценарии B оборудование и штат фаз +6 и +12 включаются через {C.phaseOffsetM6} и {C.phaseOffsetM12} месяцев после первого заказа
+            </li>
             <li>Окупаемость — месяц, когда накопленный денежный поток возвращается к нулю</li>
+            <li>Выключенные строки станков и штата в расчет не входят</li>
           </ul>
         </Card>
       </Bento>
