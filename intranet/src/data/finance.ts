@@ -78,7 +78,17 @@ export const financeConstants = {
   // Сценарии загрузки, % от базовой
   pessimisticLoadPct: 70,
   optimisticLoadPct: 130,
+
+  // Общежитие и питание для сотрудников. По умолчанию выключено (нули): стоимость в Ереване — к уточнению.
+  // Логика: часть штата живет в общежитии и питается за счет цеха, зато нанимается с меньшей зарплатой gross
+  housingPerPerson: 0, // проживание, $ на человека в месяц
+  mealsPerPerson: 0, // питание, $ на человека в месяц
+  housedSharePct: 0, // доля штата, которая пользуется общежитием, %
+  housedSalaryDiscountPct: 0, // на сколько ниже зарплата gross у тех, кто живет в общежитии, %
 }
+
+// Пример для кнопки «Подставить пример» на сайте. Это не рыночные данные, а иллюстрация механики
+export const housingExample = { housingPerPerson: 150, mealsPerPerson: 120, housedSharePct: 50, housedSalaryDiscountPct: 15 }
 
 export type Constants = typeof financeConstants
 export type ConstantKey = keyof Constants
@@ -126,6 +136,15 @@ export const constantGroups: ConstantGroup[] = [
       { key: 'pessimisticLoadPct', label: 'Пессимистичная загрузка', unit: '%', min: 10, max: 100, step: 5 },
       { key: 'optimisticLoadPct', label: 'Оптимистичная загрузка', unit: '%', min: 100, max: 300, step: 5 },
       { key: 'paybackSearchMonths', label: 'Искать окупаемость до месяца', unit: '№', min: 18, max: 120, step: 6 },
+    ],
+  },
+  {
+    title: 'Общежитие и питание',
+    fields: [
+      { key: 'housingPerPerson', label: 'Проживание на человека в месяц', unit: '$', min: 0, max: 2000, step: 10 },
+      { key: 'mealsPerPerson', label: 'Питание на человека в месяц', unit: '$', min: 0, max: 2000, step: 10 },
+      { key: 'housedSharePct', label: 'Доля штата в общежитии', unit: '%', min: 0, max: 100, step: 5 },
+      { key: 'housedSalaryDiscountPct', label: 'Ниже зарплата gross у живущих', unit: '%', min: 0, max: 50, step: 1 },
     ],
   },
 ]

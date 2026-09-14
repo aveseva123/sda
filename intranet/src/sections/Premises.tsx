@@ -40,6 +40,15 @@ export function Premises() {
           </Card>
         ))}
 
+        <Card className="lg:col-span-12" title="Желательно, но не обязательно">
+          <ul className="divide-y divide-white/10">
+            {premises.wishes.map((w) => (
+              <li key={w} className="py-2 text-sm sm:text-base text-muted text-pretty">
+                {w}
+              </li>
+            ))}
+          </ul>
+        </Card>
         <Card className="lg:col-span-7" title="Районы поиска">
           <ul className="flex flex-wrap gap-2">
             {premises.districts.map((d) => (

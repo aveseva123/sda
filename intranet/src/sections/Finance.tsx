@@ -207,6 +207,7 @@ export function Finance({ model, config }: Props) {
                 <Row label="Аренда" note={`${params.areaM2} м² × $${num(params.rentPerM2, 2)}`} value={usd(opex.rent)} />
                 <Row label="Электричество" value={usd(opex.electricity)} />
                 <Row label="Прочее" note="связь, расходники, бухгалтерия, транспорт" value={usd(opex.other)} />
+                {opex.housing > 0 && <Row label="Общежитие и питание" note={`${C.housedSharePct}% штата, зарплата у них ниже на ${C.housedSalaryDiscountPct}%`} value={usd(opex.housing)} />}
               </tbody>
               <tfoot>
                 <Row label="OPEX в месяц" value={usd(opex.total)} strong />

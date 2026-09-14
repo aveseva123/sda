@@ -73,12 +73,29 @@ export function equipmentCapex(rows: EquipmentRow[], C: Constants = financeConst
 
 export type Payroll = { headcount: number; gross: number; taxes: number; total: number }
 
-/** ФОТ по строкам штата, с налогами */
+/** Множитель к gross с учетом доли штата в общежитии и их сниженной зарплаты */
+export const housedSalaryFactor = (C: Constants): number => 1 - (C.housedSharePct / 100) * (C.housedSalaryDiscountPct / 100)
+
+/** Расходы на общежитие и питание в месяц для указанного числа сотрудников */
+export const housingCost = (headcount: number, C: Constants): number => headcount * (C.housedSharePct / 100) * (C.housingPerPerson + C.mealsPerPerson)
+
+/** ФОТ по строкам штата, с налогами. Зарплата уже с поправкой на общежитие, если она задана */
 export function payrollOf(rows: TeamRow[], C: Constants = financeConstants): Payroll {
   const headcount = rows.reduce((s, r) => s + r.qty, 0)
-  const gross = rows.reduce((s, r) => s + r.qty * r.salary, 0)
+  const gross = rows.reduce((s, r) => s + r.qty * r.salary, 0) * housedSalaryFactor(C)
   const taxes = gross * (C.payrollTaxPct / 100)
   return { headcount, gross, taxes, total: gross + taxes }
+}
+
+export type HousingEffect = { headcount: number; housed: number; cost: number; payrollSaving: number; net: number }
+
+/** Эффект общежития для штата: расход, экономия ФОТ с налогами и чистый итог в месяц (плюс — экономия) */
+export function housingEffect(rows: TeamRow[], C: Constants = financeConstants): HousingEffect {
+  const headcount = rows.reduce((s, r) => s + r.qty, 0)
+  const fullGross = rows.reduce((s, r) => s + r.qty * r.salary, 0)
+  const payrollSaving = fullGross * (1 - housedSalaryFactor(C)) * (1 + C.payrollTaxPct / 100)
+  const cost = housingCost(headcount, C)
+  return { headcount, housed: headcount * (C.housedSharePct / 100), cost, payrollSaving, net: payrollSaving - cost }
 }
 
 /** ФОТ одной фазы (только ее строки) */
@@ -146,6 +163,7 @@ export type Opex = {
   rent: number
   electricity: number
   other: number
+  housing: number // общежитие и питание
   total: number
 }
 
@@ -158,6 +176,7 @@ export function computeOpex(params: FinanceParams, team: TeamRow[], phases: Phas
   const rent = params.areaM2 * params.rentPerM2
   const electricity = C.electricityPerMonth
   const other = C.otherPerMonth
+  const housing = housingCost(p.headcount, C)
   return {
     headcount: p.headcount,
     payrollGross: p.gross,
@@ -166,7 +185,8 @@ export function computeOpex(params: FinanceParams, team: TeamRow[], phases: Phas
     rent,
     electricity,
     other,
-    total: p.total + rent + electricity + other,
+    housing,
+    total: p.total + rent + electricity + other + housing,
   }
 }
 
@@ -217,16 +237,15 @@ export function opexInMonth(params: FinanceParams, team: TeamRow[], m: number, C
   const rent = params.areaM2 * params.rentPerM2
   const fixedPart = rent + C.electricityPerMonth + C.otherPerMonth
   if (m < first) {
-    return fixedPart + payrollUpTo(team, 'start', C).total * (C.prepPayrollSharePct / 100)
+    const p = payrollUpTo(team, 'start', C)
+    return fixedPart + (p.total + housingCost(p.headcount, C)) * (C.prepPayrollSharePct / 100)
   }
   const phases = activePhases(params, m, C)
-  return (
-    fixedPart +
-    payrollOf(
-      team.filter((r) => phases.includes(r.phase)),
-      C,
-    ).total
+  const p = payrollOf(
+    team.filter((r) => phases.includes(r.phase)),
+    C,
   )
+  return fixedPart + p.total + housingCost(p.headcount, C)
 }
 
 /** CAPEX конкретного месяца: старт равномерно по подготовительным месяцам, фазы — в месяц начала фазы */

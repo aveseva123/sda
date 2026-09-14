@@ -4,10 +4,11 @@ import { Bento, Card, ScrollHint, Tag } from '../components/Card'
 import { GhostButton, NumInput, PrimaryButton, SelectInput, TextInput, Toggle } from '../components/Inputs'
 import { founderRoles } from '../data/team'
 import { phases, type Phase } from '../data/equipment'
-import { payrollByPhase, payrollUpTo } from '../model/finance'
+import { financeConstants, housingExample } from '../data/finance'
+import { housingEffect, payrollByPhase, payrollUpTo } from '../model/finance'
 import type { CustomTeam } from '../model/config'
 import type { ConfigApi } from '../hooks/useConfig'
-import { usd } from '../lib/format'
+import { num, usd } from '../lib/format'
 
 const phaseLead: Record<Phase, string> = {
   start: 'Кто нужен к первому заказу',
@@ -18,11 +19,19 @@ const phaseOptions = phases.map((p) => ({ id: p.id, title: p.title }))
 const emptyDraft = (): CustomTeam => ({ role: '', enabled: true, qty: 1, salary: 0, phase: 'start' })
 
 export function Team({ config }: { config: ConfigApi }) {
-  const { teamRows: rows, constants, updateTeam, addTeam, removeTeam, resetTeam, teamEdited } = config
+  const { teamRows: rows, constants, updateTeam, addTeam, removeTeam, resetTeam, teamEdited, setConstant } = config
   const tax = constants.payrollTaxPct
   const active = rows.filter((r) => r.enabled)
   const total = payrollUpTo(active, 'm12', constants)
   const [draft, setDraft] = useState<CustomTeam>(emptyDraft)
+
+  // Общежитие и питание: считаем для стартового штата
+  const startRows = active.filter((r) => r.phase === 'start')
+  const housing = housingEffect(startRows, constants)
+  const housingOn = constants.housedSharePct > 0 && (constants.housingPerPerson > 0 || constants.mealsPerPerson > 0 || constants.housedSalaryDiscountPct > 0)
+  const housingKeys = ['housingPerPerson', 'mealsPerPerson', 'housedSharePct', 'housedSalaryDiscountPct'] as const
+  const setExample = () => housingKeys.forEach((k) => setConstant(k, housingExample[k]))
+  const clearHousing = () => housingKeys.forEach((k) => setConstant(k, financeConstants[k]))
 
   const add = (e: FormEvent) => {
     e.preventDefault()
@@ -154,6 +163,81 @@ export function Team({ config }: { config: ConfigApi }) {
           )
         })}
       </div>
+
+      <Bento className="mt-4">
+        <Card className="lg:col-span-5" title="Общежитие и питание" big>
+          <p className="text-muted text-pretty">
+            Цех снимает дом или квартиры рядом и кормит смену. Это открывает найм релокантов и людей из регионов, снижает ожидания по зарплате и текучку
+          </p>
+          <ul className="mt-3 divide-y divide-white/10 text-sm">
+            <li className="py-2">Нанимаем на 10–20% ниже рынка при гарантированном жилье и еде</li>
+            <li className="py-2">Смена живет рядом с цехом: меньше опозданий и простоев</li>
+            <li className="py-2">Стоимость проживания и питания в Ереване — к уточнению, справа можно подставить пример</li>
+          </ul>
+        </Card>
+        <Card className="lg:col-span-7">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-lg sm:text-xl font-semibold tracking-tight">Эффект для стартового штата</h3>
+            <div className="flex gap-2 print-hide">
+              <GhostButton onClick={setExample}>Подставить пример</GhostButton>
+              {housingOn && <GhostButton onClick={clearHousing}>Выключить</GhostButton>}
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-muted">Проживание на человека в месяц</span>
+              <span className="flex items-center gap-1.5">
+                <NumInput value={constants.housingPerPerson} max={2000} step={10} label="Проживание на человека в месяц" onChange={(v) => setConstant('housingPerPerson', v)} className="w-24" />
+                <span className="text-xs text-muted w-5">$</span>
+              </span>
+            </label>
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-muted">Питание на человека в месяц</span>
+              <span className="flex items-center gap-1.5">
+                <NumInput value={constants.mealsPerPerson} max={2000} step={10} label="Питание на человека в месяц" onChange={(v) => setConstant('mealsPerPerson', v)} className="w-24" />
+                <span className="text-xs text-muted w-5">$</span>
+              </span>
+            </label>
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-muted">Доля штата в общежитии</span>
+              <span className="flex items-center gap-1.5">
+                <NumInput value={constants.housedSharePct} max={100} step={5} label="Доля штата в общежитии" onChange={(v) => setConstant('housedSharePct', v)} className="w-24" />
+                <span className="text-xs text-muted w-5">%</span>
+              </span>
+            </label>
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-muted">Ниже зарплата gross у живущих</span>
+              <span className="flex items-center gap-1.5">
+                <NumInput value={constants.housedSalaryDiscountPct} max={50} step={1} label="Ниже зарплата gross у живущих" onChange={(v) => setConstant('housedSalaryDiscountPct', v)} className="w-24" />
+                <span className="text-xs text-muted w-5">%</span>
+              </span>
+            </label>
+          </div>
+          <dl className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="glass-soft p-3">
+              <dt className="text-xs text-muted">В общежитии</dt>
+              <dd className="mt-1 text-xl font-semibold tabular-nums">{num(housing.housed, 1)} чел</dd>
+            </div>
+            <div className="glass-soft p-3">
+              <dt className="text-xs text-muted">Расход в месяц</dt>
+              <dd className="mt-1 text-xl font-semibold tabular-nums">{usd(housing.cost)}</dd>
+            </div>
+            <div className="glass-soft p-3">
+              <dt className="text-xs text-muted">Экономия ФОТ с налогами</dt>
+              <dd className="mt-1 text-xl font-semibold tabular-nums">{usd(housing.payrollSaving)}</dd>
+            </div>
+            <div className="glass-soft p-3">
+              <dt className="text-xs text-muted">Чистый эффект в месяц</dt>
+              <dd className="mt-1 text-xl font-semibold tabular-nums text-amber">{housing.net >= 0 ? '+' : ''}{usd(housing.net)}</dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-xs text-muted">
+            {housingOn
+              ? 'Учтено в OPEX и во всей финмодели. Значения хранятся в адресе страницы вместе с константами'
+              : 'Пока выключено: в модели нули. Введите стоимость или подставьте пример, чтобы увидеть эффект'}
+          </p>
+        </Card>
+      </Bento>
 
       <Card className="mt-4">
         <form onSubmit={add} className="print-hide">

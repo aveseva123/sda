@@ -7,6 +7,7 @@ import {
   computeInvestment,
   computeModel,
   computeOpex,
+  housingEffect,
   equipmentCapex,
   equipmentRows,
   objectsInOpsMonth,
@@ -19,7 +20,7 @@ import {
 } from './finance'
 import { equipment } from '../data/equipment'
 import { team } from '../data/team'
-import { financeConstants as C, financeDefaults } from '../data/finance'
+import { financeConstants as C, financeConstants, financeDefaults } from '../data/finance'
 import type { EquipmentRow } from '../data/equipment'
 import type { TeamRow } from '../data/team'
 
@@ -93,6 +94,34 @@ describe('ФОТ', () => {
 
   it('накопительно до +12 мес — 16 человек', () => {
     expect(payrollUpTo(team, 'm12').headcount).toBe(16)
+  })
+})
+
+describe('общежитие и питание', () => {
+  const C = { ...financeConstants, housingPerPerson: 150, mealsPerPerson: 120, housedSharePct: 50, housedSalaryDiscountPct: 15 }
+  const rows = [person({ qty: 10, salary: 1000 })]
+
+  it('по умолчанию выключено и ничего не меняет', () => {
+    const e = housingEffect(rows)
+    expect(e).toEqual({ headcount: 10, housed: 0, cost: 0, payrollSaving: 0, net: 0 })
+    expect(payrollOf(rows).gross).toBe(10000)
+  })
+
+  it('снижает gross на долю × скидку и добавляет расход на проживание и питание', () => {
+    const p = payrollOf(rows, C)
+    expect(p.gross).toBeCloseTo(10000 * (1 - 0.5 * 0.15))
+    const e = housingEffect(rows, C)
+    expect(e.housed).toBe(5)
+    expect(e.cost).toBeCloseTo(5 * 270)
+    expect(e.payrollSaving).toBeCloseTo(10000 * 0.075 * 1.25)
+    expect(e.net).toBeCloseTo(e.payrollSaving - e.cost)
+  })
+
+  it('OPEX содержит строку общежития и учитывает ее в итоге', () => {
+    const params = { ...financeDefaults, areaM2: 400, rentPerM2: 5 }
+    const o = computeOpex(params, rows, ['start'], C)
+    expect(o.housing).toBeCloseTo(5 * 270)
+    expect(o.total).toBeCloseTo(o.payroll + o.rent + o.electricity + o.other + o.housing)
   })
 })
 
