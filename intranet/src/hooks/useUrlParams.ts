@@ -58,7 +58,12 @@ export function useUrlParams() {
     const next = serializeParams(params)
     const current = window.location.search
     if (next !== current) {
-      window.history.replaceState(null, '', `${window.location.pathname}${next}${window.location.hash}`)
+      // В песочницах (превью, iframe) replaceState может быть запрещен: цифры все равно считаются
+      try {
+        window.history.replaceState(null, '', `${window.location.pathname}${next}${window.location.hash}`)
+      } catch {
+        /* адрес не обновится, состояние остается в памяти */
+      }
     }
   }, [params])
 
