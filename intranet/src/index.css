@@ -17,7 +17,6 @@
   --color-aurora-indigo: #4b45c6;
 }
 
-@layer base {
 :root {
   color-scheme: dark;
 }
@@ -45,6 +44,8 @@ body {
   background: var(--color-ink);
   color: var(--color-text);
   font-family: var(--font-sans);
+  font-size: 1rem; /* хостинг может задать свой размер и line-height на body: фиксируем свои */
+  line-height: 1.5;
   font-feature-settings: 'cv11', 'ss01', 'tnum';
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -55,9 +56,7 @@ body {
     scroll-padding-top: 2rem;
   }
 }
-}
 
-@layer components {
 /* ---------- Аврора: фиксированные размытые пятна ---------- */
 .aurora {
   position: fixed;
@@ -309,7 +308,6 @@ input[type='range'].slider:focus-visible::-moz-range-thumb {
   padding: 0.45rem 0.6rem;
   font: inherit;
   min-width: 0;
-  width: 100%;
 }
 .field::placeholder {
   color: rgba(228, 228, 232, 0.55);
@@ -331,7 +329,6 @@ input[type='number'].field::-webkit-outer-spin-button {
 }
 /* Выпадающий список не сжимается уже своего текста */
 select.field {
-  width: auto;
   min-width: 6rem;
   padding-right: 1.5rem;
 }
@@ -470,5 +467,4 @@ select.field option {
   .overflow-x-auto {
     overflow: visible !important;
   }
-}
 }

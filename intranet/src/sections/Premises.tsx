@@ -105,7 +105,7 @@ export function Premises() {
                 <select
                   key={c.key}
                   aria-label={c.title}
-                  className="field"
+                  className="field w-full"
                   value={draft.status}
                   onChange={(e) => setDraft({ ...draft, status: e.target.value })}
                 >
@@ -119,7 +119,7 @@ export function Premises() {
                 <input
                   key={c.key}
                   aria-label={c.title}
-                  className="field"
+                  className="field w-full"
                   placeholder={c.title}
                   required={c.key === 'address'}
                   value={draft[c.key]}

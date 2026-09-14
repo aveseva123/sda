@@ -162,7 +162,7 @@ export function Team({ config }: { config: ConfigApi }) {
             <TextInput value={draft.role} onChange={(v) => setDraft({ ...draft, role: v })} label="Роль" required className="col-span-2" />
             <NumInput value={draft.qty} min={1} max={99} label="Количество" onChange={(v) => setDraft({ ...draft, qty: v })} className="w-full" />
             <NumInput value={draft.salary} max={100000} step={50} label="Зарплата gross" onChange={(v) => setDraft({ ...draft, salary: v })} className="w-full" />
-            <SelectInput value={draft.phase} options={phaseOptions} label="Фаза" onChange={(v: Phase) => setDraft({ ...draft, phase: v })} />
+            <SelectInput value={draft.phase} options={phaseOptions} label="Фаза" onChange={(v: Phase) => setDraft({ ...draft, phase: v })} className="w-full" />
           </div>
           <div className="mt-3">
             <PrimaryButton type="submit">Добавить роль</PrimaryButton>

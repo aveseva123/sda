@@ -86,7 +86,7 @@ export function TextInput({ value, onChange, label, placeholder, className = '',
   return (
     <input
       type="text"
-      className={`field field-sm ${className}`}
+      className={`field field-sm w-full ${className}`}
       aria-label={label}
       placeholder={placeholder ?? label}
       value={value}

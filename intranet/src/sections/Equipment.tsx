@@ -189,10 +189,10 @@ export function Equipment({ config }: { config: ConfigApi }) {
             <NumInput value={draft.qty} min={1} max={99} label="Количество" onChange={(v) => setDraft({ ...draft, qty: v })} className="w-full" />
             <NumInput value={draft.priceMin} step={500} label="Цена от" onChange={(v) => setDraft({ ...draft, priceMin: v })} className="w-full" />
             <NumInput value={draft.priceMax} step={500} label="Цена до" onChange={(v) => setDraft({ ...draft, priceMax: v })} className="w-full" />
-            <SelectInput value={draft.phase} options={phaseOptions} label="Фаза" onChange={(v: Phase) => setDraft({ ...draft, phase: v })} />
-            <SelectInput value={draft.scenario} options={[{ id: 'A', title: 'Сценарий A' }, { id: 'B', title: 'Сценарий B' }]} label="Сценарий" onChange={(v: Scenario) => setDraft({ ...draft, scenario: v })} />
-            <SelectInput value={draft.source} options={sourceOptions} label="Откуда" onChange={(v: Source) => setDraft({ ...draft, source: v })} />
-            <SelectInput value={draft.condition} options={conditionOptions} label="Состояние" onChange={(v: Condition) => setDraft({ ...draft, condition: v })} />
+            <SelectInput value={draft.phase} options={phaseOptions} label="Фаза" onChange={(v: Phase) => setDraft({ ...draft, phase: v })} className="w-full" />
+            <SelectInput value={draft.scenario} options={[{ id: 'A', title: 'Сценарий A' }, { id: 'B', title: 'Сценарий B' }]} label="Сценарий" onChange={(v: Scenario) => setDraft({ ...draft, scenario: v })} className="w-full" />
+            <SelectInput value={draft.source} options={sourceOptions} label="Откуда" onChange={(v: Source) => setDraft({ ...draft, source: v })} className="w-full" />
+            <SelectInput value={draft.condition} options={conditionOptions} label="Состояние" onChange={(v: Condition) => setDraft({ ...draft, condition: v })} className="w-full" />
           </div>
           <div className="mt-3">
             <PrimaryButton type="submit">Добавить станок</PrimaryButton>
