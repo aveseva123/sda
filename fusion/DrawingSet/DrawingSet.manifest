@@ -1,0 +1,13 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "abb0b813-35c7-49be-8874-6439a3ca2c26",
+  "author": "SDA",
+  "description": {
+    "": "Комплект чертежей мебельного изделия по 3D-модели: сборочный, взрыв-схема, деталировка, экспорт PDF/DXF/DWG"
+  },
+  "version": "0.1.0",
+  "runOnStartup": false,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}
