@@ -33,7 +33,7 @@ DEFAULT_SETTINGS = {
     # Шаги пайплайна
     'steps': {
         'audit': True, 'normalize': False, 'props': False, 'visibility': False,
-        'views': False, 'explode': False, 'drawing': False, 'report': True,
+        'views': False, 'explode': False, 'drawing': False, 'report': True, 'export': True,
     },
     'dry_run': True,
     'open_report': True,
@@ -59,6 +59,11 @@ DEFAULT_SETTINGS = {
     # Допуски аудита
     'duplicate_tol_mm': 0.01,
     'duplicate_rel_tol': 1e-4,
+
+    # Экспорт пакета для генератора чертежей (JSON в папку отчётов)
+    'export_include_hidden': False,     # скрытые вхождения в пакет
+    'export_include_helpers': False,    # компоненты-помощники в пакет
+    'export_mesh_tolerance_mm': 0.5,    # допуск триангуляции
 
     # Отчёт
     'report_folder': os.path.join(os.path.expanduser('~'), 'Documents', 'FL_Prep_reports'),

@@ -90,7 +90,7 @@ def _build_inputs(inputs, st, design):
                                                (pipeline.resolve_project_code(st, doc_name)))
     code_input.tooltip = 'Используется в именах отчёта, раскадровки и чертежа. Пусто — из имени документа.'
     grp = tab_steps.addGroupCommandInput('grp_steps', 'Включить шаги').children
-    for number in range(1, 9):
+    for number in sorted(pipeline.STEP_KEYS):
         key = pipeline.STEP_KEYS[number]
         item = grp.addBoolValueInput('step_' + key, '{}. {}'.format(number, pipeline.STEP_TITLES[number]), True, '',
                                      bool(steps.get(key)) if number in pipeline.IMPLEMENTED else False)
@@ -122,6 +122,12 @@ def _build_inputs(inputs, st, design):
     tab_out = inputs.addTabCommandInput('tab_output', 'Вывод').children
     tab_out.addStringValueInput('report_folder', 'Папка отчётов', st['report_folder'])
     tab_out.addBoolValueInput('open_report', 'Открыть HTML-отчёт после выполнения', True, '', st['open_report'])
+    tab_out.addBoolValueInput('export_include_hidden', 'Экспорт: включать скрытые компоненты', True, '',
+                              bool(st['export_include_hidden']))
+    tab_out.addBoolValueInput('export_include_helpers', 'Экспорт: включать помощников', True, '',
+                              bool(st['export_include_helpers']))
+    tab_out.addFloatSpinnerCommandInput('export_mesh_tolerance_mm', 'Экспорт: допуск сетки, мм', '', 0.05, 5.0, 0.05,
+                                        float(st['export_mesh_tolerance_mm']))
     note = tab_out.addTextBoxCommandInput('note', '', 'Справочник материалов и шаблон Part Number редактируются в '
                                           'settings.json рядом с add-in. Лог: ' + log.log_file_path(), 4, True)
     note.isFullWidth = True
@@ -139,7 +145,7 @@ def _read_inputs(inputs, st):
 
     st['dry_run'] = bool(value('dry_run', bool_in))
     st['project_code'] = (value('project_code', str_in) or '').strip()
-    for number in range(1, 9):
+    for number in pipeline.STEP_KEYS:
         key = pipeline.STEP_KEYS[number]
         v = value('step_' + key, bool_in)
         if v is not None:
@@ -156,6 +162,9 @@ def _read_inputs(inputs, st):
     st['duplicate_tol_mm'] = float(value('duplicate_tol_mm', float_in))
     st['report_folder'] = (value('report_folder', str_in) or '').strip() or config.DEFAULT_SETTINGS['report_folder']
     st['open_report'] = bool(value('open_report', bool_in))
+    st['export_include_hidden'] = bool(value('export_include_hidden', bool_in))
+    st['export_include_helpers'] = bool(value('export_include_helpers', bool_in))
+    st['export_mesh_tolerance_mm'] = float(value('export_mesh_tolerance_mm', float_in))
     return st
 
 
@@ -212,6 +221,8 @@ def command_execute(args):
         report.count('error'), report.count('warning'), report.count('info')))
     if report.skipped:
         summary += '\nПропущено шагов: {}.'.format(len(report.skipped))
+    if report.export_path:
+        summary += '\nПакет для генератора: {}'.format(report.export_path)
     if html_path:
         summary += '\nОтчёт: {}'.format(html_path)
         if st.get('open_report'):

@@ -47,6 +47,7 @@ class Report(object):
         self.capabilities = []     # (имя, доступно(bool), примечание)
         self.settings_used = {}
         self.summary = {}          # произвольные счётчики для шапки
+        self.export_path = None    # путь к JSON-пакету, если экспорт выполнялся
         self.started = datetime.datetime.now()
 
     # ---- добавление

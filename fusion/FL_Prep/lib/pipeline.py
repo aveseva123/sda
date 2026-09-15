@@ -4,6 +4,7 @@ import datetime
 
 from . import audit
 from . import capabilities
+from . import exporter
 from . import geom_pure as gp
 from . import log
 from .report import Report
@@ -11,9 +12,12 @@ from .report import Report
 STEP_TITLES = {
     1: 'Аудит', 2: 'Нормализация структуры', 3: 'Свойства для спецификации', 4: 'Очистка видимости',
     5: 'Ориентация и виды', 6: 'Взрыв-схема', 7: 'Создание чертежа', 8: 'Отчёт',
+    9: 'Экспорт пакета для генератора чертежей',
 }
-STEP_KEYS = {1: 'audit', 2: 'normalize', 3: 'props', 4: 'visibility', 5: 'views', 6: 'explode', 7: 'drawing', 8: 'report'}
-IMPLEMENTED = {1, 8}
+STEP_KEYS = {1: 'audit', 2: 'normalize', 3: 'props', 4: 'visibility', 5: 'views', 6: 'explode', 7: 'drawing',
+             8: 'report', 9: 'export'}
+STEP_ORDER = (1, 2, 3, 4, 5, 6, 7, 9)   # шаг 8 (отчёт) всегда последний
+IMPLEMENTED = {1, 8, 9}
 
 
 class NullProgress(object):
@@ -59,7 +63,8 @@ def run(design, document, settings, progress=None):
 
     steps = settings.get('steps', {})
     measures = {}
-    for step in range(1, 8):
+    export_path = None
+    for step in STEP_ORDER:
         if not steps.get(STEP_KEYS[step]):
             continue
         if step not in IMPLEMENTED:
@@ -68,6 +73,8 @@ def run(design, document, settings, progress=None):
         try:
             if step == 1:
                 measures = audit.run(design, document, settings, caps, report, progress)
+            elif step == 9:
+                export_path = exporter.run(design, document, settings, caps, report, progress, code)
         except Exception as exc:  # noqa: BLE001
             log.error('Шаг {} завершился ошибкой: {}'.format(step, exc))
             report.error(step, 'X00_internal', 'Внутренняя ошибка шага: {}'.format(exc))
@@ -77,4 +84,5 @@ def run(design, document, settings, progress=None):
         html_path, csv_path = report.write(settings.get('report_folder') or '.', datetime.datetime.now())
         log.info('Отчёт: {}'.format(html_path))
     progress.finish()
+    report.export_path = export_path
     return report, html_path, csv_path

@@ -64,3 +64,57 @@ class Plane(Base):
 
 class DropDownStyles(object):
     TextListDropDownStyle = 0
+
+
+class Curve3DTypes(object):
+    Line3DCurveType = 0
+    Arc3DCurveType = 1
+    Circle3DCurveType = 2
+    NurbsCurve3DCurveType = 6
+
+
+class Matrix3D(Base):
+    def __init__(self, values=None):
+        self.values = list(values) if values else [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+    @classmethod
+    def create(cls):
+        return cls()
+
+    def asArray(self):
+        return list(self.values)
+
+    def setWithArray(self, values):
+        self.values = list(values)
+        return True
+
+
+class Line3D(Base):
+    curveType = Curve3DTypes.Line3DCurveType
+
+    def __init__(self, a, b):
+        self.startPoint, self.endPoint = a, b
+
+
+class Circle3D(Base):
+    curveType = Curve3DTypes.Circle3DCurveType
+
+    def __init__(self, center, normal, radius):
+        self.center, self.normal, self.radius = center, normal, radius
+
+
+class Attribute(Base):
+    def __init__(self, group, name, value):
+        self.groupName, self.name, self.value = group, name, value
+
+
+class Attributes(Base):
+    def __init__(self):
+        self.items = []
+
+    def add(self, group, name, value):
+        self.items.append(Attribute(group, name, value))
+        return self.items[-1]
+
+    def itemsByGroup(self, group):
+        return [a for a in self.items if a.groupName == group]
