@@ -3,3 +3,8 @@ node_modules/
 *.log
 /tmp/
 tests/e2e/screenshots/
+
+# Fusion add-in: локальные настройки и логи
+fusion/FL_Prep/settings.json
+fusion/FL_Prep/logs/
+__pycache__/

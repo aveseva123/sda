@@ -1,0 +1,13 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "7ea14642-c009-4e9a-b7d1-99bf029f5063",
+  "author": "",
+  "description": {
+    "": "Подготовка модели изделия к сборочному чертежу, взрыв-схеме и деталировке"
+  },
+  "version": "0.2.0",
+  "runOnStartup": false,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}
