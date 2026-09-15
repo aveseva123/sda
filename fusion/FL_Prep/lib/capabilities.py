@@ -6,6 +6,11 @@ import adsk.fusion
 
 from . import log
 
+try:
+    import adsk.drawing as _drawing_mod
+except Exception:  # noqa: BLE001
+    _drawing_mod = None
+
 
 def _safe(fn, default=False):
     try:
@@ -18,15 +23,14 @@ def probe(design):
     caps = {}
 
     # Drawing API (скрытый, появился в заголовках April 2026)
-    try:
-        import adsk.drawing as drawing_mod
+    if _drawing_mod is not None:
         caps['adsk.drawing'] = (True, 'модуль импортируется')
-        has_mgr = hasattr(drawing_mod, 'DrawingManager')
+        has_mgr = hasattr(_drawing_mod, 'DrawingManager')
         caps['adsk.drawing.DrawingManager'] = (
             has_mgr, 'создание чертежа через API' if has_mgr else 'скрытый API отсутствует в этой сборке — шаг 7 через штатную команду')
-        has_input = hasattr(drawing_mod, 'CreateDrawingInput')
+        has_input = hasattr(_drawing_mod, 'CreateDrawingInput')
         caps['adsk.drawing.CreateDrawingInput'] = (has_input, '')
-    except Exception:  # noqa: BLE001
+    else:
         caps['adsk.drawing'] = (False, 'модуль не импортируется')
         caps['adsk.drawing.DrawingManager'] = (False, '')
         caps['adsk.drawing.CreateDrawingInput'] = (False, '')

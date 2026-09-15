@@ -5,6 +5,7 @@ import sys
 import traceback
 
 import adsk.core
+import adsk.fusion
 
 from . import log
 
@@ -57,7 +58,6 @@ def active_design():
     """Активный Design или None."""
     app = adsk.core.Application.get()
     try:
-        import adsk.fusion
         return adsk.fusion.Design.cast(app.activeProduct)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
