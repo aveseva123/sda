@@ -72,9 +72,10 @@ npm run test:e2e     # Playwright: приложение в headless Chromium, т
 ## Add-in для Fusion: комплект чертежей
 
 В папке [`fusion/DrawingSet`](fusion/DrawingSet/README.md) лежит отдельный add-in для
-Autodesk Fusion, который по 3D-модели изделия выпускает сборочный чертёж, взрыв-схему и
-деталировку с экспортом в PDF/DXF/DWG. Он не зависит от PWA и тестируется отдельно
-(`python3 -m unittest discover -s tests -t .` внутри папки).
+Autodesk Fusion, который по 3D-модели изделия сам рисует сборочный чертёж, взрыв-схему и
+деталировку, показывает их в палитре Fusion и пишет PDF/DXF/SVG/CSV. Контуры деталей 1:1
+он выдаёт в DXF (POLYLINE/CIRCLE), который читает это приложение. Add-in не зависит от PWA
+и тестируется отдельно (`python3 -m unittest discover -s tests -t .` внутри папки).
 
 ## Структура
 

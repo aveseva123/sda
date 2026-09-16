@@ -17,6 +17,7 @@ class Log:
         self.path = os.path.join(self.dir, f"{name}-{stamp}.log")
         self.lines: List[str] = []
         self.warnings: List[str] = []
+        self.listeners: List = []      # callables (level, message) e.g. the palette
         self._app = None
         try:
             import adsk.core  # type: ignore
@@ -36,6 +37,11 @@ class Log:
         if self._app is not None:
             try:
                 self._app.log(f"[DrawingSet] {message}")
+            except Exception:
+                pass
+        for fn in list(self.listeners):
+            try:
+                fn(level.lower(), message)
             except Exception:
                 pass
 

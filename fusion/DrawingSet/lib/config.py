@@ -93,10 +93,13 @@ class Settings:
     sheet_metal_bend_table: bool = True
 
     # ---- Экспорт ----
+    drawing_engine: str = "own"         # own — собственный рендер в палитре; fusion — через Drawing API/диалог Fusion
     out_dir: str = ""
     export_pdf: bool = True
-    export_dxf: bool = False
-    export_dwg: bool = False
+    export_dxf: bool = False            # DXF листов (собственный рендер) / команда UI (движок Fusion)
+    export_part_dxf: bool = True        # DXF контуров деталей 1:1 для раскроя (собственный рендер)
+    export_svg: bool = False
+    export_dwg: bool = False            # только движок Fusion, через команду UI
     export_summary_pdf: bool = False    # один сводный PDF на изделие
     export_csv: bool = True             # спецификация, фурнитура, гибы
     file_mask: str = "{проект}_{вид}_{изделие}_{тип}"
@@ -156,6 +159,8 @@ class Settings:
             problems.append("Режим крепежа должен быть hide, attach или show.")
         if self.explode_factor <= 0 and self.explode_step_mm <= 0:
             problems.append("Коэффициент и шаг разнесения не могут быть одновременно нулевыми.")
+        if self.drawing_engine not in ("own", "fusion"):
+            problems.append("Движок чертежей должен быть own или fusion.")
         if self.standard not in ("ISO", "ASME"):
             problems.append("Стандарт должен быть ISO или ASME.")
         if self.units not in ("mm", "in"):

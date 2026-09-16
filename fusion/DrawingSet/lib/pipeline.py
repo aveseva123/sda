@@ -12,7 +12,7 @@ import os
 import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import bom, drawing_driver as dd, explode_fusion, export, model
+from . import bom, docbuild, drawing_driver as dd, explode_fusion, export, model
 from .capabilities import Capabilities, probe
 from .config import Settings
 from .naming import build_file_name, sanitize_filename
@@ -24,12 +24,19 @@ RESUME_EVENT_ID = "DrawingSet_Resume"
 
 
 class Pipeline:
-    def __init__(self, app: Any, settings: Settings, log: Any, mode: str = "full"):
+    def __init__(self, app: Any, settings: Settings, log: Any, mode: str = "full", reporter: Any = None,
+                 previous: Optional["Pipeline"] = None):
         self.app = app
         self.ui = app.userInterface
         self.settings = settings
         self.log = log
-        self.mode = mode                      # full | spec | probe
+        self.mode = mode                      # full | spec | render | export
+        self.reporter = reporter              # object with send(action, payload) (the palette) or None
+        self.scene = None
+        self.document = None
+        if previous is not None:              # export mode reuses the last rendered document
+            self.scene, self.document, self.data, self.rows = previous.scene, previous.document, previous.data, previous.rows
+            self.explode_result = previous.explode_result
         self.caps: Capabilities = probe(app)
         self.steps: List[Tuple[str, Callable[[], Any]]] = []
         self.index = 0
@@ -53,9 +60,19 @@ class Pipeline:
     # ------------------------------------------------------------------
     def _build_steps(self) -> None:
         s = self.settings
+        if self.mode == "export":
+            self.steps.append(("Экспорт", self.step_export_render))
+            self.steps.append(("Завершение", self.step_finish))
+            return
         self.steps.append(("Подготовка модели", self.step_prepare))
         if self.mode == "spec":
             self.steps.append(("Отчёт", self.step_finish))
+            return
+        if self.mode == "render" or (self.mode == "full" and s.drawing_engine == "own"):
+            self.mode = "render"
+            self.steps.append(("Чтение геометрии", self.step_extract))
+            self.steps.append(("Построение листов", self.step_render))
+            self.steps.append(("Завершение", self.step_finish))
             return
         if s.make_assembly:
             self.steps.append(("Сборочный чертёж", self.step_assembly))
@@ -68,13 +85,21 @@ class Pipeline:
         self.steps.append(("Завершение", self.step_finish))
 
     def start(self) -> None:
-        try:
-            self.progress = self.ui.createProgressDialog()
-            self.progress.isCancelButtonShown = False
-            self.progress.show("DrawingSet", "Подготовка…", 0, max(len(self.steps), 1), 0)
-        except Exception:
-            self.progress = None
+        if self.reporter is None:
+            try:
+                self.progress = self.ui.createProgressDialog()
+                self.progress.isCancelButtonShown = False
+                self.progress.show("DrawingSet", "Подготовка…", 0, max(len(self.steps), 1), 0)
+            except Exception:
+                self.progress = None
         self.run()
+
+    def report(self, message: str, value: Optional[float] = None) -> None:
+        if self.reporter is not None:
+            payload = {"message": message}
+            if value is not None:
+                payload["value"] = value
+            self.reporter.send("progress", payload)
 
     def resume(self, cancelled: bool = False) -> None:
         if self.waiting_for is None:
@@ -100,6 +125,8 @@ class Pipeline:
             name, fn = self.steps[self.index]
             self._progress(name)
             self.log.info(f"=== {name} ===")
+            if self.reporter is not None:
+                self.reporter.send("log", {"level": "info", "message": f"— {name}"})
             try:
                 outcome = fn()
             except Exception as exc:
@@ -115,6 +142,7 @@ class Pipeline:
         self._hide_progress()
 
     def _progress(self, message: str) -> None:
+        self.report(message, self.index / max(len(self.steps), 1))
         if self.progress is not None:
             try:
                 self.progress.progressValue = self.index
@@ -138,7 +166,10 @@ class Pipeline:
             self.write_report(failed=True)
         except Exception:
             pass
-        self.ui.messageBox(f"DrawingSet: ошибка.\n{exc}\n\nЛог: {self.log.path}", "DrawingSet")
+        if self.reporter is not None:
+            self.reporter.send("error", {"message": f"{exc} (лог: {self.log.path})"})
+        else:
+            self.ui.messageBox(f"DrawingSet: ошибка.\n{exc}\n\nЛог: {self.log.path}", "DrawingSet")
 
     # ------------------------------------------------------------------
     def step_prepare(self) -> None:
@@ -150,9 +181,9 @@ class Pipeline:
         if design is None:
             raise RuntimeError("Активный документ не является дизайном Fusion.")
         self.doc, self.design = doc, design
-        if self.mode != "spec":
+        if self.mode == "full" and self.settings.drawing_engine == "fusion":
             if not doc.isSaved:
-                raise RuntimeError("Документ ни разу не сохранён: сохраните его в проект, генератор чертежей работает с сохранённым файлом.")
+                raise RuntimeError("Документ ни разу не сохранён: сохраните его в проект, генератор чертежей Fusion работает с сохранённым файлом.")
         self.data = model.collect(design.rootComponent, s, self.log, product_name=doc.name)
         data = self.data
         if not data.parts:
@@ -181,11 +212,11 @@ class Pipeline:
             else:
                 self.manual_steps.append(
                     f"Разрезы включены, но маркеров с префиксом «{s.section_marker_prefix}» в модели нет.")
-        if s.export_csv:
+        if s.export_csv and self.mode in ("spec", "full"):
             self.outputs += export.write_tables(s.out_dir, self.base_name(), self.rows, data.bends, self.log)
         # explode preview (dry run) is always computed: it goes to the report
         self.explode_result = explode_fusion.compute(data, s)
-        if self.mode != "spec":
+        if self.mode == "full" and s.drawing_engine == "fusion":
             if s.save_before_run and doc.isModified:
                 self.log.info("Сохранение документа перед генерацией…")
                 if not doc.save("DrawingSet: подготовка к выпуску чертежей"):
@@ -399,6 +430,38 @@ class Pipeline:
             return WAIT
         self._finish_drawing(dd.KIND_SUMMARY, result)
 
+    # ------------------------------------------------------------------
+    def step_extract(self) -> None:
+        from .extract import extract_scene
+        total = max(len(self.data.parts), 1)
+
+        def progress(i: int, n: int, name: str) -> None:
+            self.report(f"Геометрия: {name}", (self.index + i / n) / max(len(self.steps), 1))
+            try:
+                import adsk.core  # type: ignore
+                adsk.doEvents()
+            except Exception:
+                pass
+
+        self.scene = extract_scene(self.data, self.log, progress)
+        self.log.info(f"Геометрия прочитана: деталей {len(self.scene.parts)}, развёрток {len(self.scene.flat_patterns)}")
+
+    def step_render(self) -> None:
+        self.document = docbuild.build_document(self.data, self.scene, self.settings, self.explode_result, self.rows)
+        for w in self.document.warnings:
+            self.log.warn(w)
+        self.log.info(f"Построено листов: {len(self.document.sheets)}")
+        if self.reporter is not None:
+            self.reporter.send("sheets", {"sheets": docbuild.sheets_svg(self.document),
+                                          "warnings": list(self.document.warnings)})
+
+    def step_export_render(self) -> None:
+        if self.document is None or self.scene is None:
+            raise RuntimeError("Сначала постройте листы («Сгенерировать»).")
+        self.outputs += docbuild.export_document(self.document, self.data, self.scene, self.settings, self.rows, self.log)
+        if self.settings.export_csv:
+            self.outputs += export.write_tables(self.settings.out_dir, self.base_name(), self.rows, self.data.bends, self.log)
+
     def step_finish(self) -> None:
         self.done = True
         # resume() increments index after the last UI step; make sure copies are gone
@@ -413,7 +476,14 @@ class Pipeline:
         if self.manual_steps:
             summary.append("Ручные шаги:\n  - " + "\n  - ".join(self.manual_steps))
         summary.append(f"Отчёт: {path}")
-        self.ui.messageBox("\n".join(summary), "DrawingSet")
+        if self.reporter is not None:
+            if self.mode == "export":
+                self.reporter.send("done", {"files": list(self.outputs), "out_dir": self.settings.out_dir})
+            for m in self.manual_steps:
+                self.reporter.send("log", {"level": "warn", "message": m})
+            self.reporter.send("log", {"level": "info", "message": f"Отчёт: {path}"})
+        elif self.mode != "render":
+            self.ui.messageBox("\n".join(summary), "DrawingSet")
 
     # ------------------------------------------------------------------
     def write_report(self, failed: bool = False) -> str:

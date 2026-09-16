@@ -24,6 +24,7 @@ DROPDOWNS: Dict[str, List[Tuple[str, str]]] = {
                          ("Overall", "Только габариты")],
     "det_origin": [("BottomLeft", "Левый нижний угол"), ("BottomRight", "Правый нижний"),
                    ("TopLeft", "Левый верхний"), ("TopRight", "Правый верхний"), ("ModelOrigin", "Начало модели")],
+    "drawing_engine": [("own", "Собственный рендер (палитра, PDF/DXF/SVG)"), ("fusion", "Через Fusion Drawing")],
 }
 
 FLOATS: Dict[str, Tuple[float, float, float]] = {   # min, max, step
@@ -41,6 +42,7 @@ FLOATS: Dict[str, Tuple[float, float, float]] = {   # min, max, step
 # (tab id, tab title, [(field, label)])
 LAYOUT: List[Tuple[str, str, List[Tuple[str, str]]]] = [
     ("tab_set", "Комплект", [
+        ("drawing_engine", "Движок чертежей"),
         ("make_assembly", "А. Сборочный чертёж (СБ)"),
         ("make_explode", "Б. Взрыв-схема (ВЗР)"),
         ("make_details", "В. Деталировка (ДЕТ)"),
@@ -92,8 +94,10 @@ LAYOUT: List[Tuple[str, str, List[Tuple[str, str]]]] = [
     ("tab_out", "Экспорт", [
         ("out_dir", "Папка вывода"),
         ("export_pdf", "PDF"),
-        ("export_dxf", "DXF (лист — через команду UI, развёртки — API)"),
-        ("export_dwg", "DWG (через команду UI)"),
+        ("export_dxf", "DXF листов"),
+        ("export_part_dxf", "DXF контуров деталей 1:1 (раскрой)"),
+        ("export_svg", "SVG листов"),
+        ("export_dwg", "DWG (только движок Fusion, команда UI)"),
         ("export_csv", "CSV: спецификация, фурнитура, гибы"),
         ("file_mask", "Маска имени файла"),
         ("project_override", "Проект (пусто = из имён)"),
@@ -189,3 +193,24 @@ def handle_input_changed(args: Any, ui: Any) -> None:
         target = adsk.core.StringValueCommandInput.cast(args.inputs.itemById("out_dir"))
         if target is not None:
             target.value = dlg.folder
+
+
+# ----------------------------------------------------------------------
+def schema(settings: Settings) -> List[Dict[str, Any]]:
+    """Form description for the HTML palette (same layout as the native dialog)."""
+    out: List[Dict[str, Any]] = []
+    for tab_id, title, fields_ in LAYOUT:
+        fields: List[Dict[str, Any]] = []
+        for key, label in fields_:
+            value = getattr(settings, key)
+            if key in DROPDOWNS:
+                fields.append({"key": key, "label": label, "type": "select", "options": DROPDOWNS[key]})
+            elif key in FLOATS:
+                lo, hi, step = FLOATS[key]
+                fields.append({"key": key, "label": label, "type": "float", "min": lo, "max": hi, "step": step})
+            elif isinstance(value, bool):
+                fields.append({"key": key, "label": label, "type": "bool"})
+            else:
+                fields.append({"key": key, "label": label, "type": "text"})
+        out.append({"id": tab_id, "title": title, "fields": fields})
+    return out

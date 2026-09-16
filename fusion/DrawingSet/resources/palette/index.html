@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>DrawingSet</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">DrawingSet <span id="version"></span></div>
+  <div class="status" id="status">Подключение к Fusion…</div>
+  <div class="actions">
+    <button id="btn-generate" class="primary" disabled>Сгенерировать</button>
+    <button id="btn-export" disabled>Экспорт</button>
+    <button id="btn-folder" disabled>Открыть папку</button>
+  </div>
+</header>
+<div class="progress"><div id="progress-bar"></div></div>
+<main class="layout">
+  <aside class="side">
+    <nav class="tabs" id="tabs"></nav>
+    <form class="settings" id="settings" onsubmit="return false"></form>
+    <section class="sheets">
+      <h3>Листы <span id="sheet-count"></span></h3>
+      <ul id="sheet-list"></ul>
+    </section>
+  </aside>
+  <section class="viewer">
+    <div class="viewer-bar">
+      <button id="btn-prev" title="Предыдущий лист">◀</button>
+      <span id="sheet-title">Лист не выбран</span>
+      <button id="btn-next" title="Следующий лист">▶</button>
+      <span class="spacer"></span>
+      <button id="btn-fit" title="Вписать">Вписать</button>
+      <span id="zoom-label">100%</span>
+    </div>
+    <div class="canvas" id="canvas"><div class="page" id="page"><div class="empty">Нажмите «Сгенерировать», чтобы построить комплект по активной модели.</div></div></div>
+    <details class="log" open>
+      <summary>Журнал <span id="warn-count"></span></summary>
+      <pre id="log"></pre>
+    </details>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

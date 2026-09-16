@@ -1,11 +1,14 @@
 """DrawingSet — Fusion add-in: комплект чертежей мебельного изделия по 3D-модели.
 
-Commands (панель ADD-INS в среде Design):
-  * DrawingSet: Комплект чертежей   — диалог настроек и запуск конвейера
+Команды (панель ADD-INS, вкладка UTILITIES среды Design):
+  * DrawingSet: Комплект чертежей   — палитра: настройки, построение листов, просмотр, экспорт
   * DrawingSet: Спецификация        — только анализ модели, CSV и отчёт (без чертежей)
   * DrawingSet: Проверка API        — что умеет эта версия Fusion
 """
 import json
+import os
+import subprocess
+import sys
 import traceback
 
 import adsk.core  # type: ignore
@@ -13,9 +16,10 @@ import adsk.fusion  # type: ignore
 
 from .lib import ui as ui_mod
 from .lib.capabilities import probe
-from .lib.config import load_settings, save_settings, Settings
+from .lib.config import Settings, load_settings, save_settings
 from .lib.drawing_driver import CREATE_DRAWING_CMD
 from .lib.log import Log
+from .lib.palette import PaletteBridge
 from .lib.pipeline import Pipeline, RESUME_EVENT_ID, RUN_EVENT_ID
 
 _app = None
@@ -25,6 +29,7 @@ _controls = []
 _definitions = []
 _custom_events = []
 _pipeline = None
+_bridge = None
 
 CMD_MAIN = "DrawingSet_Main"
 CMD_SPEC = "DrawingSet_Spec"
@@ -43,45 +48,71 @@ def _report_error(prefix: str) -> None:
 
 
 # ----------------------------------------------------------------------
+# Palette actions (JavaScript -> Python)
+# ----------------------------------------------------------------------
+def _on_palette_action(action: str, payload: dict):
+    global _bridge
+    if action == "ready":
+        settings = load_settings()
+        caps = probe(_app)
+        _bridge.send("init", {
+            "schema": ui_mod.schema(settings), "settings": settings.to_dict(), "version": caps.fusion_version,
+            "caps_text": caps.report(),
+            "status": "Готово. Откройте модель и нажмите «Сгенерировать».",
+        })
+        return {"status": "OK"}
+    if action in ("generate", "export"):
+        settings = Settings.from_dict(payload) if payload else load_settings()
+        problems = settings.validate()
+        if problems:
+            _bridge.send("error", {"message": "Настройки не приняты: " + "; ".join(problems)})
+            return {"status": "invalid"}
+        save_settings(settings)
+        _app.fireCustomEvent(RUN_EVENT_ID, json.dumps({"mode": "render" if action == "generate" else "export"}))
+        return {"status": "started"}
+    if action == "pick_folder":
+        dlg = _ui.createFolderDialog()
+        dlg.title = "Папка для комплекта чертежей"
+        if dlg.showDialog() == adsk.core.DialogResults.DialogOK:
+            _bridge.send("folder", {"path": dlg.folder})
+            return {"path": dlg.folder}
+        return {"path": ""}
+    if action == "open_folder":
+        path = payload.get("path") or load_settings().out_dir
+        os.makedirs(path, exist_ok=True)
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(path)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as exc:
+            _bridge.send("log", {"level": "warn", "message": f"Не удалось открыть папку: {exc}"})
+        return {"status": "OK"}
+    return {"status": "unknown action"}
+
+
 class MainCreatedHandler(adsk.core.CommandCreatedEventHandler):
     def notify(self, args):
         try:
             cmd = adsk.core.CommandCreatedEventArgs.cast(args).command
-            cmd.okButtonText = "Выпустить"
-            settings = load_settings()
-            ui_mod.build_inputs(cmd.commandInputs, settings)
             on_exec = MainExecuteHandler()
             cmd.execute.add(on_exec)
             _handlers.append(on_exec)
-            on_change = MainInputChangedHandler()
-            cmd.inputChanged.add(on_change)
-            _handlers.append(on_change)
         except Exception:
-            _report_error("Ошибка при создании диалога")
-
-
-class MainInputChangedHandler(adsk.core.InputChangedEventHandler):
-    def notify(self, args):
-        try:
-            ui_mod.handle_input_changed(adsk.core.InputChangedEventArgs.cast(args), _ui)
-        except Exception:
-            _report_error("Ошибка в диалоге")
+            _report_error("Ошибка")
 
 
 class MainExecuteHandler(adsk.core.CommandEventHandler):
     def notify(self, args):
+        global _bridge
         try:
-            inputs = adsk.core.CommandEventArgs.cast(args).command.commandInputs
-            settings = ui_mod.read_inputs(inputs, load_settings())
-            problems = settings.validate()
-            if problems:
-                _ui.messageBox("Настройки не приняты:\n- " + "\n- ".join(problems), "DrawingSet")
-                return
-            save_settings(settings)
-            # Documents cannot be created inside a command transaction: run from a custom event.
-            _app.fireCustomEvent(RUN_EVENT_ID, json.dumps({"mode": "full"}))
+            if _bridge is None:
+                _bridge = PaletteBridge(_app, _on_palette_action)
+            _bridge.show()
         except Exception:
-            _report_error("Ошибка при запуске")
+            _report_error("Не удалось открыть палитру DrawingSet")
 
 
 class SpecCreatedHandler(adsk.core.CommandCreatedEventHandler):
@@ -132,12 +163,29 @@ class RunEventHandler(adsk.core.CustomEventHandler):
             info = json.loads(adsk.core.CustomEventArgs.cast(args).additionalInfo or "{}")
             mode = info.get("mode", "full")
             if _pipeline is not None and not _pipeline.done and _pipeline.waiting_for:
-                _ui.messageBox("Предыдущий запуск ещё ждёт завершения диалога «Создать чертёж».", "DrawingSet")
+                msg = "Предыдущий запуск ещё ждёт завершения диалога «Создать чертёж»."
+                if _bridge is not None:
+                    _bridge.send("error", {"message": msg})
+                else:
+                    _ui.messageBox(msg, "DrawingSet")
                 return
             settings = load_settings()
-            log = Log("run" if mode == "full" else "spec")
+            reporter = _bridge if (mode in ("render", "export") and _bridge is not None) else None
+            if mode == "render" and settings.drawing_engine == "fusion":
+                mode = "full"        # the palette asked for Fusion's own drawing generator
+            log = Log(mode)
+            if reporter is not None:
+                log.listeners.append(lambda level, message: reporter.send("log", {"level": level, "message": message}))
             log.info(f"Запуск, режим {mode}. Настройки: {json.dumps(settings.to_dict(), ensure_ascii=False)}")
-            _pipeline = Pipeline(_app, settings, log, mode=mode)
+            previous = _pipeline if mode == "export" else None
+            if mode == "export" and (previous is None or previous.document is None):
+                msg = "Сначала постройте листы кнопкой «Сгенерировать»."
+                if reporter is not None:
+                    reporter.send("error", {"message": msg})
+                else:
+                    _ui.messageBox(msg, "DrawingSet")
+                return
+            _pipeline = Pipeline(_app, settings, log, mode=mode, reporter=reporter, previous=previous)
             _pipeline.start()
         except Exception:
             _report_error("Ошибка конвейера")
@@ -198,7 +246,7 @@ def run(context):
         _app = adsk.core.Application.get()
         _ui = _app.userInterface
         _add_button(CMD_MAIN, "DrawingSet: Комплект чертежей",
-                    "Сборочный чертёж, взрыв-схема и деталировка по активной модели, экспорт PDF/DXF/DWG",
+                    "Палитра: сборочный чертёж, взрыв-схема, деталировка по активной модели, экспорт PDF/DXF/SVG",
                     MainCreatedHandler())
         _add_button(CMD_SPEC, "DrawingSet: Спецификация",
                     "Только анализ модели по сохранённым настройкам: спецификация, фурнитура, гибы, отчёт",
@@ -226,7 +274,11 @@ def run(context):
 
 
 def stop(context):
+    global _bridge
     try:
+        if _bridge is not None:
+            _bridge.close()
+            _bridge = None
         for ctrl in _controls:
             try:
                 ctrl.deleteMe()
