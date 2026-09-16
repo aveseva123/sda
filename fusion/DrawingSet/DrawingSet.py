@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import traceback
 
 import adsk.core  # type: ignore
@@ -21,6 +22,8 @@ from .lib.drawing_driver import CREATE_DRAWING_CMD
 from .lib.log import Log
 from .lib.palette import PaletteBridge
 from .lib.pipeline import Pipeline, RESUME_EVENT_ID, RUN_EVENT_ID
+
+PALETTE_INIT_EVENT_ID = "DrawingSet_PaletteInit"
 
 _app = None
 _ui = None
@@ -50,16 +53,21 @@ def _report_error(prefix: str) -> None:
 # ----------------------------------------------------------------------
 # Palette actions (JavaScript -> Python)
 # ----------------------------------------------------------------------
+def _send_init() -> None:
+    """Pushes the settings form into the palette (called on JS 'ready' and by the delayed timer)."""
+    settings = load_settings()
+    caps = probe(_app)
+    _bridge.send("init", {
+        "schema": ui_mod.schema(settings), "settings": settings.to_dict(), "version": caps.fusion_version,
+        "caps_text": caps.report(),
+        "status": "Готово. Откройте модель и нажмите «Сгенерировать».",
+    })
+
+
 def _on_palette_action(action: str, payload: dict):
     global _bridge
     if action == "ready":
-        settings = load_settings()
-        caps = probe(_app)
-        _bridge.send("init", {
-            "schema": ui_mod.schema(settings), "settings": settings.to_dict(), "version": caps.fusion_version,
-            "caps_text": caps.report(),
-            "status": "Готово. Откройте модель и нажмите «Сгенерировать».",
-        })
+        _send_init()
         return {"status": "OK"}
     if action in ("generate", "export"):
         settings = Settings.from_dict(payload) if payload else load_settings()
@@ -111,8 +119,21 @@ class MainExecuteHandler(adsk.core.CommandEventHandler):
             if _bridge is None:
                 _bridge = PaletteBridge(_app, _on_palette_action)
             _bridge.show()
+            # The JavaScript bridge appears with a delay in the Qt browser: push the settings
+            # from our side as well, a little later (custom events are handled on the main thread).
+            for delay in (1.5, 4.0):
+                threading.Timer(delay, lambda: _app.fireCustomEvent(PALETTE_INIT_EVENT_ID, "")).start()
         except Exception:
             _report_error("Не удалось открыть палитру DrawingSet")
+
+
+class PaletteInitEventHandler(adsk.core.CustomEventHandler):
+    def notify(self, args):
+        try:
+            if _bridge is not None:
+                _send_init()
+        except Exception:
+            _report_error("Ошибка инициализации палитры")
 
 
 class SpecCreatedHandler(adsk.core.CommandCreatedEventHandler):
@@ -254,7 +275,8 @@ def run(context):
         _add_button(CMD_PROBE, "DrawingSet: Проверка API",
                     "Показывает, какие возможности Drawing/Animation API доступны в этой версии Fusion",
                     ProbeCreatedHandler())
-        for event_id, handler in ((RUN_EVENT_ID, RunEventHandler()), (RESUME_EVENT_ID, ResumeEventHandler())):
+        for event_id, handler in ((RUN_EVENT_ID, RunEventHandler()), (RESUME_EVENT_ID, ResumeEventHandler()),
+                                  (PALETTE_INIT_EVENT_ID, PaletteInitEventHandler())):
             try:
                 _app.unregisterCustomEvent(event_id)
             except Exception:

@@ -7,9 +7,13 @@
   const PX_PER_MM = 3;
 
   // ---------------------------------------------------------------- bridge
+  function bridgeReady() {
+    return !!(window.adsk && typeof window.adsk.fusionSendData === 'function');
+  }
+
   function send(action, payload) {
     const data = JSON.stringify(payload || {});
-    if (window.adsk && typeof window.adsk.fusionSendData === 'function') {
+    if (bridgeReady()) {
       try {
         const r = window.adsk.fusionSendData(action, data);
         return Promise.resolve(r);
@@ -47,7 +51,7 @@
   };
 
   // ---------------------------------------------------------------- settings form
-  function onInit(p) {
+  let onInit = function (p) {
     state.schema = p.schema || [];
     state.settings = p.settings || {};
     state.outDir = state.settings.out_dir || '';
@@ -246,6 +250,22 @@
   }
   function clearLog() { $('log').innerHTML = ''; state.warnings = 0; $('warn-count').textContent = ''; }
 
-  // hello
-  send('ready', {});
+  // handshake: the Qt web browser injects window.adsk shortly after the page loads
+  let initDone = false;
+  const origInit = onInit;
+  onInit = function (p) { initDone = true; origInit(p); };
+  (function waitForBridge(attempt) {
+    if (bridgeReady()) {
+      send('ready', {});
+      setStatus('Ожидание настроек от Fusion…', '');
+      return;
+    }
+    if (attempt > 400) {   // ~60 s
+      setStatus('Нет связи с Fusion: откройте палитру заново через кнопку DrawingSet.', 'err');
+      return;
+    }
+    setTimeout(() => waitForBridge(attempt + 1), 150);
+  })(0);
+  // if the handshake was lost, retry once more after a while
+  setTimeout(() => { if (!initDone && bridgeReady()) send('ready', {}); }, 4000);
 })();
