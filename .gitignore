@@ -3,3 +3,5 @@ node_modules/
 *.log
 /tmp/
 tests/e2e/screenshots/
+__pycache__/
+*.pyc
