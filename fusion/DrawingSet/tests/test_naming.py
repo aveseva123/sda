@@ -72,3 +72,11 @@ class FileNameTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VersionSuffixTest(unittest.TestCase):
+    def test_strip_version(self):
+        from lib.naming import strip_version_suffix
+        self.assertEqual(strip_version_suffix("Лавка Тумба v12"), "Лавка Тумба")
+        self.assertEqual(strip_version_suffix("Шкаф v"), "Шкаф v")
+        self.assertEqual(strip_version_suffix("Стол"), "Стол")

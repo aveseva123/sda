@@ -240,7 +240,7 @@ def render_sheet_spec(sh: Dict[str, Any], ctx: RenderContext) -> Sheet:
     common_scale = next((p.scale for p in placed.values()), 1.0)
     sheet.meta["scale"] = scale_text(common_scale)
     for p in sheet.prims:
-        if isinstance(p, Text) and p.text == "—":
+        if isinstance(p, Text) and p.layer == "SCALE":
             p.text = sheet.meta["scale"]
 
     # per-view annotations

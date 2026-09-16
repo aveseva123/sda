@@ -79,19 +79,19 @@ def title_block(width: float, height: float, margin: float, fields: Dict[str, st
     prims.append(Line(x0 + col1, y0, x0 + col1, y0 + TITLE_H, W_THIN, layer="FRAME"))
     prims.append(Line(x0 + col1 + col2, y0, x0 + col1 + col2, y0 + 2 * row, W_THIN, layer="FRAME"))
 
-    def cell(x: float, y: float, label: str, value: str, w: float) -> None:
+    def cell(x: float, y: float, label: str, value: str, w: float, layer: str = "TEXT") -> None:
         prims.append(Text(x + 1.0, y + row - 2.2, label, 1.8, "start", layer="TEXT"))
         max_chars = max(1, int((w - 2) / (0.6 * FONT_SIZE)))
         if len(value) > max_chars:
             value = value[:max_chars - 1] + "…"
-        prims.append(Text(x + 1.0, y + 1.6, value, FONT_SIZE, "start", layer="TEXT"))
+        prims.append(Text(x + 1.0, y + 1.6, value, FONT_SIZE, "start", layer=layer))
 
     cell(x0, y0 + 2 * row, "Изделие / проект", f"{fields.get('product', '')}  {fields.get('project', '')}".strip(), col1)
     cell(x0, y0 + row, "Наименование", fields.get("title", ""), col1)
     cell(x0, y0, "Материал / примечание", fields.get("material", ""), col1)
     cell(x0 + col1, y0 + 2 * row, "Вид / тип", f"{fields.get('view', '')} {fields.get('kind', '')}".strip(), col2)
-    cell(x0 + col1, y0 + row, "Масштаб", fields.get("scale", ""), col2)
-    cell(x0 + col1 + col2, y0 + 2 * row, "Лист", fields.get("sheet", ""), TITLE_W - col1 - col2)
+    cell(x0 + col1, y0 + row, "Масштаб", fields.get("scale", ""), col2, layer="SCALE")
+    cell(x0 + col1 + col2, y0 + 2 * row, "Лист", fields.get("sheet", ""), TITLE_W - col1 - col2, layer="SHEETNUM")
     cell(x0 + col1 + col2, y0 + row, "Дата", fields.get("date", ""), TITLE_W - col1 - col2)
     cell(x0 + col1, y0, "Выпустил", fields.get("author", "DrawingSet"), TITLE_W - col1)
     return prims

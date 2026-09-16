@@ -32,6 +32,11 @@ def strip_instance_suffix(name: str) -> str:
     return re.sub(r":\d+$", "", name or "").strip()
 
 
+def strip_version_suffix(name: str) -> str:
+    """Removes the ' v12' version suffix Fusion appends to document names."""
+    return re.sub(r"\s+v\d+$", "", name or "").strip()
+
+
 def parse_name(name: str, pattern: str) -> ParsedName:
     clean = strip_instance_suffix(name)
     result = ParsedName(raw=clean, title=clean)

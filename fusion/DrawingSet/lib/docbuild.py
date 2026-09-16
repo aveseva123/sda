@@ -105,7 +105,7 @@ def number_sheets(doc: Document) -> None:
         s.meta["total"] = total
         s.meta["sheet"] = f"{i} / {total}"
         for p in s.prims:
-            if isinstance(p, Text) and (p.text == "{sheet}" or (p.text.endswith(f" / {total}") and p.size == 3.5 and "/" in p.text and p.text.split(" / ")[0].isdigit())):
+            if isinstance(p, Text) and p.layer == "SHEETNUM":
                 p.text = s.meta["sheet"]
 
 
@@ -207,12 +207,15 @@ def export_document(doc: Document, data: ModelData, scene: Scene, settings: Sett
     return written
 
 
-def sheets_svg(doc: Document) -> List[Dict[str, str]]:
-    """Payload for the palette: one SVG per sheet."""
-    out = []
-    for i, s in enumerate(doc.sheets):
-        out.append({"id": s.meta.get("spec_id") or f"sheet{i}", "kind": s.meta.get("kind", ""), "title": s.meta.get("title", ""),
-                    "number": s.meta.get("number", i + 1), "total": s.meta.get("total", len(doc.sheets)),
-                    "scale": s.meta.get("scale", ""), "svg": sheet_to_svg(s, embed_size=False),
-                    "spec": doc.sheet_spec(s.meta.get("spec_id", ""))})
-    return out
+def sheet_payload(doc: Document, i: int, with_svg: bool = True) -> Dict[str, Any]:
+    """Palette payload for one sheet (SVG optional so that large sets can be streamed sheet by sheet)."""
+    s = doc.sheets[i]
+    return {"id": s.meta.get("spec_id") or f"sheet{i}", "kind": s.meta.get("kind", ""), "title": s.meta.get("title", ""),
+            "number": s.meta.get("number", i + 1), "total": s.meta.get("total", len(doc.sheets)),
+            "scale": s.meta.get("scale", ""), "svg": sheet_to_svg(s, embed_size=False) if with_svg else "",
+            "spec": doc.sheet_spec(s.meta.get("spec_id", ""))}
+
+
+def sheets_svg(doc: Document, with_svg: bool = True) -> List[Dict[str, Any]]:
+    """Payload for the palette: one entry per sheet."""
+    return [sheet_payload(doc, i, with_svg) for i in range(len(doc.sheets))]

@@ -76,7 +76,7 @@ class CollectTest(unittest.TestCase):
     def test_project_view_product_markers(self):
         self.assertEqual(self.data.project, "37-4")
         self.assertEqual(self.data.view, "В1")
-        self.assertEqual(self.data.product, "Шкаф барный v3")
+        self.assertEqual(self.data.product, "Шкаф барный")
         self.assertEqual(self.data.section_markers, ["Шкаф барный v3: РАЗРЕЗ А-А"])
 
     def test_sheet_metal_detected(self):
@@ -134,3 +134,14 @@ class SheetMetalTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HardwareHeuristicTest(unittest.TestCase):
+    def test_small_panel_is_not_hardware(self):
+        small = panel("37-4_В1_П08_Царга малая", 0, 0, 0, 100, 60, 16)
+        chunk = panel("Блок", 0, 0, 0, 40, 30, 20)
+        root = Root("R", [small, chunk])
+        d = collect(root, Settings())
+        by = {p.title: p for p in d.parts}
+        self.assertFalse(by["Царга малая"].is_hardware)
+        self.assertTrue(by["Блок"].is_hardware)

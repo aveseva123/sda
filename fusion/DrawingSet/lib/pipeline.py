@@ -34,10 +34,6 @@ class Pipeline:
         self.reporter = reporter              # object with send(action, payload) (the palette) or None
         self.scene = None
         self.document = None
-        if previous is not None:              # export mode reuses the last rendered document
-            self.scene, self.document, self.data, self.rows = previous.scene, previous.document, previous.data, previous.rows
-            self.explode_result = previous.explode_result
-            self.ai_history = getattr(previous, "ai_history", {})
         self.caps: Capabilities = probe(app)
         self.steps: List[Tuple[str, Callable[[], Any]]] = []
         self.index = 0
@@ -57,6 +53,10 @@ class Pipeline:
         self.ai_history: Dict[str, List[Dict[str, str]]] = {}
         self._pending_kind: Optional[str] = None
         self._pending_use_storyboard = False
+        if previous is not None:              # export mode reuses the last rendered document (set last: nothing may overwrite it)
+            self.scene, self.document, self.data, self.rows = previous.scene, previous.document, previous.data, previous.rows
+            self.explode_result = previous.explode_result
+            self.ai_history = getattr(previous, "ai_history", {})
         self._build_steps()
 
     # ------------------------------------------------------------------
@@ -458,15 +458,22 @@ class Pipeline:
             self.log.warn(w)
         self.log.info(f"Построено листов: {len(self.document.sheets)}")
         if self.reporter is not None:
-            self.reporter.send("sheets", {"sheets": docbuild.sheets_svg(self.document),
+            # metadata first, then each sheet separately: keeps the JS bridge payloads small
+            self.reporter.send("sheets", {"sheets": docbuild.sheets_svg(self.document, with_svg=False),
                                           "warnings": list(self.document.warnings)})
+            for i in range(len(self.document.sheets)):
+                self.reporter.send("sheet_update", {"sheets": [docbuild.sheet_payload(self.document, i)]})
+                try:
+                    import adsk.core  # type: ignore
+                    adsk.doEvents()
+                except Exception:
+                    pass
 
     # ------------------------------------------------------------------
     # AI / manual sheet editing (called from the palette actions)
     # ------------------------------------------------------------------
     def sheet_payload(self, idx: int) -> Dict[str, Any]:
-        items = docbuild.sheets_svg(self.document)
-        return items[idx]
+        return docbuild.sheet_payload(self.document, idx)
 
     def apply_sheet_spec(self, sheet_spec: Dict[str, Any], save: bool = True) -> int:
         idx = docbuild.rerender_sheet(self.document, sheet_spec, self.data, self.scene, self.settings,

@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .bom import BendRow, PartRecord, description_text
 from .config import Settings
 from .explode import ExplodeItem, Vec
-from .naming import classify, is_hardware_name, parse_name, strip_instance_suffix
+from .naming import classify, is_hardware_name, parse_name, strip_instance_suffix, strip_version_suffix
 
 CM = 10.0  # cm -> mm
 
@@ -161,7 +161,7 @@ def _solid_bodies(occ: Any) -> List[Any]:
 # ----------------------------------------------------------------------
 def collect(root_component: Any, settings: Settings, log=None, product_name: str = "") -> ModelData:
     """Walks the occurrence tree of the root component and fills a ModelData."""
-    data = ModelData(product=strip_instance_suffix(product_name or getattr(root_component, "name", "")))
+    data = ModelData(product=strip_version_suffix(strip_instance_suffix(product_name or getattr(root_component, "name", ""))))
     hardware_kw = settings.hardware_keywords
 
     def walk(parent_occ: Any, parent_id: Optional[str], level: int) -> None:
@@ -226,12 +226,14 @@ def collect(root_component: Any, settings: Settings, log=None, product_name: str
             length_mm, width_mm, thickness_mm = sorted_dims
             material = _material_name(bodies, comp)
             is_sheet_metal = any(bool(getattr(b, "isSheetMetal", False)) for b in bodies)
+            panel_like = thickness_mm <= settings.panel_max_thickness_mm and length_mm >= 3 * thickness_mm
+            small_chunky = (length_mm <= settings.hardware_max_size_mm and thickness_mm > 0
+                            and thickness_mm / max(length_mm, 1e-6) > 0.15)
             hardware = is_hardware_name(parsed.title, hardware_kw) or (
-                not is_sheet_metal and length_mm <= settings.hardware_max_size_mm
-                and thickness_mm > 0 and thickness_mm / max(length_mm, 1e-6) > 0.15)
+                not is_sheet_metal and not panel_like and small_chunky)
             if hardware:
                 category = "hardware"
-            elif thickness_mm <= settings.panel_max_thickness_mm and length_mm >= 3 * thickness_mm:
+            elif panel_like:
                 category = classify(parsed.title, settings.category_keywords)
             else:
                 category = "other"

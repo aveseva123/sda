@@ -100,7 +100,7 @@
       input = document.createElement('input'); input.type = 'number'; input.value = value;
       if (f.min !== undefined) input.min = f.min; if (f.max !== undefined) input.max = f.max; if (f.step) input.step = f.step;
     } else {
-      input = document.createElement('input'); input.type = 'text'; input.value = value == null ? '' : value;
+      input = document.createElement('input'); input.type = f.key === 'ai_api_key' ? 'password' : 'text'; input.value = value == null ? '' : value;
       if (f.key === 'out_dir' || f.key === 'name_regex' || f.key === 'hardware_keywords' || f.key === 'file_mask') { wrap.classList.add('wide'); }
     }
     input.id = 'f_' + f.key; input.dataset.key = f.key; input.dataset.type = f.type;
@@ -191,6 +191,7 @@
     state.current = i;
     [...$('sheet-list').children].forEach((li, k) => li.classList.toggle('active', k === i));
     const s = state.sheets[i];
+    if (!s.svg) { $('page').innerHTML = '<div class="empty">Лист строится…</div>'; updateAssistHead(); return; }
     $('sheet-title').textContent = s.kind + ' · ' + s.title + ' · ' + s.number + '/' + s.total + (s.scale ? ' · М ' + s.scale : '');
     updateAssistHead();
     const page = $('page'); page.innerHTML = s.svg;
