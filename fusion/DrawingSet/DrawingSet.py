@@ -184,8 +184,12 @@ def _add_button(cmd_id: str, name: str, tooltip: str, handler) -> None:
     panel = _ui.allToolbarPanels.itemById(PANEL_ID)
     if panel is not None:
         ctrl = panel.controls.addCommand(cdef)
-        ctrl.isPromoted = cmd_id == CMD_MAIN
+        ctrl.isPromoted = True
+        ctrl.isPromotedByDefault = True
         _controls.append(ctrl)
+    else:
+        _ui.messageBox(f"DrawingSet: панель {PANEL_ID} не найдена, команда «{name}» доступна только через "
+                       "Utilities → Scripts and Add-Ins.", "DrawingSet")
 
 
 def run(context):
@@ -214,6 +218,9 @@ def run(context):
         on_term = CommandTerminatedHandler()
         _ui.commandTerminated.add(on_term)
         _handlers.append(on_term)
+        _app.log("[DrawingSet] add-in загружен: вкладка UTILITIES, панель ADD-INS")
+        if context and context.get("IsApplicationStartup") is False:
+            _ui.messageBox("DrawingSet загружен. Кнопки — во вкладке UTILITIES, панель ADD-INS.", "DrawingSet")
     except Exception:
         _report_error("DrawingSet не запустился")
 
