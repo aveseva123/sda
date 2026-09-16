@@ -40,6 +40,32 @@
       <pre id="log"></pre>
     </details>
   </section>
+  <aside class="assist">
+    <div class="assist-head">
+      <strong>AI-настройка листа</strong>
+      <span id="assist-sheet" class="muted">лист не выбран</span>
+    </div>
+    <div class="chat" id="chat">
+      <div class="hint">Опишите, что изменить на текущем листе: «убери вид слева», «покажи изометрию сзади»,
+        «размеры отверстий от базы», «масштаб 1:5», «добавь примечание …», «вынеси спецификацию вниз».
+        Правка применяется к листу и сохраняется для этого изделия.</div>
+    </div>
+    <form class="ask" id="ask" onsubmit="return false">
+      <textarea id="ask-text" rows="3" placeholder="Что изменить на этом листе?"></textarea>
+      <div class="ask-row">
+        <label><input type="checkbox" id="ask-kind"> ко всем листам этого типа</label>
+        <span class="spacer"></span>
+        <button type="button" id="btn-reset" title="Вернуть лист к настройкам по умолчанию">Сбросить</button>
+        <button type="button" id="btn-spec" title="Показать/скрыть JSON листа">JSON</button>
+        <button type="button" id="btn-ask" class="primary">Применить</button>
+      </div>
+    </form>
+    <details class="spec" id="spec-box">
+      <summary>Спецификация листа (JSON)</summary>
+      <textarea id="spec-text" rows="14" spellcheck="false"></textarea>
+      <div class="ask-row"><span class="spacer"></span><button type="button" id="btn-spec-apply">Применить JSON</button></div>
+    </details>
+  </aside>
 </main>
 <script src="app.js"></script>
 </body>

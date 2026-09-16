@@ -12,7 +12,7 @@ import os
 import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import bom, docbuild, drawing_driver as dd, explode_fusion, export, model
+from . import ai, bom, docbuild, drawing_driver as dd, explode_fusion, export, model, spec as spec_mod
 from .capabilities import Capabilities, probe
 from .config import Settings
 from .naming import build_file_name, sanitize_filename
@@ -37,6 +37,7 @@ class Pipeline:
         if previous is not None:              # export mode reuses the last rendered document
             self.scene, self.document, self.data, self.rows = previous.scene, previous.document, previous.data, previous.rows
             self.explode_result = previous.explode_result
+            self.ai_history = getattr(previous, "ai_history", {})
         self.caps: Capabilities = probe(app)
         self.steps: List[Tuple[str, Callable[[], Any]]] = []
         self.index = 0
@@ -53,6 +54,7 @@ class Pipeline:
         self.explode_result = None
         self.progress = None
         self.done = False
+        self.ai_history: Dict[str, List[Dict[str, str]]] = {}
         self._pending_kind: Optional[str] = None
         self._pending_use_storyboard = False
         self._build_steps()
@@ -447,13 +449,69 @@ class Pipeline:
         self.log.info(f"Геометрия прочитана: деталей {len(self.scene.parts)}, развёрток {len(self.scene.flat_patterns)}")
 
     def step_render(self) -> None:
-        self.document = docbuild.build_document(self.data, self.scene, self.settings, self.explode_result, self.rows)
+        overrides = spec_mod.load_overrides(self.data.product)
+        if overrides:
+            self.log.info(f"Загружены сохранённые настройки листов: {len(overrides)}")
+        self.document = docbuild.build_document(self.data, self.scene, self.settings, self.explode_result, self.rows,
+                                                overrides=overrides)
         for w in self.document.warnings:
             self.log.warn(w)
         self.log.info(f"Построено листов: {len(self.document.sheets)}")
         if self.reporter is not None:
             self.reporter.send("sheets", {"sheets": docbuild.sheets_svg(self.document),
                                           "warnings": list(self.document.warnings)})
+
+    # ------------------------------------------------------------------
+    # AI / manual sheet editing (called from the palette actions)
+    # ------------------------------------------------------------------
+    def sheet_payload(self, idx: int) -> Dict[str, Any]:
+        items = docbuild.sheets_svg(self.document)
+        return items[idx]
+
+    def apply_sheet_spec(self, sheet_spec: Dict[str, Any], save: bool = True) -> int:
+        idx = docbuild.rerender_sheet(self.document, sheet_spec, self.data, self.scene, self.settings,
+                                      self.explode_result, self.rows)
+        if save:
+            overrides = spec_mod.load_overrides(self.data.product)
+            overrides[sheet_spec["id"]] = sheet_spec
+            spec_mod.save_overrides(self.data.product, overrides)
+        return idx
+
+    def reset_sheet(self, sheet_id: str) -> Optional[int]:
+        default = spec_mod.default_spec(self.data, self.rows, self.settings, has_flat=set(self.scene.flat_patterns))
+        sh = next((x for x in default["sheets"] if x["id"] == sheet_id), None)
+        if sh is None:
+            return None
+        overrides = spec_mod.load_overrides(self.data.product)
+        overrides.pop(sheet_id, None)
+        spec_mod.save_overrides(self.data.product, overrides)
+        return self.apply_sheet_spec(sh, save=False)
+
+    def ai_edit(self, sheet_id: str, message: str, apply_to_kind: bool = False) -> Dict[str, Any]:
+        sh = self.document.sheet_spec(sheet_id) if self.document else None
+        if sh is None:
+            raise RuntimeError("Лист не найден; постройте комплект заново.")
+        s = self.settings
+        assistant = ai.SheetAssistant(s.ai_api_key, s.ai_model, s.ai_effort)
+        summary = ai.model_summary(self.data, self.rows, self.scene)
+        history = self.ai_history.get(sheet_id, [])[-6:]
+        result = assistant.edit_sheet(sh, summary, message, history)
+        self.ai_history.setdefault(sheet_id, []).extend([
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": result.explanation or "OK"},
+        ])
+        updated: List[int] = []
+        if not result.refused:
+            updated.append(self.apply_sheet_spec(result.sheet))
+            if apply_to_kind:
+                for other in list(self.document.spec.get("sheets", [])):
+                    if other["kind"] == sh["kind"] and other["id"] != sh["id"]:
+                        clone = json.loads(json.dumps(result.sheet))
+                        clone["id"], clone["subject"], clone["title"] = other["id"], other["subject"], other["title"]
+                        clone["header"], clone["material"] = other.get("header", ""), other.get("material", "")
+                        updated.append(self.apply_sheet_spec(clone))
+        return {"explanation": result.explanation, "model": result.model, "usage": result.usage,
+                "refused": result.refused, "updated": updated}
 
     def step_export_render(self) -> None:
         if self.document is None or self.scene is None:

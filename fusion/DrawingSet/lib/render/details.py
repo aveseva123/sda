@@ -64,7 +64,8 @@ def _unique(values: Sequence[float], tol: float = 0.05) -> List[float]:
 
 
 def hole_dimensions(holes: Sequence[Hole], view: View, placed: Placed, strategy: str,
-                    x_row: float, y_col: float, bbox_model: Tuple[float, float, float, float]) -> List[Primitive]:
+                    x_row: float, y_col: float, bbox_model: Tuple[float, float, float, float],
+                    axes: Tuple[str, ...] = ("x", "y")) -> List[Primitive]:
     """Chain / baseline dimensions of hole centres visible in this view (axis parallel to the view)."""
     centers = [view.project2(h.entry) for h in holes if abs(dot(unit(h.axis), view.forward)) > 0.9]
     if not centers:
@@ -106,12 +107,14 @@ def hole_dimensions(holes: Sequence[Hole], view: View, placed: Placed, strategy:
     if strategy == "Overall":
         return prims
     if use_baseline:
-        baseline_h(xs, sy0, x_row)
-        if sy1 - sy0 > 12:
+        if "x" in axes:
+            baseline_h(xs, sy0, x_row)
+        if "y" in axes and sy1 - sy0 > 12:
             baseline_v(ys, sx1, y_col)
     else:
-        chain_h(xs, sy0, x_row)
-        if sy1 - sy0 > 12:
+        if "x" in axes:
+            chain_h(xs, sy0, x_row)
+        if "y" in axes and sy1 - sy0 > 12:
             chain_v(ys, sx1, y_col)
     return prims
 

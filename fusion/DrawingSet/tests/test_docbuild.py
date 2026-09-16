@@ -31,7 +31,7 @@ class DocBuildTest(unittest.TestCase):
         self.assertTrue(all(sh.meta.get("scale") for sh in doc.sheets))
         titles = [sh.meta["title"] for sh in doc.sheets]
         self.assertIn("Поз. 01 Боковина", titles)
-        self.assertIn("Поз. 07 Кронштейн", titles)
+        self.assertIn("Поз. 07 Кронштейн — развёртка", titles)
 
     def test_modules_toggle(self):
         s = Settings(make_assembly=False, make_details=False)

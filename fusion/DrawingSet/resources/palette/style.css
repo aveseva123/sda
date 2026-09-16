@@ -18,7 +18,7 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 button:disabled { opacity: .5; cursor: default; }
 .progress { height: 3px; background: var(--line); }
 #progress-bar { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
-.layout { flex: 1; display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+.layout { flex: 1; display: grid; grid-template-columns: 300px 1fr 320px; min-height: 0; }
 .side { display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
 .tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 6px; border-bottom: 1px solid var(--line); }
 .tabs button { flex: 1; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; cursor: pointer; font-size: 12px; }
@@ -54,3 +54,22 @@ button:disabled { opacity: .5; cursor: default; }
 .log pre { margin: 0; padding: 6px 10px; overflow: auto; font: 11px/1.35 Consolas, "DejaVu Sans Mono", monospace; white-space: pre-wrap; }
 .log .warn { color: var(--warn); }
 .log .err { color: var(--err); }
+
+.assist { display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--panel); min-height: 0; }
+.assist-head { padding: 8px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.muted { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat { flex: 1; overflow: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+.chat .hint { color: var(--muted); font-size: 12px; }
+.msg { padding: 6px 9px; border-radius: 8px; max-width: 95%; white-space: pre-wrap; font-size: 12.5px; }
+.msg.user { align-self: flex-end; background: #e6f0fb; }
+.msg.ai { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); }
+.msg.err { align-self: flex-start; background: #fdecec; color: var(--err); }
+.msg.wait { align-self: flex-start; color: var(--muted); font-style: italic; }
+.ask { padding: 8px 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.ask textarea, .spec textarea { width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 6px; font: inherit; resize: vertical; }
+.spec textarea { font: 11px/1.35 Consolas, "DejaVu Sans Mono", monospace; }
+.ask-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.ask-row .spacer { flex: 1; }
+.ask-row button { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; }
+.spec { border-top: 1px solid var(--line); padding: 6px 10px; }
+.spec summary { cursor: pointer; color: var(--muted); font-size: 12px; }

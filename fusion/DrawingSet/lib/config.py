@@ -108,6 +108,12 @@ class Settings:
     dxf_command_id: str = ""            # id команды экспорта DXF (см. «Проверка API»)
     dwg_command_id: str = ""
 
+    # ---- AI-помощник ----
+    ai_api_key: str = ""                # ключ Anthropic API (или переменная окружения ANTHROPIC_API_KEY)
+    ai_model: str = "claude-opus-5"
+    ai_effort: str = "high"             # low | medium | high | xhigh | max
+    ai_apply_to_kind: bool = False      # применять правку ко всем листам того же типа
+
     # ---- Модель / служебные ----
     name_regex: str = DEFAULT_NAME_REGEX
     hardware_keywords: str = DEFAULT_HARDWARE_KEYWORDS

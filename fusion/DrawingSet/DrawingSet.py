@@ -24,6 +24,7 @@ from .lib.palette import PaletteBridge
 from .lib.pipeline import Pipeline, RESUME_EVENT_ID, RUN_EVENT_ID
 
 PALETTE_INIT_EVENT_ID = "DrawingSet_PaletteInit"
+EDIT_EVENT_ID = "DrawingSet_Edit"
 
 _app = None
 _ui = None
@@ -78,6 +79,18 @@ def _on_palette_action(action: str, payload: dict):
         save_settings(settings)
         _app.fireCustomEvent(RUN_EVENT_ID, json.dumps({"mode": "render" if action == "generate" else "export"}))
         return {"status": "started"}
+    if action in ("ai_edit", "spec_set", "spec_reset"):
+        if _pipeline is None or _pipeline.document is None:
+            _bridge.send("ai_reply", {"error": "Сначала постройте листы кнопкой «Сгенерировать»."})
+            return {"status": "no-document"}
+        if action == "ai_edit" and payload.get("settings"):
+            settings = Settings.from_dict(payload["settings"])
+            save_settings(settings)
+            _pipeline.settings.ai_api_key = settings.ai_api_key
+            _pipeline.settings.ai_model = settings.ai_model
+            _pipeline.settings.ai_effort = settings.ai_effort
+        _app.fireCustomEvent(EDIT_EVENT_ID, json.dumps({"action": action, "payload": payload}, ensure_ascii=False))
+        return {"status": "started"}
     if action == "pick_folder":
         dlg = _ui.createFolderDialog()
         dlg.title = "Папка для комплекта чертежей"
@@ -125,6 +138,49 @@ class MainExecuteHandler(adsk.core.CommandEventHandler):
                 threading.Timer(delay, lambda: _app.fireCustomEvent(PALETTE_INIT_EVENT_ID, "")).start()
         except Exception:
             _report_error("Не удалось открыть палитру DrawingSet")
+
+
+class EditEventHandler(adsk.core.CustomEventHandler):
+    """Sheet edits (AI / JSON / reset) run outside the HTML event so the palette stays responsive."""
+    def notify(self, args):
+        try:
+            info = json.loads(adsk.core.CustomEventArgs.cast(args).additionalInfo or "{}")
+            action, payload = info.get("action"), info.get("payload") or {}
+            if _pipeline is None or _pipeline.document is None:
+                return
+            sheet_id = payload.get("sheet_id", "")
+            updated = []
+            if action == "ai_edit":
+                try:
+                    res = _pipeline.ai_edit(sheet_id, payload.get("message", ""), bool(payload.get("apply_to_kind")))
+                except Exception as exc:
+                    _pipeline.log.error("AI-правка не выполнена", exc)
+                    _bridge.send("ai_reply", {"error": str(exc)})
+                    return
+                _bridge.send("ai_reply", {"explanation": res["explanation"], "model": res["model"], "usage": res["usage"]})
+                updated = res["updated"]
+            elif action == "spec_set":
+                from .lib.spec import normalize_sheet
+                current = _pipeline.document.sheet_spec(sheet_id)
+                if current is None:
+                    _bridge.send("ai_reply", {"error": "Лист не найден."})
+                    return
+                new = normalize_sheet(payload.get("spec") or {}, current)
+                new["id"], new["kind"], new["subject"] = current["id"], current["kind"], current["subject"]
+                updated = [_pipeline.apply_sheet_spec(new)]
+                _bridge.send("ai_reply", {"explanation": "JSON применён."})
+            elif action == "spec_reset":
+                idx = _pipeline.reset_sheet(sheet_id)
+                if idx is None:
+                    _bridge.send("ai_reply", {"error": "Лист не найден в наборе по умолчанию."})
+                    return
+                updated = [idx]
+                _bridge.send("ai_reply", {"explanation": "Лист возвращён к настройкам по умолчанию."})
+            if updated:
+                _bridge.send("sheet_update", {"sheets": [_pipeline.sheet_payload(i) for i in sorted(set(updated))],
+                                              "warnings": list(_pipeline.document.warnings)})
+        except Exception:
+            _report_error("Ошибка правки листа")
 
 
 class PaletteInitEventHandler(adsk.core.CustomEventHandler):
@@ -276,7 +332,7 @@ def run(context):
                     "Показывает, какие возможности Drawing/Animation API доступны в этой версии Fusion",
                     ProbeCreatedHandler())
         for event_id, handler in ((RUN_EVENT_ID, RunEventHandler()), (RESUME_EVENT_ID, ResumeEventHandler()),
-                                  (PALETTE_INIT_EVENT_ID, PaletteInitEventHandler())):
+                                  (PALETTE_INIT_EVENT_ID, PaletteInitEventHandler()), (EDIT_EVENT_ID, EditEventHandler())):
             try:
                 _app.unregisterCustomEvent(event_id)
             except Exception:

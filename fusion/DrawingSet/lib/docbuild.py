@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from . import bom
 from .config import Settings
@@ -14,8 +14,10 @@ from .explode import ExplodeResult
 from .geom import axis_name, is_circle_2d, standard_views, unit
 from .model import ModelData
 from .naming import build_file_name, sanitize_filename
-from .render import assembly, details, explode_sheet, sheetmetal
+from .render import details
 from .render.dxf import prims_to_dxf, write_dxf
+from .render.generic import RenderContext, render_sheet_spec
+from .spec import default_spec, merge_overrides
 from .render.pdf import write_pdf
 from .render.prims import Circle, Polyline, Sheet
 from .render.svg import sheet_to_svg
@@ -29,6 +31,7 @@ KIND_ASSEMBLY, KIND_EXPLODE, KIND_DETAILS = "СБ", "ВЗР", "ДЕТ"
 class Document:
     sheets: List[Sheet] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    spec: Dict[str, Any] = field(default_factory=dict)      # the specification the sheets were rendered from
 
     def by_kind(self, kind: str) -> List[Sheet]:
         return [s for s in self.sheets if s.meta.get("kind") == kind]
@@ -41,118 +44,60 @@ class Document:
                 out.append(k)
         return out
 
+    def sheet_spec(self, spec_id: str) -> Optional[Dict[str, Any]]:
+        return next((sh for sh in self.spec.get("sheets", []) if sh.get("id") == spec_id), None)
 
-def _labels(data: ModelData, include_hardware: bool) -> Dict[str, str]:
-    labels: Dict[str, str] = {}
-    for p in data.parts:
-        if p.category == "assembly":
-            continue
-        if p.is_hardware and not include_hardware:
-            continue
-        labels[p.occ_id] = p.position or "?"
-    return labels
+    def index_of(self, spec_id: str) -> int:
+        return next((i for i, s in enumerate(self.sheets) if s.meta.get("spec_id") == spec_id), -1)
 
 
-def _style(settings: Settings) -> ViewStyle:
-    return ViewStyle()
+def make_context(data: ModelData, scene: Scene, settings: Settings, explode: Optional[ExplodeResult],
+                 rows: Sequence[bom.SpecRow]) -> RenderContext:
+    up = axis_name(settings.up_axis)
+    front = explode.front if (explode is not None and explode.front != (0.0, 0.0, 0.0)) else axis_name(settings.front_axis)
+    return RenderContext(data=data, scene=scene, rows=rows, settings=settings, explode=explode, up=up, front=front)
 
 
 def build_document(data: ModelData, scene: Scene, settings: Settings, explode: Optional[ExplodeResult],
-                   rows: Optional[Sequence[bom.SpecRow]] = None) -> Document:
-    doc = Document()
+                   rows: Optional[Sequence[bom.SpecRow]] = None,
+                   overrides: Optional[Dict[str, Dict[str, Any]]] = None) -> Document:
+    """Renders the whole set: default spec (from settings) + saved per-sheet overrides."""
     rows = list(rows) if rows is not None else bom.group_parts(data.parts)
-    up = axis_name(settings.up_axis)
-    front = explode.front if (explode is not None and explode.front != (0.0, 0.0, 0.0)) else axis_name(settings.front_axis)
-    first_angle = settings.standard == "ISO"
-    size, orient = settings.sheet_size, settings.orientation
-    style = _style(settings)
-    base_meta = {"project": data.project, "product": data.product, "view": data.view, "scale": "—", "sheet": "{sheet}"}
-    hide_hw = settings.hardware_mode == "hide"
-    hidden_hw = {p.occ_id for p in data.parts if p.is_hardware} if hide_hw else set()
-    parts_all = [scene.parts[p.occ_id] for p in data.parts if p.occ_id in scene.parts and p.category != "assembly"]
-    if not parts_all:
-        doc.warnings.append("Нет геометрии деталей для построения видов.")
-        return doc
+    doc = Document()
+    spec = default_spec(data, rows, settings, has_flat=set(scene.flat_patterns.keys()))
+    if overrides:
+        spec = merge_overrides(spec, overrides)
+    doc.spec = spec
+    ctx = make_context(data, scene, settings, explode, rows)
+    for sh in spec["sheets"]:
+        doc.sheets.append(render_sheet_spec(sh, ctx))
+    doc.warnings.extend(ctx.warnings)
+    if settings.asm_sections and data.section_markers:
+        doc.warnings.append("Разрезы по маркерам не строятся автоматически: " + "; ".join(data.section_markers))
+    number_sheets(doc)
+    return doc
 
-    # ---- assembly ----
-    if settings.make_assembly:
-        labels = _labels(data, include_hardware=not hide_hw)
-        meta = {**base_meta, "kind": KIND_ASSEMBLY, "title": f"{data.product} — сборочный чертёж"}
-        sheets = assembly.assembly_sheet(
-            parts_all, labels if settings.asm_parts_list else {}, rows, up=up, front=front, first_angle=first_angle,
-            size=size, orientation=orient, meta=meta, hidden=hidden_hw, show_dims=settings.asm_overall_dims,
-            show_balloons=settings.asm_parts_list, show_spec=settings.asm_parts_list, style=style)
-        doc.sheets.extend(sheets)
-        if settings.asm_subassembly_sheets:
-            for asm in [p for p in data.parts if p.category == "assembly"]:
-                children = [scene.parts[p.occ_id] for p in data.parts
-                            if p.parent_id == asm.occ_id and p.occ_id in scene.parts and p.category != "assembly"]
-                if not children:
-                    continue
-                sub_rows = bom.group_parts([p for p in data.parts if p.parent_id == asm.occ_id])
-                meta = {**base_meta, "kind": KIND_ASSEMBLY, "title": f"Подсборка {asm.position} {asm.title}"}
-                doc.sheets.extend(assembly.assembly_sheet(
-                    children, labels, sub_rows, up=up, front=front, first_angle=first_angle, size=size,
-                    orientation=orient, meta=meta, hidden=hidden_hw, show_dims=settings.asm_overall_dims,
-                    show_balloons=settings.asm_parts_list, show_spec=settings.asm_parts_list, style=style))
-        if settings.asm_sections and data.section_markers:
-            doc.warnings.append("Разрезы по маркерам не строятся автоматически: " + "; ".join(data.section_markers))
 
-    # ---- exploded ----
-    if settings.make_explode and explode is not None:
-        by_id = {it.id: it for it in data.explode_items}
-        offsets = {pid: explode.world_offset(by_id, pid) for pid in scene.parts}
-        hidden = set(explode.hidden) | (hidden_hw if hide_hw else set())
-        labels = _labels(data, include_hardware=settings.hardware_mode == "show")
-        meta = {**base_meta, "kind": KIND_EXPLODE, "title": f"{data.product} — схема разнесения"}
-        doc.sheets.append(explode_sheet.explode_sheet(
-            parts_all, offsets, hidden, labels, rows, up=up, front=front, size=size, orientation=orient, meta=meta,
-            hardware_table=settings.hardware_table, style=style))
-        if settings.explode_subassemblies:
-            for asm in [p for p in data.parts if p.category == "assembly"]:
-                children = [scene.parts[p.occ_id] for p in data.parts
-                            if p.parent_id == asm.occ_id and p.occ_id in scene.parts and p.category != "assembly"]
-                if not children:
-                    continue
-                own = {c.id: explode.offsets.get(c.id, (0.0, 0.0, 0.0)) for c in children}
-                sub_rows = bom.group_parts([p for p in data.parts if p.parent_id == asm.occ_id])
-                meta = {**base_meta, "kind": KIND_EXPLODE, "title": f"Подсборка {asm.position} {asm.title} — разнесение"}
-                doc.sheets.append(explode_sheet.explode_sheet(
-                    children, own, hidden, labels, sub_rows, up=up, front=front, size=size, orientation=orient,
-                    meta=meta, hardware_table=settings.hardware_table, style=style))
+def rerender_sheet(doc: Document, spec_sheet: Dict[str, Any], data: ModelData, scene: Scene, settings: Settings,
+                   explode: Optional[ExplodeResult], rows: Sequence[bom.SpecRow]) -> int:
+    """Replaces one sheet (matched by spec id) with a re-render of the given spec. Returns its index."""
+    ctx = make_context(data, scene, settings, explode, rows)
+    sheet = render_sheet_spec(spec_sheet, ctx)
+    doc.warnings = [w for w in doc.warnings if not w.startswith(f"Лист «{spec_sheet.get('title')}»")] + ctx.warnings
+    idx = doc.index_of(spec_sheet.get("id", ""))
+    for i, sh in enumerate(doc.spec.get("sheets", [])):
+        if sh.get("id") == spec_sheet.get("id"):
+            doc.spec["sheets"][i] = spec_sheet
+    if idx < 0:
+        doc.sheets.append(sheet)
+        idx = len(doc.sheets) - 1
+    else:
+        doc.sheets[idx] = sheet
+    number_sheets(doc)
+    return idx
 
-    # ---- details ----
-    if settings.make_details:
-        bends_by_part: Dict[str, List[bom.BendRow]] = {}
-        for b in data.bends:
-            bends_by_part.setdefault(b.part, []).append(b)
-        for row in rows:
-            if row.is_hardware or not row.occ_ids:
-                continue
-            occ_id = next((o for o in row.occ_ids if o in scene.parts), None)
-            if occ_id is None:
-                doc.warnings.append(f"Поз. {row.position} {row.title}: нет геометрии, лист пропущен.")
-                continue
-            part = scene.parts[occ_id]
-            meta = {**base_meta, "kind": KIND_DETAILS, "title": f"Поз. {row.position} {row.title}".strip(),
-                    "material": "  ".join(t for t in (row.material, f"{bom.fmt_mm(row.thickness_mm)} мм", row.size_text(),
-                                                      f"{row.quantity} шт.") if t)}
-            rec = data.part_by_id(occ_id)
-            comp_id = rec.component_id if rec else ""
-            flat = scene.flat_patterns.get(comp_id) if row.is_sheet_metal else None
-            if row.is_sheet_metal and flat is not None and settings.sheet_metal_flat:
-                part_bends = bends_by_part.get(f"{row.position} {row.title}".strip(), [])
-                doc.sheets.append(sheetmetal.flat_pattern_sheet(
-                    part, flat, row, part_bends, size=size, orientation=orient, meta=meta,
-                    bend_table=settings.sheet_metal_bend_table, style=style))
-                if not settings.sheet_metal_folded:
-                    continue
-            doc.sheets.append(details.detail_sheet(
-                part, row, first_angle=first_angle, size=size, orientation=orient, meta=meta,
-                strategy=settings.det_dim_strategy, hole_notes_on=settings.det_hole_notes,
-                show_dims=settings.det_auto_dims, style=style))
 
-    # numbering: the title block was drawn with the "{sheet}" placeholder
+def number_sheets(doc: Document) -> None:
     from .render.prims import Text
     total = len(doc.sheets)
     for i, s in enumerate(doc.sheets, start=1):
@@ -160,9 +105,8 @@ def build_document(data: ModelData, scene: Scene, settings: Settings, explode: O
         s.meta["total"] = total
         s.meta["sheet"] = f"{i} / {total}"
         for p in s.prims:
-            if isinstance(p, Text) and p.text == "{sheet}":
+            if isinstance(p, Text) and (p.text == "{sheet}" or (p.text.endswith(f" / {total}") and p.size == 3.5 and "/" in p.text and p.text.split(" / ")[0].isdigit())):
                 p.text = s.meta["sheet"]
-    return doc
 
 
 # ----------------------------------------------------------------------
@@ -267,7 +211,8 @@ def sheets_svg(doc: Document) -> List[Dict[str, str]]:
     """Payload for the palette: one SVG per sheet."""
     out = []
     for i, s in enumerate(doc.sheets):
-        out.append({"id": f"sheet{i}", "kind": s.meta.get("kind", ""), "title": s.meta.get("title", ""),
+        out.append({"id": s.meta.get("spec_id") or f"sheet{i}", "kind": s.meta.get("kind", ""), "title": s.meta.get("title", ""),
                     "number": s.meta.get("number", i + 1), "total": s.meta.get("total", len(doc.sheets)),
-                    "scale": s.meta.get("scale", ""), "svg": sheet_to_svg(s, embed_size=False)})
+                    "scale": s.meta.get("scale", ""), "svg": sheet_to_svg(s, embed_size=False),
+                    "spec": doc.sheet_spec(s.meta.get("spec_id", ""))})
     return out

@@ -25,6 +25,9 @@ DROPDOWNS: Dict[str, List[Tuple[str, str]]] = {
     "det_origin": [("BottomLeft", "Левый нижний угол"), ("BottomRight", "Правый нижний"),
                    ("TopLeft", "Левый верхний"), ("TopRight", "Правый верхний"), ("ModelOrigin", "Начало модели")],
     "drawing_engine": [("own", "Собственный рендер (палитра, PDF/DXF/SVG)"), ("fusion", "Через Fusion Drawing")],
+    "ai_model": [("claude-opus-5", "Claude Opus 5"), ("claude-sonnet-5", "Claude Sonnet 5"),
+                 ("claude-fable-5-1", "Claude Fable 5.1"), ("claude-haiku-4-5", "Claude Haiku 4.5")],
+    "ai_effort": [("high", "high"), ("medium", "medium"), ("low", "low"), ("xhigh", "xhigh"), ("max", "max")],
 }
 
 FLOATS: Dict[str, Tuple[float, float, float]] = {   # min, max, step
@@ -106,6 +109,12 @@ LAYOUT: List[Tuple[str, str, List[Tuple[str, str]]]] = [
         ("dwg_command_id", "Id команды экспорта DWG"),
         ("close_drawings_after_export", "Закрывать чертежи после экспорта"),
         ("keep_intermediate_docs", "Оставлять разнесённую копию в проекте"),
+    ]),
+    ("tab_ai", "AI", [
+        ("ai_api_key", "Ключ Anthropic API"),
+        ("ai_model", "Модель"),
+        ("ai_effort", "Усилие (effort)"),
+        ("ai_apply_to_kind", "Применять правку ко всем листам того же типа"),
     ]),
     ("tab_model", "Модель", [
         ("name_regex", "Шаблон имени компонента"),

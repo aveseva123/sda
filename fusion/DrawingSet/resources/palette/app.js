@@ -40,6 +40,8 @@
           case 'done': onDone(payload); break;
           case 'error': onError(payload); break;
           case 'folder': if (payload.path) { setField('out_dir', payload.path); } break;
+          case 'sheet_update': onSheetUpdate(payload); break;
+          case 'ai_reply': onAiReply(payload); break;
           case 'response': break;
           default: log('warn', 'Неизвестное действие от Fusion: ' + action);
         }
@@ -190,6 +192,7 @@
     [...$('sheet-list').children].forEach((li, k) => li.classList.toggle('active', k === i));
     const s = state.sheets[i];
     $('sheet-title').textContent = s.kind + ' · ' + s.title + ' · ' + s.number + '/' + s.total + (s.scale ? ' · М ' + s.scale : '');
+    updateAssistHead();
     const page = $('page'); page.innerHTML = s.svg;
     const svg = page.querySelector('svg');
     if (svg) {
@@ -235,6 +238,57 @@
     state.zoom = nz; applyTransform();
   }, { passive: false });
   window.addEventListener('resize', () => { if (state.current >= 0) fit(); });
+
+  // ---------------------------------------------------------------- AI assistant
+  const chat = $('chat');
+  function addMsg(cls, text) {
+    const div = document.createElement('div'); div.className = 'msg ' + cls; div.textContent = text;
+    chat.appendChild(div); chat.scrollTop = chat.scrollHeight; return div;
+  }
+  let waitMsg = null;
+  function currentSheet() { return state.current >= 0 ? state.sheets[state.current] : null; }
+  function updateAssistHead() {
+    const s = currentSheet();
+    $('assist-sheet').textContent = s ? (s.kind + ' · ' + s.title) : 'лист не выбран';
+    $('spec-text').value = s && s.spec ? JSON.stringify(s.spec, null, 1) : '';
+  }
+  $('btn-ask').onclick = () => {
+    const s = currentSheet(); const text = $('ask-text').value.trim();
+    if (!s) { addMsg('err', 'Сначала выберите лист.'); return; }
+    if (!text) return;
+    collectSettings();
+    addMsg('user', text);
+    waitMsg = addMsg('wait', 'Думаю…');
+    $('btn-ask').disabled = true;
+    send('ai_edit', { sheet_id: s.id, message: text, apply_to_kind: $('ask-kind').checked, settings: state.settings });
+    $('ask-text').value = '';
+  };
+  $('ask-text').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('btn-ask').click(); });
+  $('btn-reset').onclick = () => { const s = currentSheet(); if (s) { addMsg('user', 'Сбросить лист к настройкам по умолчанию'); send('spec_reset', { sheet_id: s.id }); } };
+  $('btn-spec').onclick = () => { const box = $('spec-box'); box.open = !box.open; updateAssistHead(); };
+  $('btn-spec-apply').onclick = () => {
+    const s = currentSheet(); if (!s) return;
+    try { const spec = JSON.parse($('spec-text').value); send('spec_set', { sheet_id: s.id, spec }); }
+    catch (e) { addMsg('err', 'JSON не разбирается: ' + e.message); }
+  };
+  function onAiReply(p) {
+    if (waitMsg) { waitMsg.remove(); waitMsg = null; }
+    $('btn-ask').disabled = false;
+    if (p.error) { addMsg('err', p.error); return; }
+    addMsg('ai', p.explanation || 'Готово.');
+    if (p.usage && p.usage.input_tokens !== undefined) {
+      log('info', 'AI: ' + (p.model || '') + ', токенов вход/выход: ' + p.usage.input_tokens + '/' + p.usage.output_tokens);
+    }
+  }
+  function onSheetUpdate(p) {
+    (p.sheets || []).forEach((ns) => {
+      const i = state.sheets.findIndex((s) => s.id === ns.id);
+      if (i >= 0) state.sheets[i] = ns; else state.sheets.push(ns);
+    });
+    renderSheetList();
+    if (state.current >= 0 && state.current < state.sheets.length) showSheet(state.current);
+    if (p.warnings) p.warnings.forEach((w) => log('warn', w));
+  }
 
   // ---------------------------------------------------------------- status & log
   function setStatus(text, level) { const el = $('status'); el.textContent = text; el.className = 'status ' + (level || ''); }
