@@ -1,0 +1,305 @@
+<title>Визуальная счётная станция 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: full-height workbench — 3D viewport left, instrument panel right; stacks on phones. */
+  :root {
+    --bg: #eef0ee;
+    --panel: #ffffff;
+    --fg: #1c211f;
+    --muted: #5d6662;
+    --line: #d5dad6;
+    --accent: #1f8a4c;
+    --accent-ink: #ffffff;
+    --buy: #5c78b3;
+    --sheet: #8d9196;
+    --belt: #1a6b47;
+    --font: "IBM Plex Sans", "Segoe UI", Roboto, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151817; --panel: #1f2321; --fg: #e8ece9; --muted: #9aa49f; --line: #333a37;
+      --accent: #3fbf74; --accent-ink: #0d1510; --buy: #8aa3dd; --sheet: #a8adb2; --belt: #2f9c6a;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151817; --panel: #1f2321; --fg: #e8ece9; --muted: #9aa49f; --line: #333a37;
+    --accent: #3fbf74; --accent-ink: #0d1510; --buy: #8aa3dd; --sheet: #a8adb2; --belt: #2f9c6a;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 14px; line-height: 1.45; }
+  .app {
+    height: 100%; display: grid; grid-template-columns: 1fr 320px; grid-template-rows: auto 1fr;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px; gap: 12px; box-sizing: border-box;
+  }
+  header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; text-wrap: balance; }
+  header .sub { color: var(--muted); }
+  .stage { position: relative; min-width: 0; min-height: 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .tip { position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 24px); padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; font-family: var(--mono); font-size: 12px; pointer-events: none; }
+  .views { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+  button { font: inherit; font-size: 12px; padding: 5px 10px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 4px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  aside { min-width: 0; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+  h2 { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .comp { display: flex; flex-direction: column; gap: 6px; }
+  .comp label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .comp input { accent-color: var(--accent); }
+  .comp .n { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .legend { display: grid; grid-template-columns: 14px 1fr; gap: 6px 8px; align-items: center; }
+  .sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); }
+  dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; }
+  .sel { min-height: 40px; }
+  .sel .name { font-weight: 500; }
+  .sel .dims { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  details ol { margin: 8px 0 0; padding-left: 20px; font-size: 12.5px; }
+  details li { margin: 2px 0; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto minmax(300px, 55vh) auto; height: auto; }
+    aside { overflow: visible; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <header>
+    <h1>Визуальная счётная станция — прототип</h1>
+    <span class="sub">лента 150×700, камера с ИИ, загрузка вручную · 92 тела, 31 печатная</span>
+  </header>
+
+  <div class="stage">
+    <canvas id="c"></canvas>
+    <div class="views" role="group" aria-label="Вид">
+      <button type="button" data-view="iso" aria-pressed="true">Изометрия</button>
+      <button type="button" data-view="front">Спереди</button>
+      <button type="button" data-view="side">Сбоку</button>
+      <button type="button" data-view="top">Сверху</button>
+    </div>
+    <div class="tip" id="tip" hidden></div>
+    <div class="loading" id="loading">Загрузка модели…</div>
+  </div>
+
+  <aside>
+    <section>
+      <h2>Узлы</h2>
+      <div class="comp" id="comps"></div>
+    </section>
+    <section class="sel" id="sel">
+      <h2>Деталь</h2>
+      <div class="name">Наведите на деталь, щёлкните, чтобы закрепить</div>
+      <div class="dims"></div>
+    </section>
+    <section>
+      <h2>Цвета</h2>
+      <div class="legend">
+        <span class="sw" style="background:#33b858"></span><span>печать на 3D‑принтере, PETG</span>
+        <span class="sw" style="background:#5c78b3"></span><span>покупное: двигатель, камера, серва, датчики</span>
+        <span class="sw" style="background:#cfd1d4"></span><span>алюминий: боковины, профиль, платформа</span>
+        <span class="sw" style="background:#7a7d82"></span><span>сталь: рама, плита, оси</span>
+        <span class="sw" style="background:#1a6b47"></span><span>лента ПВХ</span>
+        <span class="sw" style="background:#47474c"></span><span>капот: ПВХ или композит 3 мм</span>
+      </div>
+    </section>
+    <section>
+      <h2>Размеры</h2>
+      <dl>
+        <dt>Габарит стенда</dt><dd>1300 × 572 × 1327 мм</dd>
+        <dt>Верх ленты от пола</dt><dd>987 мм</dd>
+        <dt>Камера над лентой</dt><dd>300 мм</dd>
+        <dt>Поле кадра, объектив 6 мм</dt><dd>≈ 250 × 190 мм</dd>
+        <dt>Скорость ленты</dt><dd>150 мм/с</dd>
+        <dt>Деталь в кадре</dt><dd>≈ 1,7 с</dd>
+      </dl>
+    </section>
+    <section>
+      <details>
+        <summary>Печатные детали</summary>
+        <ol id="printed"></ol>
+      </details>
+    </section>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+(function () {
+  var canvas = document.getElementById('c');
+  var stage = canvas.parentElement;
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(32, 1, 1, 100000);
+  var controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.1;
+
+  var dark = function () {
+    var t = document.documentElement.getAttribute('data-theme');
+    if (t === 'dark') return true;
+    if (t === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  };
+  function applyTheme() { scene.background = new THREE.Color(dark() ? 0x1f2321 : 0xffffff); }
+  applyTheme();
+  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+  new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f8a, 0.9));
+  var sun = new THREE.DirectionalLight(0xffffff, 0.7);
+  sun.position.set(1, 2, 1.5);
+  scene.add(sun);
+  var fill = new THREE.DirectionalLight(0xffffff, 0.3);
+  fill.position.set(-2, 1, -1);
+  scene.add(fill);
+
+  function fixName(s) {
+    try { return decodeURIComponent(escape(s)); } catch (e) { return s; }
+  }
+
+  var root = null, meshes = [], box = new THREE.Box3(), center = new THREE.Vector3(), radius = 1;
+  var picked = null, pinned = null;
+
+  function resize() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function setView(name) {
+    var d = radius * 2.6;
+    var dirs = { iso: [1, 0.75, 1.1], front: [0, 0.12, 1], side: [1, 0.12, 0], top: [0.001, 1, 0] };
+    var v = new THREE.Vector3().fromArray(dirs[name]).normalize().multiplyScalar(d);
+    camera.position.copy(center).add(v);
+    camera.near = d / 100; camera.far = d * 10;
+    camera.updateProjectionMatrix();
+    controls.target.copy(center);
+    controls.update();
+    Array.prototype.forEach.call(document.querySelectorAll('.views button'), function (b) {
+      b.setAttribute('aria-pressed', b.dataset.view === name ? 'true' : 'false');
+    });
+  }
+  document.querySelector('.views').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (b) setView(b.dataset.view);
+  });
+
+  var loader = new THREE.GLTFLoader();
+  loader.load('VisionStation.glb', function (gltf) {
+    root = gltf.scene;
+    scene.add(root);
+    root.traverse(function (o) {
+      if (o.isMesh) {
+        o.userData.base = o.material.color.clone();
+        o.material = o.material.clone();
+        o.material.side = THREE.DoubleSide;
+        o.material.metalness = 0.1; o.material.roughness = 0.75;
+        meshes.push(o);
+      }
+    });
+    box.setFromObject(root);
+    box.getCenter(center);
+    radius = box.getSize(new THREE.Vector3()).length() / 2;
+    setView('iso');
+    document.getElementById('loading').hidden = true;
+    buildPanel();
+  }, undefined, function () {
+    document.getElementById('loading').textContent = 'Модель не загрузилась. Обновите страницу.';
+  });
+
+  function partName(o) {
+    var n = fixName(o.name || '');
+    return n.replace(/^\d{3}\s+/, '');
+  }
+
+  function buildPanel() {
+    var comps = document.getElementById('comps');
+    var top = root.children.length === 1 ? root.children[0] : root;
+    var printed = document.getElementById('printed');
+    top.children.forEach(function (group, i) {
+      var count = 0;
+      group.traverse(function (o) { if (o.isMesh) count++; });
+      var id = 'comp' + i;
+      var label = document.createElement('label');
+      label.innerHTML = '<input type="checkbox" id="' + id + '" checked> <span></span><span class="n"></span>';
+      label.querySelector('span').textContent = fixName(group.name);
+      label.querySelector('.n').textContent = count;
+      label.querySelector('input').addEventListener('change', function () { group.visible = this.checked; });
+      comps.appendChild(label);
+    });
+    meshes.forEach(function (m) {
+      var n = partName(m);
+      if (n.indexOf('[3D]') === 0) {
+        var li = document.createElement('li');
+        li.textContent = n.slice(4).trim();
+        printed.appendChild(li);
+      }
+    });
+  }
+
+  var ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), tip = document.getElementById('tip');
+  function showSel(o) {
+    var el = document.getElementById('sel');
+    if (!o) {
+      el.querySelector('.name').textContent = 'Наведите на деталь, щёлкните, чтобы закрепить';
+      el.querySelector('.dims').textContent = '';
+      return;
+    }
+    var b = new THREE.Box3().setFromObject(o), s = b.getSize(new THREE.Vector3());
+    var k = radius > 50 ? 1 : 1000;   // модель в метрах или миллиметрах
+    el.querySelector('.name').textContent = partName(o);
+    el.querySelector('.dims').textContent = 'габарит ' + Math.round(s.x * k) + ' × ' + Math.round(s.z * k) + ' × ' + Math.round(s.y * k) + ' мм (X × Y × Z)';
+  }
+  function highlight(o) {
+    meshes.forEach(function (m) { m.material.emissive.setHex(0x000000); });
+    if (o) o.material.emissive.setHex(dark() ? 0x335544 : 0x224433);
+  }
+  function pick(e) {
+    if (!root) return null;
+    var r = canvas.getBoundingClientRect();
+    ptr.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+    ptr.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    ray.setFromCamera(ptr, camera);
+    var hits = ray.intersectObjects(meshes.filter(function (m) { return m.visible && m.parent.visible; }), false);
+    for (var i = 0; i < hits.length; i++) {
+      var o = hits[i].object, vis = true, p = o;
+      while (p) { if (p.visible === false) vis = false; p = p.parent; }
+      if (vis) return o;
+    }
+    return null;
+  }
+  canvas.addEventListener('pointermove', function (e) {
+    var o = pick(e);
+    if (o !== picked) {
+      picked = o;
+      if (!pinned) { highlight(o); showSel(o); }
+      if (o) { tip.textContent = partName(o); tip.hidden = false; } else { tip.hidden = true; }
+    }
+  });
+  canvas.addEventListener('pointerleave', function () { tip.hidden = true; if (!pinned) { highlight(null); showSel(null); } });
+  canvas.addEventListener('click', function (e) {
+    var o = pick(e);
+    pinned = (o && o !== pinned) ? o : null;
+    highlight(pinned || picked); showSel(pinned || picked);
+  });
+
+  function tick() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(tick); }
+  tick();
+})();
+</script>

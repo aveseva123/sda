@@ -49,3 +49,18 @@
   моделей подставить размеры в `params.py`.
 - Капот крупнее стола принтера: стенки из листа, печатаются только углы и кронштейны. Воронка 200×180×120 —
   две половины.
+
+## Готовая модель без Fusion (CadQuery)
+
+Та же сборка собирается здесь, в Python, по тем же `params.py` и `station.py`:
+
+```bash
+pip install cadquery
+python3 fusion/VisionStation/cad_model.py   # out/VisionStation.step, .glb, .stl
+python3 fusion/VisionStation/render.py      # out/view_iso.png, front, side, top
+```
+
+`cq_helpers.py` подменяет `helpers.py` на функции CadQuery, поэтому геометрия одна и та же.
+`out/VisionStation.step` открывается в Fusion через Upload с деревом узлов и именами деталей;
+`out/VisionStation.glb` смотрит `viewer.html` (интерактивный 3D-просмотр, опубликован как артефакт).
+Имена с кириллицей после экспорта OCCT чинятся в `cad_model.py` (STEP — кодировка `\X2\`, glTF — UTF-8).
