@@ -1,0 +1,10 @@
+{
+    "autodeskProduct": "Fusion360",
+    "type": "script",
+    "author": "SDA",
+    "description": {
+        "": "Визуальная счётная станция (камера + ИИ, лента): параметрическая сборка прототипа"
+    },
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}
