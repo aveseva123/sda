@@ -69,6 +69,12 @@ npm run test:e2e     # Playwright: приложение в headless Chromium, т
 
 Подробный контракт модулей — в [docs/SPEC.md](docs/SPEC.md).
 
+## Сервис уведомлений для салонов (YCLIENTS)
+
+В каталоге [`notify/`](notify/README.md) лежит отдельный сервис: берёт расписание и телефоны
+клиентов из YCLIENTS и рассылает напоминания, подтверждения и запросы отзывов через
+Telegram → WhatsApp → SMS с каскадной доставкой. Запуск: `cd notify && npm start`.
+
 ## Структура
 
 ```

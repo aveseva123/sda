@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Уведомления · YCLIENTS</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="dot"></span> Уведомления клиентам <small id="companyTitle"></small></div>
+  <nav id="nav">
+    <button data-tab="overview" class="active">Обзор</button>
+    <button data-tab="schedule">Расписание</button>
+    <button data-tab="messages">Сообщения</button>
+    <button data-tab="rules">Правила</button>
+    <button data-tab="contacts">Контакты</button>
+    <button data-tab="settings">Настройки</button>
+    <button data-tab="log">Журнал</button>
+  </nav>
+  <button id="logout" class="ghost" title="Сменить токен">Выйти</button>
+</header>
+
+<main id="main">
+  <section id="login" class="card narrow hidden">
+    <h2>Вход в панель</h2>
+    <p class="muted">Введите ADMIN_TOKEN из настроек сервера.</p>
+    <form id="loginForm"><input type="password" id="tokenInput" placeholder="Токен администратора" autocomplete="current-password" required><button type="submit">Войти</button></form>
+    <p id="loginError" class="error"></p>
+  </section>
+
+  <section id="tab-overview" class="tab"></section>
+  <section id="tab-schedule" class="tab hidden"></section>
+  <section id="tab-messages" class="tab hidden"></section>
+  <section id="tab-rules" class="tab hidden"></section>
+  <section id="tab-contacts" class="tab hidden"></section>
+  <section id="tab-settings" class="tab hidden"></section>
+  <section id="tab-log" class="tab hidden"></section>
+</main>
+<div id="toast" class="toast hidden"></div>
+<div id="modal" class="modal hidden"><div class="modal-body" id="modalBody"></div></div>
+<script src="/app.js"></script>
+</body>
+</html>

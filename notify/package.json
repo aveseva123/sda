@@ -1,0 +1,13 @@
+{
+  "name": "yclients-notify",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Сервис уведомлений для салонов на YCLIENTS: напоминания, подтверждение визита, запрос отзыва и возврат клиентов через Telegram / WhatsApp / SMS с каскадной доставкой",
+  "type": "module",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning server.mjs",
+    "dev": "node --no-warnings=ExperimentalWarning --watch server.mjs",
+    "test": "node --no-warnings=ExperimentalWarning --test \"tests/*.test.mjs\""
+  }
+}
