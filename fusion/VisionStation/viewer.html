@@ -201,7 +201,11 @@
   });
 
   var loader = new THREE.GLTFLoader();
-  loader.load('VisionStation.glb', function (gltf) {
+  var b64 = (document.getElementById('glb') || {}).textContent || '';
+  var bytes = atob(b64.replace(/\s+/g, ''));
+  var buf = new Uint8Array(bytes.length);
+  for (var bi = 0; bi < bytes.length; bi++) buf[bi] = bytes.charCodeAt(bi);
+  loader.parse(buf.buffer, '', function (gltf) {
     root = gltf.scene;
     scene.add(root);
     root.traverse(function (o) {
@@ -219,7 +223,7 @@
     setView('iso');
     document.getElementById('loading').hidden = true;
     buildPanel();
-  }, undefined, function () {
+  }, function () {
     document.getElementById('loading').textContent = 'Модель не загрузилась. Обновите страницу.';
   });
 
@@ -303,3 +307,4 @@
   tick();
 })();
 </script>
+<script type="application/octet-stream" id="glb">__GLB_BASE64__</script>
