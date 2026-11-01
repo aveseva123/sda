@@ -23,6 +23,7 @@
     --hmi: #10140f; --hmi-ink: #d9efe0; color-scheme: dark;
   }
   html, body { height: 100%; }
+  [hidden] { display: none !important; }
   body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 14px; line-height: 1.45; }
   .app { height: 100%; display: grid; grid-template-columns: 1fr 360px; grid-template-rows: auto 1fr; gap: 12px;
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -149,6 +150,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script type="application/octet-stream" id="glb">__GLB_BASE64__</script>
 <script>
 (function () {
   // ---------- геометрия станции (мм, Z вверх; совпадает с params.py) ----------
@@ -238,6 +240,7 @@
   for (var bi = 0; bi < bytes.length; bi++) buf[bi] = bytes.charCodeAt(bi);
   loader.parse(buf.buffer, '', function (gltf) {
     root = gltf.scene; scene.add(root);
+    root.children.forEach(function (c) { c.quaternion.set(0, 0, 0, 1); });   // OCCT пишет поворот Z-up→Y-up в корень; снимаем, работаем в мм с Z вверх
     root.traverse(function (o) {
       if (o.isMesh) {
         o.material = o.material.clone(); o.material.side = THREE.DoubleSide;
@@ -473,4 +476,3 @@
   requestAnimationFrame(tick);
 })();
 </script>
-<script type="application/octet-stream" id="glb">__GLB_BASE64__</script>
