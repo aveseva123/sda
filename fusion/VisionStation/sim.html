@@ -150,7 +150,6 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script type="application/octet-stream" id="glb">__GLB_BASE64__</script>
 <script>
 (function () {
   // ---------- геометрия станции (мм, Z вверх; совпадает с params.py) ----------
@@ -237,14 +236,20 @@
   document.querySelector('.views').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setView(b.dataset.view); });
 
   function fixName(s) { try { return decodeURIComponent(escape(s)); } catch (e) { return s; } }
-  function partName(o) { return fixName(o.name || '').replace(/^\d{3}\s+/, ''); }
+  var NAMES = [];
+  function partName(o) { var mm = /^(\d{3})[ _]/.exec(o.name || ''); if (mm && NAMES[+mm[1]]) return NAMES[+mm[1]]; return fixName(o.name || '').replace(/^\d{3}\s+/, '').replace(/_/g, ' '); }
 
   var root = null, meshes = [], flapPivot = null, beltStripe = null;
   var loader = new THREE.GLTFLoader();
-  var b64 = (document.getElementById('glb') || {}).textContent || '';
-  var bytes = atob(b64.replace(/\s+/g, '')), buf = new Uint8Array(bytes.length);
-  for (var bi = 0; bi < bytes.length; bi++) buf[bi] = bytes.charCodeAt(bi);
-  loader.parse(buf.buffer, '', function (gltf) {
+  var CHUNKS = __MODEL_CHUNKS__;
+  Promise.all([fetch('names.json').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })].concat(Array.from({ length: CHUNKS }, function (_, i) { return fetch('model.' + i + '.txt').then(function (r) { if (!r.ok) throw new Error('model.' + i + '.txt: ' + r.status); return r.text(); }); })))
+  .then(function (parts) {
+    NAMES = parts.shift() || [];
+    var bytes = atob(parts.join('').replace(/\s+/g, '')), buf = new Uint8Array(bytes.length);
+    for (var bi = 0; bi < bytes.length; bi++) buf[bi] = bytes.charCodeAt(bi);
+    loader.parse(buf.buffer, '', onModel, function () { document.getElementById('loading').textContent = 'Модель не загрузилась. Обновите страницу.'; });
+  }).catch(function (e) { document.getElementById('loading').textContent = 'Модель не загрузилась: ' + e.message; });
+  function onModel(gltf) {
     root = gltf.scene; scene.add(root);
     root.children.forEach(function (c) { c.quaternion.set(0, 0, 0, 1); });   // OCCT пишет поворот Z-up→Y-up в корень; снимаем, работаем в мм с Z вверх
     root.traverse(function (o) {
@@ -258,7 +263,7 @@
     setupFlap(); setupBeltStripe(); buildParts();
     document.getElementById('loading').hidden = true;
     setView('iso');
-  }, function () { document.getElementById('loading').textContent = 'Модель не загрузилась. Обновите страницу.'; });
+  }
 
   function findMesh(sub) { for (var i = 0; i < meshes.length; i++) if (partName(meshes[i]).indexOf(sub) >= 0) return meshes[i]; return null; }
   function setupFlap() {

@@ -2,97 +2,100 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-  /* Layout: full-height workbench — 3D viewport left, instrument panel right; stacks on phones. */
+  /* Layout: engineering workbench — 3D view or wiring diagram on the left, instrument panel on the right. */
   :root {
-    --bg: #eef0ee;
-    --panel: #ffffff;
-    --fg: #1c211f;
-    --muted: #5d6662;
-    --line: #d5dad6;
-    --accent: #1f8a4c;
-    --accent-ink: #ffffff;
-    --buy: #5c78b3;
-    --sheet: #8d9196;
-    --belt: #1a6b47;
-    --font: "IBM Plex Sans", "Segoe UI", Roboto, system-ui, sans-serif;
-    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --bg: #eceeec; --panel: #ffffff; --fg: #1c211f; --muted: #5d6662; --line: #d3d8d4;
+    --accent: #1f8a4c; --accent-ink: #ffffff; --sel: #e8c547; --font: "IBM Plex Sans", "Segoe UI", Roboto, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace; --schema-bg: #fbfcfb; --schema-ink: #1c211f;
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #151817; --panel: #1f2321; --fg: #e8ece9; --muted: #9aa49f; --line: #333a37;
-      --accent: #3fbf74; --accent-ink: #0d1510; --buy: #8aa3dd; --sheet: #a8adb2; --belt: #2f9c6a;
-      color-scheme: dark;
-    }
+    :root:not([data-theme="light"]) { --bg: #141716; --panel: #1e2220; --fg: #e8ece9; --muted: #9aa49f; --line: #333a37; --accent: #3fbf74; --accent-ink: #0d1510; --sel: #ffd166; --schema-bg: #181c1a; --schema-ink: #e8ece9; color-scheme: dark; }
   }
-  :root[data-theme="dark"] {
-    --bg: #151817; --panel: #1f2321; --fg: #e8ece9; --muted: #9aa49f; --line: #333a37;
-    --accent: #3fbf74; --accent-ink: #0d1510; --buy: #8aa3dd; --sheet: #a8adb2; --belt: #2f9c6a;
-    color-scheme: dark;
-  }
+  :root[data-theme="dark"] { --bg: #141716; --panel: #1e2220; --fg: #e8ece9; --muted: #9aa49f; --line: #333a37; --accent: #3fbf74; --accent-ink: #0d1510; --sel: #ffd166; --schema-bg: #181c1a; --schema-ink: #e8ece9; color-scheme: dark; }
   html, body { height: 100%; }
   [hidden] { display: none !important; }
   body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 14px; line-height: 1.45; }
-  .app {
-    height: 100%; display: grid; grid-template-columns: 1fr 320px; grid-template-rows: auto 1fr;
-    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-    padding-block: 12px; gap: 12px; box-sizing: border-box;
-  }
+  .app { height: 100%; display: grid; grid-template-columns: 1fr 340px; grid-template-rows: auto 1fr; gap: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px; box-sizing: border-box; }
   header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
   h1 { font-size: 18px; font-weight: 600; margin: 0; text-wrap: balance; }
   header .sub { color: var(--muted); }
-  .stage { position: relative; min-width: 0; min-height: 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-  canvas { display: block; width: 100%; height: 100%; }
+  .stage { position: relative; min-width: 0; min-height: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  canvas#c { display: block; width: 100%; height: 100%; }
+  .bar { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; pointer-events: none; }
+  .bar > * { pointer-events: auto; }
+  .bar .sp { flex: 1; }
   .tip { position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 24px); padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; font-family: var(--mono); font-size: 12px; pointer-events: none; }
-  .views { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
-  .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+  .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); background: var(--panel); }
   button { font: inherit; font-size: 12px; padding: 5px 10px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 4px; cursor: pointer; }
   button:hover { border-color: var(--accent); }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  aside { min-width: 0; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+  .schema { position: absolute; inset: 0; overflow: auto; background: var(--schema-bg); padding-top: 44px; box-sizing: border-box; }
+  .schema svg { display: block; min-width: 1640px; font-family: var(--font); }
+  .schema .node rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; rx: 4; }
+  .schema .node text { fill: var(--schema-ink); font-size: 11px; }
+  .schema .node .title { font-weight: 600; font-size: 12px; }
+  .schema .pin { fill: var(--muted); }
+  .schema .pinlabel { font-size: 9.5px; fill: var(--muted); font-family: var(--mono); }
+  .schema .wire { fill: none; stroke-width: 2; cursor: pointer; stroke-linejoin: round; }
+  .schema .wire.hl { stroke-width: 5; filter: drop-shadow(0 0 3px var(--sel)); }
+  .schema .wire.dim { opacity: .18; }
+  .schema .wlabel { font-size: 9px; fill: var(--muted); font-family: var(--mono); pointer-events: none; }
+  .schema .hit { stroke: transparent; stroke-width: 12; fill: none; cursor: pointer; }
+  aside { min-width: 0; display: flex; flex-direction: column; gap: 12px; overflow: auto; }
   section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
   h2 { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
-  .comp { display: flex; flex-direction: column; gap: 6px; }
+  input[type=search] { width: 100%; box-sizing: border-box; font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--fg); }
+  .list { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow: auto; }
+  .list button, .wires button { text-align: left; display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 5px 8px; border-color: transparent; background: transparent; align-items: start; }
+  .list button:hover, .list button[aria-pressed="true"], .wires button:hover, .wires button[aria-pressed="true"] { background: var(--bg); border-color: var(--line); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; border: 1px solid var(--line); }
+  .w { font-weight: 500; }
+  .r { grid-column: 2; font-size: 11.5px; color: var(--muted); }
+  .comp { display: flex; flex-direction: column; gap: 5px; }
   .comp label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   .comp input { accent-color: var(--accent); }
-  .comp .n { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .comp .n { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .card .name { font-weight: 500; }
+  .card .meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .card .route { margin-top: 6px; font-size: 13px; }
+  .card .act { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   .legend { display: grid; grid-template-columns: 14px 1fr; gap: 6px 8px; align-items: center; }
   .sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); }
   dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; }
   dt { color: var(--muted); }
   dd { margin: 0; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; }
-  .sel { min-height: 40px; }
-  .sel .name { font-weight: 500; }
-  .sel .dims { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .wires { display: flex; flex-direction: column; gap: 2px; }
-  .wires button { text-align: left; display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 5px 8px; border-color: transparent; background: transparent; align-items: start; }
-  .wires button:hover, .wires button[aria-pressed="true"] { background: var(--bg); border-color: var(--line); }
-  .wires .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; border: 1px solid var(--line); }
-  .wires .w { font-weight: 500; }
-  .wires .r { grid-column: 2; font-size: 11.5px; color: var(--muted); }
   details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   details ol { margin: 8px 0 0; padding-left: 20px; font-size: 12.5px; }
-  details li { margin: 2px 0; }
-  @media (max-width: 760px) {
-    .app { grid-template-columns: 1fr; grid-template-rows: auto minmax(300px, 55vh) auto; height: auto; }
-    aside { overflow: visible; }
-  }
+  .wires { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow: auto; }
+  @media (max-width: 820px) { .app { grid-template-columns: 1fr; grid-template-rows: auto minmax(320px, 58vh) auto; height: auto; } aside { overflow: visible; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
 <div class="app">
   <header>
     <h1>Визуальная счётная станция — прототип</h1>
-    <span class="sub">лента 150×700, камера с ИИ, загрузка вручную · 280 тел, 38 печатных, вся коммутация</span>
+    <span class="sub">лента 150×700 · камера с ИИ · загрузка вручную · 648 деталей, крепёж и коммутация до жилы</span>
   </header>
 
   <div class="stage">
     <canvas id="c"></canvas>
-    <div class="views" role="group" aria-label="Вид">
-      <button type="button" data-view="iso" aria-pressed="true">Изометрия</button>
-      <button type="button" data-view="front">Спереди</button>
-      <button type="button" data-view="side">Сбоку</button>
-      <button type="button" data-view="top">Сверху</button>
+    <div class="schema" id="schema" hidden></div>
+    <div class="bar">
+      <button type="button" id="tab3d" aria-pressed="true">3D</button>
+      <button type="button" id="tabSchema">Схема подключения</button>
+      <span class="sp"></span>
+      <span id="viewBtns">
+        <button type="button" data-view="iso" aria-pressed="true">Изометрия</button>
+        <button type="button" data-view="cam">Капот</button>
+        <button type="button" data-view="cab">Шкаф</button>
+        <button type="button" data-view="out">Выход</button>
+        <button type="button" data-view="top">Сверху</button>
+      </span>
+      <button type="button" id="tHood">Капот прозрачный</button>
+      <button type="button" id="tBody">Корпус прозрачный</button>
+      <button type="button" id="tCat">Цвета: категории</button>
     </div>
     <div class="tip" id="tip" hidden></div>
     <div class="loading" id="loading">Загрузка модели…</div>
@@ -100,47 +103,45 @@
 
   <aside>
     <section>
+      <h2>Поиск детали</h2>
+      <input type="search" id="q" placeholder="болт, HX711, клемма 5, кабель HDMI…" aria-label="Поиск детали">
+      <div class="list" id="found"></div>
+    </section>
+    <section class="card" id="card">
+      <h2>Деталь</h2>
+      <div class="name">Наведите на деталь, щёлкните, чтобы закрепить. Двойной щелчок приближает.</div>
+      <div class="meta"></div>
+      <div class="route"></div>
+      <div class="act"></div>
+    </section>
+    <section>
       <h2>Узлы</h2>
       <div class="comp" id="comps"></div>
     </section>
-    <section class="sel" id="sel">
-      <h2>Деталь</h2>
-      <div class="name">Наведите на деталь, щёлкните, чтобы закрепить</div>
-      <div class="dims"></div>
+    <section>
+      <h2>Коммутация · провод → подсветка трассы в 3D и на схеме</h2>
+      <div class="wires" id="wires"></div>
     </section>
     <section>
-      <h2>Цвета</h2>
+      <h2>Цвета в режиме «категории»</h2>
       <div class="legend">
-        <span class="sw" style="background:#33b858"></span><span>печать на 3D‑принтере, PETG</span>
-        <span class="sw" style="background:#5c78b3"></span><span>покупное: двигатель, камера, серва, датчики</span>
-        <span class="sw" style="background:#cfd1d4"></span><span>алюминий: боковины, профиль, платформа</span>
-        <span class="sw" style="background:#7a7d82"></span><span>сталь: рама, плита, оси</span>
-        <span class="sw" style="background:#1a6b47"></span><span>лента ПВХ</span>
-        <span class="sw" style="background:#47474c"></span><span>капот: ПВХ или композит 3 мм</span>
-        <span class="sw" style="background:#1f7338"></span><span>платы: Pi 5, камера, HX711</span>
-        <span class="sw" style="background:#c8402a"></span><span>кабели: цвет по жиле, подпись при наведении</span>
+        <span class="sw" style="background:#33b858"></span><span>печать на 3D-принтере, PETG</span>
+        <span class="sw" style="background:#5c78b3"></span><span>покупное: двигатель, камера, серва, автоматы, БП…</span>
+        <span class="sw" style="background:#cfd1d4"></span><span>лист, профиль, крепёж — своё изготовление</span>
+        <span class="sw" style="background:#c8402a"></span><span>кабели и жилы — цвет по изоляции</span>
       </div>
     </section>
     <section>
       <h2>Размеры</h2>
       <dl>
-        <dt>Габарит стенда</dt><dd>1316 × 723 × 1335 мм</dd>
+        <dt>Габарит станции</dt><dd>1332 × 1013 × 1336 мм</dd>
         <dt>Верх ленты от пола</dt><dd>987 мм</dd>
         <dt>Камера над лентой</dt><dd>300 мм</dd>
-        <dt>Поле кадра, объектив 6 мм</dt><dd>≈ 250 × 190 мм</dd>
-        <dt>Скорость ленты</dt><dd>150 мм/с</dd>
-        <dt>Деталь в кадре</dt><dd>≈ 1,7 с</dd>
+        <dt>Поле кадра, 6 мм</dt><dd>≈ 250 × 190 мм</dd>
       </dl>
     </section>
     <section>
-      <h2>Коммутация · нажмите провод, чтобы подсветить его трассу</h2>
-      <div class="wires" id="wires"></div>
-    </section>
-    <section>
-      <details>
-        <summary>Печатные детали</summary>
-        <ol id="printed"></ol>
-      </details>
+      <details><summary>Печатные детали</summary><ol id="printed"></ol></details>
     </section>
   </aside>
 </div>
@@ -148,195 +149,370 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script type="application/octet-stream" id="glb">__GLB_BASE64__</script>
 <script>
 (function () {
-  var canvas = document.getElementById('c');
-  var stage = canvas.parentElement;
+  // ======================= сцена =======================
+  var canvas = document.getElementById('c'), stage = canvas.parentElement;
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   var scene = new THREE.Scene();
-  var camera = new THREE.PerspectiveCamera(32, 1, 1, 100000);
+  var camera = new THREE.PerspectiveCamera(30, 1, 5, 30000);
+  camera.up.set(0, 0, 1);
   var controls = new THREE.OrbitControls(camera, canvas);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.1;
-
-  var dark = function () {
-    var t = document.documentElement.getAttribute('data-theme');
-    if (t === 'dark') return true;
-    if (t === 'light') return false;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  };
-  function applyTheme() { scene.background = new THREE.Color(dark() ? 0x1f2321 : 0xffffff); }
-  applyTheme();
+  controls.enableDamping = true; controls.dampingFactor = 0.1;
+  function dark() { var t = document.documentElement.getAttribute('data-theme'); if (t === 'dark') return true; if (t === 'light') return false; return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; }
+  var ground;
+  function applyTheme() { scene.background = new THREE.Color(dark() ? 0x1b1f1d : 0xf4f5f3); if (ground) ground.material.opacity = dark() ? 0.45 : 0.22; }
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
   new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa09a, 0.75));
+  var sun = new THREE.DirectionalLight(0xffffff, 0.95); sun.position.set(900, -1400, 2200); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -1300; sun.shadow.camera.right = 1300; sun.shadow.camera.top = 1300; sun.shadow.camera.bottom = -1300;
+  sun.shadow.camera.near = 500; sun.shadow.camera.far = 6000; sun.shadow.bias = -0.0005; sun.shadow.normalBias = 2; scene.add(sun);
+  var fill = new THREE.DirectionalLight(0xdfe8ff, 0.35); fill.position.set(-1500, 900, 900); scene.add(fill);
+  var rim = new THREE.DirectionalLight(0xffffff, 0.25); rim.position.set(0, 1800, 600); scene.add(rim);
+  ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.ShadowMaterial({ opacity: 0.22 }));
+  ground.position.set(250, 0, 0); ground.receiveShadow = true; scene.add(ground);
+  applyTheme();
+  function resize() { var w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  window.addEventListener('resize', resize); resize();
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f8a, 0.9));
-  var sun = new THREE.DirectionalLight(0xffffff, 0.7);
-  sun.position.set(1, 2, 1.5);
-  scene.add(sun);
-  var fill = new THREE.DirectionalLight(0xffffff, 0.3);
-  fill.position.set(-2, 1, -1);
-  scene.add(fill);
-
-  function fixName(s) {
-    try { return decodeURIComponent(escape(s)); } catch (e) { return s; }
-  }
-
-  var root = null, meshes = [], box = new THREE.Box3(), center = new THREE.Vector3(), radius = 1;
-  var picked = null, pinned = null;
-
-  function resize() {
-    var w = stage.clientWidth, h = stage.clientHeight;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
+  var VIEWS = { iso: { t: [300, 0, 700], d: [1, -1.3, 0.75], r: 1500 }, cam: { t: [380, 0, 1100], d: [0.9, -1.1, 0.5], r: 520 },
+    cab: { t: [500, 200, 500], d: [0.3, 1.2, 0.45], r: 520 }, out: { t: [780, 0, 850], d: [1.1, -1, 0.5], r: 460 }, top: { t: [300, 0, 900], d: [0.001, -0.001, 1], r: 1500 } };
   function setView(name) {
-    var d = radius * 2.6;
-    var dirs = { iso: [1, 0.75, 1.1], front: [0, 0.12, 1], side: [1, 0.12, 0], top: [0.001, 1, 0] };
-    var v = new THREE.Vector3().fromArray(dirs[name]).normalize().multiplyScalar(d);
-    camera.position.copy(center).add(v);
-    camera.near = d / 100; camera.far = d * 10;
-    camera.updateProjectionMatrix();
-    controls.target.copy(center);
-    controls.update();
-    Array.prototype.forEach.call(document.querySelectorAll('.views button'), function (b) {
-      b.setAttribute('aria-pressed', b.dataset.view === name ? 'true' : 'false');
-    });
+    var v = VIEWS[name], dir = new THREE.Vector3().fromArray(v.d).normalize().multiplyScalar(v.r * 2.3);
+    controls.target.set(v.t[0], v.t[1], v.t[2]); camera.position.copy(controls.target).add(dir); controls.update();
+    Array.prototype.forEach.call(document.querySelectorAll('#viewBtns button'), function (b) { b.setAttribute('aria-pressed', b.dataset.view === name ? 'true' : 'false'); });
   }
-  document.querySelector('.views').addEventListener('click', function (e) {
-    var b = e.target.closest('button'); if (b) setView(b.dataset.view);
-  });
+  document.getElementById('viewBtns').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { show3d(); setView(b.dataset.view); } });
 
+  // ======================= модель =======================
+  function fixName(s) { try { return decodeURIComponent(escape(s)); } catch (e) { return s; } }
+  var NAMES = [];
+  function partName(o) { var mm = /^(\d{3})[ _]/.exec(o.name || ''); if (mm && NAMES[+mm[1]]) return NAMES[+mm[1]]; return fixName(o.name || '').replace(/^\d{3}\s+/, '').replace(/_/g, ' '); }
+  var root = null, meshes = [], groups = [];
+  var CAT = { print: 0x33b858, buy: 0x5c78b3, make: 0xcfd1d4 };
+  function category(n) {
+    var l = n.toLowerCase();
+    if (n.indexOf('[3D]') === 0) return 'print';
+    if (/кабель|провод|шлейф|жила/.test(l)) return 'cable';
+    if (/покупн|подшипник|nema23|ds3218|raspberry|hx711|tb6600|порт|разъём|gpio|кулер|клемма|автомат|реле|розетка|адаптер|диммер|бп —|кабельный ввод|din|колесо|опора регул|колонна|стяжка|наконечник|штырьк|объектив|камера|дисплей|сервопривод|тензодатч|лента пвх|ремень|led|шкив gt2 20t|вентилятор/.test(l)) return 'buy';
+    return 'make';
+  }
+  function matKind(n) {
+    var l = n.toLowerCase();
+    if (/оргстекло|стекло|линза/.test(l)) return { metalness: 0.0, roughness: 0.05, transparent: true, opacity: 0.45 };
+    if (/световая линия|световое кольцо|сегмент (зелёный|жёлтый|красный)|лампа сигнальная|полоса статуса|рассеиватель|индикатор/.test(l)) return { metalness: 0, roughness: 0.4, emissive: 0.35 };
+    if (/нержав|алюмин|сталь|профтруба|ось |болт|винт|гайка|шайба|стойка|труба|профиль|din|шкаф|оболочка|дверца|столешница|плита|ролик|шкив|фланец|пруток|подшипник|стопорное|вал |кронштейн hmi|пульт наклонный|консоль|ввод pg|наконечник|штырьк|боковина|кожух|колонна — стойка/.test(l)) return { metalness: 0.85, roughness: 0.38 };
+    if (/кабель|провод|шлейф|жила|лента пвх|ремень|резин|полиуретан|стяжка/.test(l)) return { metalness: 0.0, roughness: 0.75 };
+    if (/плата|текстолит/.test(l)) return { metalness: 0.2, roughness: 0.45 };
+    return { metalness: 0.05, roughness: 0.55 };
+  }
+  var HOOD_RE = /капот|стенка капота|крыша капота|торец капота|дверца капота|окно дверцы|профиль алюминиевый 20×20 станочный|профиль 20×20|угловая заглушка|табличка «зона|полоса статуса|корпус raspberry pi 5 —/i;
+  var BODY_RE = /оболочка корпуса|дверца отсека|сервисная дверца|юбка корпуса|столешница|плита стенда|шкаф — |лючок|решётка|корпус — /i;
   var loader = new THREE.GLTFLoader();
-  var b64 = (document.getElementById('glb') || {}).textContent || '';
-  var bytes = atob(b64.replace(/\s+/g, ''));
-  var buf = new Uint8Array(bytes.length);
-  for (var bi = 0; bi < bytes.length; bi++) buf[bi] = bytes.charCodeAt(bi);
-  loader.parse(buf.buffer, '', function (gltf) {
-    root = gltf.scene;
-    scene.add(root);
+  var CHUNKS = __MODEL_CHUNKS__;
+  Promise.all([fetch('names.json').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })].concat(Array.from({ length: CHUNKS }, function (_, i) { return fetch('model.' + i + '.txt').then(function (r) { if (!r.ok) throw new Error('model.' + i + '.txt: ' + r.status); return r.text(); }); })))
+  .then(function (parts) {
+    NAMES = parts.shift() || [];
+    var bytes = atob(parts.join('').replace(/\s+/g, '')), buf = new Uint8Array(bytes.length);
+    for (var bi = 0; bi < bytes.length; bi++) buf[bi] = bytes.charCodeAt(bi);
+    loader.parse(buf.buffer, '', onModel, function (e) { document.getElementById('loading').textContent = 'Модель не загрузилась: ' + (e && e.message || e); });
+  }).catch(function (e) { document.getElementById('loading').textContent = 'Модель не загрузилась: ' + e.message; });
+
+  function onModel(gltf) {
+    root = gltf.scene; scene.add(root);
+    root.children.forEach(function (c) { c.quaternion.set(0, 0, 0, 1); });
     root.traverse(function (o) {
-      if (o.isMesh) {
-        o.userData.base = o.material.color.clone();
-        o.material = o.material.clone();
-        o.material.side = THREE.DoubleSide;
-        o.material.metalness = 0.1; o.material.roughness = 0.75;
-        meshes.push(o);
-      }
+      if (!o.isMesh) return;
+      var n = partName(o), k = matKind(n);
+      var base = o.material.color.clone();
+      o.material = new THREE.MeshStandardMaterial({ color: base, metalness: k.metalness, roughness: k.roughness, side: THREE.DoubleSide,
+        transparent: !!k.transparent, opacity: k.opacity == null ? 1 : k.opacity, emissive: k.emissive ? base.clone().multiplyScalar(k.emissive) : new THREE.Color(0) });
+      o.castShadow = true; o.receiveShadow = true;
+      o.userData.base = base; o.userData.name = n; o.userData.cat = category(n); o.userData.opacity = o.material.opacity; o.userData.emis = o.material.emissive.clone();
+      if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+      meshes.push(o);
     });
-    box.setFromObject(root);
-    box.getCenter(center);
-    radius = box.getSize(new THREE.Vector3()).length() / 2;
-    setView('iso');
-    document.getElementById('loading').hidden = true;
-    buildPanel();
-  }, function () {
-    document.getElementById('loading').textContent = 'Модель не загрузилась. Обновите страницу.';
-  });
-
-  function partName(o) {
-    var n = fixName(o.name || '');
-    return n.replace(/^\d{3}\s+/, '');
-  }
-
-  function buildPanel() {
-    var comps = document.getElementById('comps');
     var top = root.children.length === 1 ? root.children[0] : root;
-    var printed = document.getElementById('printed');
-    top.children.forEach(function (group, i) {
-      var count = 0;
-      group.traverse(function (o) { if (o.isMesh) count++; });
-      var id = 'comp' + i;
-      var label = document.createElement('label');
-      label.innerHTML = '<input type="checkbox" id="' + id + '" checked> <span></span><span class="n"></span>';
-      label.querySelector('span').textContent = fixName(group.name).replace(/_/g, ' ');
-      label.querySelector('.n').textContent = count;
-      label.querySelector('input').addEventListener('change', function () { group.visible = this.checked; });
-      comps.appendChild(label);
-    });
-    var wires = document.getElementById('wires');
-    meshes.forEach(function (m) {
-      var n = partName(m);
-      if (n.indexOf('[3D]') === 0) {
-        var li = document.createElement('li');
-        li.textContent = n.slice(4).trim();
-        printed.appendChild(li);
-      }
-      if (n.indexOf('→') >= 0 && /^(Кабель|Провод|Шлейф)/.test(n)) {
-        var parts = n.split(':');
-        var head = parts[0], route = parts.slice(1).join(':').trim();
-        var b = document.createElement('button'); b.type = 'button';
-        b.innerHTML = '<span class="dot"></span><span class="w"></span><span class="r"></span>';
-        b.querySelector('.dot').style.background = '#' + m.userData.base.getHexString();
-        b.querySelector('.w').textContent = head;
-        b.querySelector('.r').textContent = route;
-        b.addEventListener('click', function () {
-          Array.prototype.forEach.call(wires.children, function (x) { x.setAttribute('aria-pressed', 'false'); });
-          b.setAttribute('aria-pressed', 'true');
-          pinned = m; highlight(m); showSel(m);
-          var bb = new THREE.Box3().setFromObject(m), ctr = bb.getCenter(new THREE.Vector3()), size = bb.getSize(new THREE.Vector3()).length();
-          var dir = new THREE.Vector3(1, 0.8, 1.1).normalize().multiplyScalar(Math.max(size * 1.6, 400));
-          controls.target.copy(ctr); camera.position.copy(ctr).add(dir); controls.update();
-        });
-        wires.appendChild(b);
-      }
-    });
+    groups = top.children.slice();
+    document.getElementById('loading').hidden = true;
+    setView('iso'); buildPanel(); buildSchema();
   }
 
+  // ======================= режимы отображения =======================
+  var catMode = false, hoodT = false, bodyT = false;
+  function applyModes() {
+    meshes.forEach(function (m) {
+      var n = m.userData.name;
+      if (catMode && m.userData.cat !== 'cable') m.material.color.setHex(CAT[m.userData.cat]); else m.material.color.copy(m.userData.base);
+      var t = (hoodT && HOOD_RE.test(n)) || (bodyT && BODY_RE.test(n));
+      m.material.transparent = t || m.userData.opacity < 1; m.material.opacity = t ? 0.12 : m.userData.opacity; m.material.depthWrite = !t;
+    });
+  }
+  function toggle(btn, fn) { btn.addEventListener('click', function () { var on = btn.getAttribute('aria-pressed') !== 'true'; btn.setAttribute('aria-pressed', on ? 'true' : 'false'); fn(on); applyModes(); }); }
+  toggle(document.getElementById('tHood'), function (on) { hoodT = on; });
+  toggle(document.getElementById('tBody'), function (on) { bodyT = on; });
+  toggle(document.getElementById('tCat'), function (on) { catMode = on; document.getElementById('tCat').textContent = on ? 'Цвета: материалы' : 'Цвета: категории'; });
+
+  // ======================= выбор и карточка =======================
+  var selected = [], hoverMesh = null, pinned = false;
+  function setHighlight(list) {
+    meshes.forEach(function (m) { m.material.emissive.copy(m.userData.emis); });
+    list.forEach(function (m) { m.material.emissive.setHex(0x8a6a00); });
+  }
+  function flyTo(list) {
+    if (!list.length) return;
+    var bb = new THREE.Box3(); list.forEach(function (m) { bb.expandByObject(m); });
+    var ctr = bb.getCenter(new THREE.Vector3()), size = bb.getSize(new THREE.Vector3()).length();
+    var dir = new THREE.Vector3(1, -1.1, 0.8).normalize().multiplyScalar(Math.max(size * 1.8, 260));
+    controls.target.copy(ctr); camera.position.copy(ctr).add(dir); controls.update();
+  }
+  function groupOf(m) { var p = m; while (p && groups.indexOf(p) < 0) p = p.parent; return p ? fixName(p.name).replace(/_/g, ' ') : ''; }
+  function showCard(list) {
+    var el = document.getElementById('card'), name = el.querySelector('.name'), meta = el.querySelector('.meta'), route = el.querySelector('.route'), act = el.querySelector('.act');
+    act.innerHTML = ''; route.textContent = '';
+    if (!list.length) { name.textContent = 'Наведите на деталь, щёлкните, чтобы закрепить. Двойной щелчок приближает.'; meta.textContent = ''; return; }
+    var m = list[0], n = m.userData.name, bb = new THREE.Box3().setFromObject(m), s = bb.getSize(new THREE.Vector3());
+    var head = n.split(':')[0], rest = n.indexOf(':') > 0 ? n.slice(n.indexOf(':') + 1).trim() : '';
+    name.textContent = head + (list.length > 1 ? ' (+' + (list.length - 1) + ')' : '');
+    meta.textContent = groupOf(m) + ' · ' + Math.round(s.x) + ' × ' + Math.round(s.y) + ' × ' + Math.round(s.z) + ' мм · ' + ({ print: 'печать', buy: 'покупное', make: 'своё изготовление', cable: 'кабель' })[m.userData.cat];
+    if (rest) route.textContent = 'Трасса: ' + rest;
+    var b1 = document.createElement('button'); b1.type = 'button'; b1.textContent = 'Приблизить'; b1.addEventListener('click', function () { show3d(); flyTo(list); }); act.appendChild(b1);
+    var ws = wiresForMesh(m);
+    if (ws.length) { var b2 = document.createElement('button'); b2.type = 'button'; b2.textContent = 'Показать на схеме'; b2.addEventListener('click', function () { showSchema(); highlightSchemaWires(ws); }); act.appendChild(b2); }
+    var b3 = document.createElement('button'); b3.type = 'button'; b3.textContent = 'Снять выделение'; b3.addEventListener('click', function () { select([]); }); act.appendChild(b3);
+  }
+  function select(list, opts) {
+    selected = list; pinned = list.length > 0; setHighlight(list); showCard(list);
+    highlightSchemaWires(list.length ? wiresForMesh(list[0]) : []);
+    if (opts && opts.fly) flyTo(list);
+  }
   var ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), tip = document.getElementById('tip');
-  function showSel(o) {
-    var el = document.getElementById('sel');
-    if (!o) {
-      el.querySelector('.name').textContent = 'Наведите на деталь, щёлкните, чтобы закрепить';
-      el.querySelector('.dims').textContent = '';
-      return;
-    }
-    var b = new THREE.Box3().setFromObject(o), s = b.getSize(new THREE.Vector3());
-    var k = radius > 50 ? 1 : 1000;   // модель в метрах или миллиметрах
-    el.querySelector('.name').textContent = partName(o);
-    el.querySelector('.dims').textContent = 'габарит ' + Math.round(s.x * k) + ' × ' + Math.round(s.z * k) + ' × ' + Math.round(s.y * k) + ' мм (X × Y × Z)';
-  }
-  function highlight(o) {
-    meshes.forEach(function (m) { m.material.emissive.setHex(0x000000); });
-    if (o) o.material.emissive.setHex(0x66aa33);
-  }
   function pick(e) {
     if (!root) return null;
     var r = canvas.getBoundingClientRect();
-    ptr.x = ((e.clientX - r.left) / r.width) * 2 - 1;
-    ptr.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    ptr.x = ((e.clientX - r.left) / r.width) * 2 - 1; ptr.y = -((e.clientY - r.top) / r.height) * 2 + 1;
     ray.setFromCamera(ptr, camera);
-    var hits = ray.intersectObjects(meshes.filter(function (m) { return m.visible && m.parent.visible; }), false);
-    for (var i = 0; i < hits.length; i++) {
-      var o = hits[i].object, vis = true, p = o;
-      while (p) { if (p.visible === false) vis = false; p = p.parent; }
-      if (vis) return o;
-    }
+    var hits = ray.intersectObjects(meshes.filter(function (m) { return m.visible && m.material.opacity > 0.3; }), false);
+    for (var i = 0; i < hits.length; i++) { var o = hits[i].object, p = o, vis = true; while (p) { if (p.visible === false) vis = false; p = p.parent; } if (vis) return o; }
     return null;
   }
   canvas.addEventListener('pointermove', function (e) {
     var o = pick(e);
-    if (o !== picked) {
-      picked = o;
-      if (!pinned) { highlight(o); showSel(o); }
-      if (o) { tip.textContent = partName(o); tip.hidden = false; } else { tip.hidden = true; }
-    }
+    if (o !== hoverMesh) { hoverMesh = o; if (!pinned) { setHighlight(o ? [o] : []); showCard(o ? [o] : []); } if (o) { tip.textContent = o.userData.name; tip.hidden = false; } else tip.hidden = true; }
   });
-  canvas.addEventListener('pointerleave', function () { tip.hidden = true; if (!pinned) { highlight(null); showSel(null); } });
+  canvas.addEventListener('pointerleave', function () { tip.hidden = true; if (!pinned) { setHighlight([]); showCard([]); } });
+  var downAt = null;
+  canvas.addEventListener('pointerdown', function (e) { downAt = [e.clientX, e.clientY]; });
   canvas.addEventListener('click', function (e) {
+    if (downAt && (Math.abs(e.clientX - downAt[0]) > 4 || Math.abs(e.clientY - downAt[1]) > 4)) return;
     var o = pick(e);
-    pinned = (o && o !== pinned) ? o : null;
-    highlight(pinned || picked); showSel(pinned || picked);
+    if (!o) { select([]); return; }
+    var same = selected.length === 1 && selected[0] === o;
+    select(same ? [] : [o]);
   });
+  canvas.addEventListener('dblclick', function (e) { var o = pick(e); if (o) select([o], { fly: true }); });
 
-  function tick() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(tick); }
+  // ======================= панель =======================
+  function buildPanel() {
+    var comps = document.getElementById('comps'), printed = document.getElementById('printed'), wires = document.getElementById('wires');
+    groups.forEach(function (g, i) {
+      var count = 0; g.traverse(function (o) { if (o.isMesh) count++; });
+      var label = document.createElement('label');
+      label.innerHTML = '<input type="checkbox" id="g' + i + '" checked> <span></span><span class="n"></span>';
+      label.querySelector('span').textContent = fixName(g.name).replace(/_/g, ' ');
+      label.querySelector('.n').textContent = count;
+      label.querySelector('input').addEventListener('change', function () { g.visible = this.checked; });
+      comps.appendChild(label);
+    });
+    var cables = {};
+    meshes.forEach(function (m) {
+      var n = m.userData.name;
+      if (n.indexOf('[3D]') === 0) { var li = document.createElement('li'); li.textContent = n.slice(4).trim(); printed.appendChild(li); }
+      if (m.userData.cat === 'cable' && n.indexOf('→') >= 0 && !/^Жила/.test(n)) { var k = n.split(':')[0]; (cables[k] = cables[k] || []).push(m); }
+    });
+    Object.keys(cables).sort().forEach(function (k) {
+      var list = cables[k], b = document.createElement('button'); b.type = 'button';
+      b.innerHTML = '<span class="dot"></span><span class="w"></span><span class="r"></span>';
+      b.querySelector('.dot').style.background = '#' + list[0].userData.base.getHexString();
+      b.querySelector('.w').textContent = k;
+      b.querySelector('.r').textContent = list[0].userData.name.slice(k.length + 1).trim();
+      b.addEventListener('click', function () { Array.prototype.forEach.call(wires.children, function (x) { x.setAttribute('aria-pressed', 'false'); }); b.setAttribute('aria-pressed', 'true'); show3d(); select(list, { fly: true }); });
+      wires.appendChild(b);
+    });
+    var q = document.getElementById('q'), found = document.getElementById('found');
+    q.addEventListener('input', function () {
+      var s = q.value.trim().toLowerCase(); found.innerHTML = '';
+      if (s.length < 2) return;
+      var hits = meshes.filter(function (m) { return m.userData.name.toLowerCase().indexOf(s) >= 0; }).slice(0, 40);
+      hits.forEach(function (m) {
+        var b = document.createElement('button'); b.type = 'button';
+        b.innerHTML = '<span class="dot"></span><span class="w"></span>';
+        b.querySelector('.dot').style.background = '#' + m.userData.base.getHexString();
+        b.querySelector('.w').textContent = m.userData.name;
+        b.addEventListener('click', function () { show3d(); select([m], { fly: true }); });
+        found.appendChild(b);
+      });
+      if (!hits.length) found.textContent = 'Ничего не найдено';
+    });
+  }
+
+  // ======================= схема подключения =======================
+  var schemaEl = document.getElementById('schema');
+  function show3d() { schemaEl.hidden = true; document.getElementById('tab3d').setAttribute('aria-pressed', 'true'); document.getElementById('tabSchema').setAttribute('aria-pressed', 'false'); }
+  function showSchema() { schemaEl.hidden = false; document.getElementById('tab3d').setAttribute('aria-pressed', 'false'); document.getElementById('tabSchema').setAttribute('aria-pressed', 'true'); }
+  document.getElementById('tab3d').addEventListener('click', show3d);
+  document.getElementById('tabSchema').addEventListener('click', showSchema);
+
+  var NODES = [
+    { id: 'AC', t: 'Сеть 220 В 50 Гц', x: 30, y: 40, w: 120, r: ['L', 'N', 'PE'] },
+    { id: 'PE', t: 'Шина PE', x: 30, y: 560, w: 120, l: ['PE'], r: ['рама'] },
+    { id: 'QF1', t: 'QF1 автомат 1P 10 А C', x: 190, y: 40, w: 150, l: ['1'], r: ['2'] },
+    { id: 'QF2', t: 'QF2 дифавтомат 2P 16 А 30 мА', x: 190, y: 130, w: 150, l: ['L', 'N'], r: ["L'", "N'"] },
+    { id: 'XS1', t: 'XS1 розетка + адаптер 27 Вт', x: 190, y: 240, w: 150, l: ['L', 'N'], r: ['USB-C 5 В'] },
+    { id: 'G1', t: 'G1 БП 24 В 5 А SDR-120', x: 190, y: 340, w: 150, l: ['L', 'N', 'PE'], r: ['+V', '−V'] },
+    { id: 'X1', t: 'X1 клеммник 16 × 2,5 мм²', x: 400, y: 40, w: 110, l: ['1 +24 В', '2 0 В', '3 +24 TB', '4 0 В TB', '5 A+', '6 A−', '7 B+', '8 B−', '9 стоп NC1', '10 резерв', '11 пуск', '12 стоп', '13 лампа +', '14 лампа −', '15 +24 пульт', '16 GND Pi'], r: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16'] },
+    { id: 'K1', t: 'K1 реле аварийной цепи', x: 600, y: 40, w: 160, l: ['A1', 'A2'], r: ['11', '14 → ENA', '21', '24 → STOP_FB'] },
+    { id: 'K2', t: 'K2 реле лампы и колонны', x: 600, y: 175, w: 160, l: ['IN 3,3 В', 'GND', 'COM +24'], r: ['NO'] },
+    { id: 'U1', t: 'U1 диммер LED 24 В', x: 600, y: 285, w: 160, l: ['IN+', 'IN−'], r: ['OUT+', 'OUT−'] },
+    { id: 'TB', t: 'TB6600 драйвер шагового', x: 600, y: 390, w: 170, l: ['VCC', 'GND', 'PUL+', 'PUL−', 'DIR+', 'DIR−', 'ENA+', 'ENA−'], r: ['A+', 'A−', 'B+', 'B−'] },
+    { id: 'TL', t: 'HL2 световая колонна', x: 840, y: 175, w: 130, l: ['+', '−'] },
+    { id: 'LED', t: 'LED-планки А и Б', x: 840, y: 285, w: 130, l: ['+24', '0 В'] },
+    { id: 'M1', t: 'M1 NEMA23 2,8 А', x: 840, y: 420, w: 130, l: ['A+', 'A−', 'B+', 'B−'] },
+    { id: 'PI', t: 'Raspberry Pi 5 (в коробке на капоте)', x: 1030, y: 40, w: 220, l: ['USB-C 5 В', '5 В', 'GPIO20 PUL', 'GPIO21 DIR', 'GPIO16 ENA', 'GPIO24 STOP_FB', 'GPIO23 START', 'GPIO25 STOP', 'GPIO12 LAMP', 'GND'], r: ['CAM0 CSI', 'micro-HDMI 0', 'USB 2.0', 'GPIO18 PWM', 'GPIO5 DT', 'GPIO6 SCK', '3V3', 'GND'] },
+    { id: 'U2', t: 'U2 понижающий 24→6 В 3 А', x: 1030, y: 300, w: 220, l: ['IN+', 'IN−'], r: ['OUT+', 'OUT−'] },
+    { id: 'CAM', t: 'Камера IMX296', x: 1320, y: 40, w: 140, l: ['CSI'] },
+    { id: 'DISP', t: 'Дисплей 7″', x: 1320, y: 100, w: 140, l: ['HDMI', 'USB'] },
+    { id: 'HX', t: 'HX711', x: 1320, y: 180, w: 140, l: ['VCC', 'GND', 'DT', 'SCK'], r: ['E+', 'E−', 'A+', 'A−'] },
+    { id: 'LC', t: 'Тензодатчик 3 кг', x: 1500, y: 180, w: 120, l: ['E+', 'E−', 'A+', 'A−'] },
+    { id: 'M2', t: 'M2 серва DS3218', x: 1320, y: 300, w: 140, l: ['+6 В', 'GND', 'PWM'] },
+    { id: 'PB', t: 'Кнопочный пост: S1 аварийный стоп (2 NC) · S2 пуск · S3 стоп · HL1 лампа', x: 400, y: 640, w: 560, tp: ['S1 NC1 a', 'S1 NC1 b', 'S1 NC2 a', 'S1 NC2 b', 'S2 пуск a', 'S2 пуск b', 'S3 стоп a', 'S3 стоп b', 'HL1 +', 'HL1 −'] }
+  ];
+  var C = { br: '#8a5a2b', bl: '#2b55c7', yg: '#9aa800', rd: '#c8322b', bk: '#2a2a2e', gy: '#7a7f85', wh: '#b8b8b2', gr: '#2a9a4a', ye: '#d9b53a', or: '#e07b1f' };
+  // провод: from, to, цвет, подпись, ключи имён в 3D, смещение магистрали
+  var WIRES = [
+    ['AC.L', 'QF1.1', C.br, 'L', ['220 В → автомат', 'ввод 220 В → автомат'], -8],
+    ['AC.N', 'QF2.N', C.bl, 'N', ['220 В → дифавтомат N', 'ввод 220 В → дифавтомат'], 0],
+    ['AC.PE', 'PE.PE', C.yg, 'PE', ['220 В → шина PE', 'ввод 220 В → шина PE'], 8],
+    ['PE.рама', 'G1.PE', C.yg, 'PE', ['шина PE'], 24],
+    ['QF1.2', 'QF2.L', C.br, '', ['автомат (выход) → дифавтамат'], 0],
+    ["QF2.L'", 'G1.L', C.br, 'L', ['дифавтомат (выход) → БП 24 В (L)'], -6],
+    ["QF2.N'", 'G1.N', C.bl, 'N', ['дифавтомат (выход) → БП 24 В (N)'], 6],
+    ["QF2.L'", 'XS1.L', C.br, '', ['розетка адаптера'], 14],
+    ["QF2.N'", 'XS1.N', C.bl, '', ['розетка адаптера'], 20],
+    ['XS1.USB-C 5 В', 'PI.USB-C 5 В', C.wh, 'USB-C 27 Вт', ['USB-C 27 Вт'], -40],
+    ['G1.+V', 'X1.1 +24 В', C.rd, '+24', ['БП 24 В (+V) → клемма 1'], -8],
+    ['G1.−V', 'X1.2 0 В', C.bk, '0 В', ['БП 24 В (−V) → клемма 2'], 0],
+    ['X1.3', 'TB.VCC', C.rd, '', ['клемма 3 → TB6600 (VCC)'], -30],
+    ['X1.4', 'TB.GND', C.bk, '', ['клемма 4 → TB6600 (GND)'], -24],
+    ['X1.1', 'U1.IN+', C.rd, '', ['клемма 1 → диммер LED'], -18],
+    ['X1.2', 'U1.IN−', C.bk, '', ['диммер LED (вход)'], -12],
+    ['U1.OUT+', 'LED.+24', C.rd, 'подсветка', ['Кабель подсветки', 'подсветка → диммер OUT+'], -6],
+    ['U1.OUT−', 'LED.0 В', C.bk, '', ['Кабель подсветки', 'подсветка → диммер OUT−'], 0],
+    ['X1.1', 'U2.IN+', C.rd, '24 В сервы', ['Кабель 24 В 2×0,5', '24 В сервы → клемма 1'], -46],
+    ['X1.2', 'U2.IN−', C.bk, '', ['Кабель 24 В 2×0,5', '24 В сервы → клемма 2'], -52],
+    ['U2.OUT+', 'M2.+6 В', C.rd, '6 В', ['Кабель сервопривода'], -6],
+    ['U2.OUT−', 'M2.GND', C.bk, '', ['Кабель сервопривода'], 0],
+    ['PI.GPIO18 PWM', 'M2.PWM', C.or, 'PWM', ['Провод сигнала PWM', 'Кабель сервопривода'], 6],
+    ['TB.A+', 'M1.A+', C.rd, 'через X1:5–8', ['TB6600 (A+)', 'кабель двигателя → клемма 5', 'Жила двигателя красный'], -9],
+    ['TB.A−', 'M1.A−', C.bl, '', ['TB6600 (A−)', 'кабель двигателя → клемма 6', 'Жила двигателя синий'], -3],
+    ['TB.B+', 'M1.B+', C.gr, '', ['TB6600 (B+)', 'кабель двигателя → клемма 7', 'Жила двигателя зелёный'], 3],
+    ['TB.B−', 'M1.B−', C.bk, '', ['TB6600 (B−)', 'кабель двигателя → клемма 8', 'Жила двигателя чёрный'], 9],
+    ['PI.GPIO20 PUL', 'TB.PUL−', C.wh, 'PUL', ['STEP/DIR → TB6600 PUL−', 'Кабель STEP/DIR'], -60],
+    ['PI.GPIO21 DIR', 'TB.DIR−', C.gr, 'DIR', ['STEP/DIR → TB6600 DIR−', 'Кабель STEP/DIR'], -54],
+    ['PI.GPIO16 ENA', 'K1.11', C.ye, 'ENA', ['STEP/DIR → TB6600 ENA−', 'Кабель STEP/DIR'], -48],
+    ['K1.14 → ENA', 'TB.ENA−', C.ye, '', ['TB6600 ENA−'], -40],
+    ['PI.5 В', 'TB.PUL+', C.rd, '+5 В общий', ['+5 В общий', 'Кабель STEP/DIR'], -66],
+    ['PI.GPIO24 STOP_FB', 'K1.24 → STOP_FB', C.gy, 'STOP_FB', ['Кабель STEP/DIR'], -72],
+    ['PI.GND', 'K1.21', C.bk, '', ['Кабель STEP/DIR'], -78],
+    ['X1.9', 'K1.A1', C.gy, 'цепь стопа', ['клемма 9', 'реле K1'], -36],
+    ['X1.2', 'K1.A2', C.bk, '', ['реле K1'], -42],
+    ['PI.GPIO12 LAMP', 'K2.IN 3,3 В', C.gr, 'LAMP', ['Кабель STEP/DIR'], -84],
+    ['PI.GND', 'K2.GND', C.bk, '', ['Кабель STEP/DIR'], -90],
+    ['X1.1', 'K2.COM +24', C.rd, '', ['реле K2'], -58],
+    ['K2.NO', 'X1.13', C.gr, 'лампа/колонна', ['реле K2', 'клемма 13'], -20],
+    ['K2.NO', 'TL.+', C.gr, '', ['Кабель световой колонны'], 10],
+    ['TL.−', 'X1.14', C.bk, '', ['Кабель световой колонны'], 16],
+    ['PI.GPIO23 START', 'X1.11', C.wh, 'START', ['Кабель STEP/DIR', 'клемма 11'], -96],
+    ['PI.GPIO25 STOP', 'X1.12', C.br, 'STOP', ['Кабель STEP/DIR', 'клемма 12'], -102],
+    ['PI.GND', 'X1.16', C.bk, 'GND', ['Кабель STEP/DIR', 'клемма 16'], -108],
+    ['X1.15', 'PB.S1 NC1 a', C.rd, '+24', ['пульт → клемма 15', 'Жила пульта красный'], 0],
+    ['PB.S1 NC1 b', 'X1.9', C.gy, '', ['пульт → клемма 9', 'Жила пульта серый: кабель → стоп NC1'], 0],
+    ['PB.S1 NC2 a', 'X1.10', C.gy, 'резерв', ['пульт → клемма 10', 'стоп NC2'], 0],
+    ['X1.16', 'PB.S2 пуск a', C.bk, 'GND', ['пульт → клемма 16'], 0],
+    ['PB.S2 пуск b', 'X1.11', C.wh, '', ['пульт → клемма 11', 'Жила пульта белый'], 0],
+    ['X1.16', 'PB.S3 стоп a', C.bk, '', ['пульт → клемма 16'], 0],
+    ['PB.S3 стоп b', 'X1.12', C.br, '', ['пульт → клемма 12', 'Жила пульта коричневый'], 0],
+    ['X1.13', 'PB.HL1 +', C.gr, '', ['пульт → клемма 13', 'Жила пульта зелёный'], 0],
+    ['PB.HL1 −', 'X1.14', C.bk, '', ['пульт → клемма 14', 'Жила пульта чёрный'], 0],
+    ['PI.CAM0 CSI', 'CAM.CSI', C.ye, 'CSI 22→15', ['Шлейф камеры'], -6],
+    ['PI.micro-HDMI 0', 'DISP.HDMI', C.bk, 'HDMI', ['Кабель HDMI'], 0],
+    ['PI.USB 2.0', 'DISP.USB', C.bk, 'USB', ['Кабель USB A–micro'], 6],
+    ['PI.GPIO5 DT', 'HX.DT', C.bl, 'DT', ['Кабель HX711'], 12],
+    ['PI.GPIO6 SCK', 'HX.SCK', C.bl, 'SCK', ['Кабель HX711'], 18],
+    ['PI.3V3', 'HX.VCC', C.rd, '3V3', ['Кабель HX711'], 24],
+    ['PI.GND', 'HX.GND', C.bk, '', ['Кабель HX711'], 30],
+    ['HX.E+', 'LC.E+', C.rd, '', ['Жила тензодатчика красный', 'Кабель тензодатчика'], -6],
+    ['HX.E−', 'LC.E−', C.bk, '', ['Жила тензодатчика чёрный', 'Кабель тензодатчика'], -2],
+    ['HX.A+', 'LC.A+', C.gr, '', ['Жила тензодатчика зелёный', 'Кабель тензодатчика'], 2],
+    ['HX.A−', 'LC.A−', C.wh, '', ['Жила тензодатчика белый', 'Кабель тензодатчика'], 6]
+  ];
+  var PINS = {}, wireEls = [];
+  function nodeH(n) { var k = Math.max((n.l || []).length, (n.r || []).length); return n.tp ? 56 : 26 + k * 17 + 8; }
+  function pinPos(ref) { return PINS[ref]; }
+  function buildSchema() {
+    var NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 1640 740'); svg.setAttribute('width', '1640'); svg.setAttribute('height', '740');
+    function el(tag, attrs, text) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; }
+    var gW = el('g', {}), gN = el('g', {});
+    NODES.forEach(function (n) {
+      var h = nodeH(n), g = el('g', { 'class': 'node' });
+      g.appendChild(el('rect', { x: n.x, y: n.y, width: n.w, height: h }));
+      g.appendChild(el('text', { x: n.x + 8, y: n.y + 16, 'class': 'title' }, n.t));
+      (n.l || []).forEach(function (p, i) { var y = n.y + 30 + i * 17; PINS[n.id + '.' + p] = { x: n.x, y: y, d: -1 }; PINS[n.id + '.' + p.split(' ')[0]] = PINS[n.id + '.' + p]; g.appendChild(el('circle', { cx: n.x, cy: y, r: 2.5, 'class': 'pin' })); g.appendChild(el('text', { x: n.x + 6, y: y + 3.5, 'class': 'pinlabel' }, p)); });
+      (n.r || []).forEach(function (p, i) { var y = n.y + 30 + i * 17; PINS[n.id + '.' + p] = { x: n.x + n.w, y: y, d: 1 }; g.appendChild(el('circle', { cx: n.x + n.w, cy: y, r: 2.5, 'class': 'pin' })); g.appendChild(el('text', { x: n.x + n.w - 6, y: y + 3.5, 'class': 'pinlabel', 'text-anchor': 'end' }, p)); });
+      (n.tp || []).forEach(function (p, i) { var x = n.x + 30 + i * 56; PINS[n.id + '.' + p] = { x: x, y: n.y, d: 0, up: true }; g.appendChild(el('circle', { cx: x, cy: n.y, r: 2.5, 'class': 'pin' })); g.appendChild(el('text', { x: x, y: n.y + 30, 'class': 'pinlabel', 'text-anchor': 'middle' }, p)); });
+      gN.appendChild(g);
+    });
+    var pbCount = 0;
+    WIRES.forEach(function (w, idx) {
+      var p1 = pinPos(w[0]), p2 = pinPos(w[1]); if (!p1 || !p2) { return; }
+      var pts;
+      if (p1.up || p2.up) {
+        var a = p1.up ? p1 : p2, b = p1.up ? p2 : p1, i = pbCount++;
+        var ly = 612 - i * 4, lx = b.x + (b.d > 0 ? 24 + i * 5 : -24 - i * 5);
+        pts = [[a.x, a.y], [a.x, ly], [lx, ly], [lx, b.y], [b.x, b.y]];
+      } else {
+        var a1 = [p1.x + p1.d * 14, p1.y], a2 = [p2.x + p2.d * 14, p2.y];
+        var lx2 = (a1[0] + a2[0]) / 2 + (w[5] || 0);
+        pts = [[p1.x, p1.y], a1, [lx2, a1[1]], [lx2, a2[1]], a2, [p2.x, p2.y]];
+      }
+      var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0] + ' ' + p[1]; }).join(' ');
+      var hit = el('path', { d: d, 'class': 'hit' }), path = el('path', { d: d, 'class': 'wire', stroke: w[2], 'data-i': idx });
+      var mid = pts[Math.floor(pts.length / 2)];
+      if (w[3]) gW.appendChild(el('text', { x: mid[0] + 3, y: mid[1] - 3, 'class': 'wlabel' }, w[3]));
+      function onClick() { var ms = meshesForWire(w); if (ms.length) { select(ms); } highlightSchemaWires([w]); }
+      hit.addEventListener('click', onClick); path.addEventListener('click', onClick);
+      path.appendChild(el('title', {}, w[0] + ' → ' + w[1] + (w[3] ? ' · ' + w[3] : '')));
+      gW.appendChild(hit); gW.appendChild(path); wireEls[idx] = path;
+    });
+    svg.appendChild(gW); svg.appendChild(gN);
+    svg.appendChild(el('text', { x: 30, y: 725, 'class': 'wlabel' }, 'Клик по проводу подсвечивает его здесь и в 3D (кнопка «Приблизить» в карточке). X1: 1–4 питание 24 В · 5–8 двигатель · 9–12 стоп и пуск · 13–14 лампа и колонна · 15–16 общие. Номера GPIO и клемм — для прототипа, уточняются при написании ПО.'));
+    schemaEl.innerHTML = ''; schemaEl.appendChild(svg);
+  }
+  function meshesForWire(w) { var keys = w[4].map(function (k) { return k.toLowerCase(); }); return meshes.filter(function (m) { var n = m.userData.name.toLowerCase(); return keys.some(function (k) { return n.indexOf(k) >= 0; }); }); }
+  function wiresForMesh(m) { var n = m.userData.name.toLowerCase(); return WIRES.filter(function (w) { return w[4].some(function (k) { return n.indexOf(k.toLowerCase()) >= 0; }); }); }
+  function highlightSchemaWires(list) {
+    var any = list.length > 0;
+    WIRES.forEach(function (w, i) { var e = wireEls[i]; if (!e) return; var on = list.indexOf(w) >= 0; e.classList.toggle('hl', on); e.classList.toggle('dim', any && !on); });
+  }
+
+  // ======================= цикл =======================
+  function tick() { controls.update(); if (schemaEl.hidden) renderer.render(scene, camera); requestAnimationFrame(tick); }
   tick();
 })();
 </script>
