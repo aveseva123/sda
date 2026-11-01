@@ -64,6 +64,12 @@
   .sel { min-height: 40px; }
   .sel .name { font-weight: 500; }
   .sel .dims { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .wires { display: flex; flex-direction: column; gap: 2px; }
+  .wires button { text-align: left; display: grid; grid-template-columns: 10px 1fr; gap: 2px 8px; padding: 5px 8px; border-color: transparent; background: transparent; align-items: start; }
+  .wires button:hover, .wires button[aria-pressed="true"] { background: var(--bg); border-color: var(--line); }
+  .wires .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; border: 1px solid var(--line); }
+  .wires .w { font-weight: 500; }
+  .wires .r { grid-column: 2; font-size: 11.5px; color: var(--muted); }
   details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   details ol { margin: 8px 0 0; padding-left: 20px; font-size: 12.5px; }
   details li { margin: 2px 0; }
@@ -77,7 +83,7 @@
 <div class="app">
   <header>
     <h1>Визуальная счётная станция — прототип</h1>
-    <span class="sub">лента 150×700, камера с ИИ, загрузка вручную · 92 тела, 31 печатная</span>
+    <span class="sub">лента 150×700, камера с ИИ, загрузка вручную · 280 тел, 38 печатных, вся коммутация</span>
   </header>
 
   <div class="stage">
@@ -111,18 +117,24 @@
         <span class="sw" style="background:#7a7d82"></span><span>сталь: рама, плита, оси</span>
         <span class="sw" style="background:#1a6b47"></span><span>лента ПВХ</span>
         <span class="sw" style="background:#47474c"></span><span>капот: ПВХ или композит 3 мм</span>
+        <span class="sw" style="background:#1f7338"></span><span>платы: Pi 5, камера, HX711</span>
+        <span class="sw" style="background:#c8402a"></span><span>кабели: цвет по жиле, подпись при наведении</span>
       </div>
     </section>
     <section>
       <h2>Размеры</h2>
       <dl>
-        <dt>Габарит стенда</dt><dd>1300 × 572 × 1327 мм</dd>
+        <dt>Габарит стенда</dt><dd>1316 × 723 × 1335 мм</dd>
         <dt>Верх ленты от пола</dt><dd>987 мм</dd>
         <dt>Камера над лентой</dt><dd>300 мм</dd>
         <dt>Поле кадра, объектив 6 мм</dt><dd>≈ 250 × 190 мм</dd>
         <dt>Скорость ленты</dt><dd>150 мм/с</dd>
         <dt>Деталь в кадре</dt><dd>≈ 1,7 с</dd>
       </dl>
+    </section>
+    <section>
+      <h2>Коммутация · нажмите провод, чтобы подсветить его трассу</h2>
+      <div class="wires" id="wires"></div>
     </section>
     <section>
       <details>
@@ -244,17 +256,36 @@
       var id = 'comp' + i;
       var label = document.createElement('label');
       label.innerHTML = '<input type="checkbox" id="' + id + '" checked> <span></span><span class="n"></span>';
-      label.querySelector('span').textContent = fixName(group.name);
+      label.querySelector('span').textContent = fixName(group.name).replace(/_/g, ' ');
       label.querySelector('.n').textContent = count;
       label.querySelector('input').addEventListener('change', function () { group.visible = this.checked; });
       comps.appendChild(label);
     });
+    var wires = document.getElementById('wires');
     meshes.forEach(function (m) {
       var n = partName(m);
       if (n.indexOf('[3D]') === 0) {
         var li = document.createElement('li');
         li.textContent = n.slice(4).trim();
         printed.appendChild(li);
+      }
+      if (n.indexOf('→') >= 0 && /^(Кабель|Провод|Шлейф)/.test(n)) {
+        var parts = n.split(':');
+        var head = parts[0], route = parts.slice(1).join(':').trim();
+        var b = document.createElement('button'); b.type = 'button';
+        b.innerHTML = '<span class="dot"></span><span class="w"></span><span class="r"></span>';
+        b.querySelector('.dot').style.background = '#' + m.userData.base.getHexString();
+        b.querySelector('.w').textContent = head;
+        b.querySelector('.r').textContent = route;
+        b.addEventListener('click', function () {
+          Array.prototype.forEach.call(wires.children, function (x) { x.setAttribute('aria-pressed', 'false'); });
+          b.setAttribute('aria-pressed', 'true');
+          pinned = m; highlight(m); showSel(m);
+          var bb = new THREE.Box3().setFromObject(m), ctr = bb.getCenter(new THREE.Vector3()), size = bb.getSize(new THREE.Vector3()).length();
+          var dir = new THREE.Vector3(1, 0.8, 1.1).normalize().multiplyScalar(Math.max(size * 1.6, 400));
+          controls.target.copy(ctr); camera.position.copy(ctr).add(dir); controls.update();
+        });
+        wires.appendChild(b);
       }
     });
   }
@@ -274,7 +305,7 @@
   }
   function highlight(o) {
     meshes.forEach(function (m) { m.material.emissive.setHex(0x000000); });
-    if (o) o.material.emissive.setHex(dark() ? 0x335544 : 0x224433);
+    if (o) o.material.emissive.setHex(0x66aa33);
   }
   function pick(e) {
     if (!root) return null;

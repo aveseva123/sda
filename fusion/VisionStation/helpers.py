@@ -269,3 +269,65 @@ def export_dxf(ctx, folder):
         em.execute(opts)
         done.append(path)
     return done
+
+
+# ---------- расширение для детализации: призмы, кабели, объединение ----------
+def poly_prism(comp, axis, pts, a1, a2, name=None, op=NEW, participants=None):
+    """Призма с произвольным многоугольником (u, v) в плоскости, перпендикулярной axis, от a1 до a2."""
+    am = (a1 + a2) / 2.0
+    sk = sketch(comp, plane_at(comp, axis, am), name)
+    polygon(sk, [compose(axis, u, v, am) for u, v in pts])
+    return named(extrude_sym(comp, sk.profiles.item(0), abs(a2 - a1), op, participants), name)
+
+
+def prism(comp, axis, uv, n, r, a1, a2, name=None, rot=0.0, op=NEW, participants=None):
+    """Правильная n-угольная призма (шестигранник болта и т. п.), r — радиус описанной окружности."""
+    pts = [(uv[0] + r * math.cos(rot + 2 * math.pi * i / n), uv[1] + r * math.sin(rot + 2 * math.pi * i / n)) for i in range(n)]
+    return poly_prism(comp, axis, pts, a1, a2, name, op, participants)
+
+
+def tube_path(comp, pts, r, name=None):
+    """Кабель/трубка: окружность радиуса r протянута по сплайну через точки (мм)."""
+    sk = sketch(comp, comp.xYConstructionPlane, (name or 'кабель') + ' — трасса')
+    coll = adsk.core.ObjectCollection.create()
+    for p in pts:
+        coll.add(sp(sk, *p))
+    spline = sk.sketchCurves.sketchFittedSplines.add(coll)
+    path = comp.features.createPath(spline, False)
+    planes = comp.constructionPlanes
+    inp = planes.createInput()
+    inp.setByDistanceOnPath(path, adsk.core.ValueInput.createByReal(0))
+    pl = planes.add(inp)
+    pl.isLightBulbOn = False
+    sk2 = sketch(comp, pl, (name or 'кабель') + ' — сечение')
+    circle(sk2, pts[0], r)
+    feats = comp.features.sweepFeatures
+    inp2 = feats.createInput(sk2.profiles.item(0), path, NEW)
+    inp2.orientation = adsk.fusion.SweepOrientationTypes.PerpendicularOrientationType
+    return named(feats.add(inp2), name)
+
+
+def cylinder_join(comp, axis, uv, r, a1, a2, body):
+    return cylinder(comp, axis, uv, r, a1, a2, None, JOIN, [body])
+
+
+def cable_poly(comp, pts, r, name=None):
+    """Провод по ломаной: протяжка окружности вдоль цепочки отрезков."""
+    sk = sketch(comp, comp.xYConstructionPlane, (name or 'провод') + ' — трасса')
+    lines = sk.sketchCurves.sketchLines
+    first = None
+    for a, b in zip(pts[:-1], pts[1:]):
+        ln = lines.addByTwoPoints(sp(sk, *a), sp(sk, *b))
+        first = first or ln
+    path = comp.features.createPath(first, True)
+    planes = comp.constructionPlanes
+    inp = planes.createInput()
+    inp.setByDistanceOnPath(path, adsk.core.ValueInput.createByReal(0))
+    pl = planes.add(inp)
+    pl.isLightBulbOn = False
+    sk2 = sketch(comp, pl, (name or 'провод') + ' — сечение')
+    circle(sk2, pts[0], r)
+    feats = comp.features.sweepFeatures
+    inp2 = feats.createInput(sk2.profiles.item(0), path, NEW)
+    inp2.orientation = adsk.fusion.SweepOrientationTypes.PerpendicularOrientationType
+    return named(feats.add(inp2), name)

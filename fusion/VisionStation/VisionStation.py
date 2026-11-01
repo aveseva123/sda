@@ -26,7 +26,8 @@ if HERE not in sys.path:
 import params      # noqa: E402
 import helpers     # noqa: E402
 import station     # noqa: E402
-for _m in (params, helpers, station):
+import detail      # noqa: E402
+for _m in (params, helpers, station, detail):
     importlib.reload(_m)
 
 
@@ -54,7 +55,17 @@ def run(context):
         step('Загрузка', station.build_loading)
         step('Капот камеры', station.build_hood)
         step('Выход и весы', station.build_outlet)
-        step('Электроника', station.build_electronics)
+        step('Лента кольцом и ремень', detail.build_belt_loop)
+        step('Привод — детали и крепёж', detail.build_drive_detail)
+        step('Серва и весы — детали', detail.build_servo_and_scale)
+        step('Кнопочный пост', detail.build_front_panel)
+        step('Дисплей', detail.build_display)
+        step('Капот — крепёж', detail.build_hood_detail)
+        step('Кабель-каналы', detail.build_ducts)
+        cam = step('Камера и Pi', detail.build_camera)
+        cab = step('Шкаф управления', detail.build_cabinet)
+        if cam and cab:
+            step('Кабели', detail.build_cables, cam['pi'], cab)
 
         fov_x = 250.0 * P['cam_height'] / 300.0
         notes = [

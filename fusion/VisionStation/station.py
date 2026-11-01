@@ -57,9 +57,6 @@ def build_conveyor(ctx, parent, P, L):
         y1, y2 = yr(s, y_side_out, y_side_out + 15)
         box(c, (-45, y1, za - 25), (5, y2, za + 25), '[3D] Натяжитель ведомого ролика')
     zt = za + rd / 2
-    box(c, (-rd / 2, -bw / 2, zt), (bl + rd / 2, bw / 2, zt + P['belt_t']),
-        'Лента ПВХ %g×%g — верхняя ветвь (бесконечная L≈%.0f)' % (bw, P['belt_t'], 2 * bl + math.pi * rd))
-    box(c, (-rd / 2, -bw / 2, za - rd / 2 - P['belt_t']), (bl + rd / 2, bw / 2, za - rd / 2), 'Лента ПВХ — нижняя ветвь')
     box(c, (rd / 2 + 5, -bw / 2, zt - P['support_t']), (bl - rd / 2 - 5, bw / 2, zt), 'Опорная пластина ленты — сталь %g' % P['support_t'], flat=True)
     for s in (-1, 1):
         y1, y2 = yr(s, bw / 2 - P['guide_t'], bw / 2)
@@ -120,9 +117,6 @@ def build_hood(ctx, parent, P, L):
             box(c, (x, y1, zb), (x + 15, y2, zt - t), '[3D] Угловой соединитель капота')
     xc = (x0 + x1) / 2
     zc = L['z_cam']
-    box(c, (xc - P['cam_w'] / 2, -P['cam_w'] / 2, zc), (xc + P['cam_w'] / 2, P['cam_w'] / 2, zc + P['cam_h']),
-        'Камера Raspberry Pi Global Shutter (покупная)')
-    cylinder(c, 'z', (xc, 0), P['lens_d'] / 2, zc - P['lens_len'], zc, 'Объектив 6 мм CS (покупной)')
     box(c, (xc - 35, -35, zc + P['cam_h']), (xc + 35, 35, zt - t), '[3D] Кронштейн камеры к крыше')
     zl = L['z_belt_top'] + 150
     for s, nm in ((-1, 'А'), (1, 'Б')):
@@ -147,9 +141,6 @@ def build_outlet(ctx, parent, P, L):
     g = P['gate_t']
     box(c, (xf - 38, -35, zb - 2 - g), (xf + 38, 35, zb - 2), '[3D] Заслонка выхода (показана закрытой)')
     cylinder(c, 'y', (xf - 38, zb - 2 - g / 2), 2, -45, 45, 'Ось заслонки Ø4')
-    sw, sd, sh = P['servo']
-    box(c, (xf - 38 - sw / 2, 45, zb - 2 - sh / 2), (xf - 38 + sw / 2, 45 + sd, zb - 2 + sh / 2), 'Сервопривод MG996R/DS3218 (покупной)')
-    box(c, (xf - 38 - sw / 2 - 3, 35, zb - 2 - sh / 2 - 3), (xf - 38 + sw / 2 + 3, 45 + sd + 3, zb - 2 - sh / 2), '[3D] Кронштейн сервопривода')
     z_cup_top = zb - 2 - g - 10
     z_cup_bot = z_cup_top - P['cup_h']
     f = cylinder(c, 'z', (xf, 0), P['cup_d'] / 2, z_cup_bot, z_cup_top, '[3D] Ковш / держатель пакета')
@@ -164,23 +155,4 @@ def build_outlet(ctx, parent, P, L):
     if gap < 1:
         raise RuntimeError('Весы не помещаются под воронкой: не хватает %.1f мм. Увеличьте conv_base_z или уменьшите funnel_h.' % (1 - gap))
     box(c, (xf - P['cell_l'] / 2, -P['cell_w'] / 2, L['z_plate_top']), (xf + P['cell_l'] / 2, P['cell_w'] / 2, z_cell_bot), '[3D] Проставка весов %g' % gap)
-    return c
-
-
-def build_electronics(ctx, parent, P, L):
-    c = new_component(parent, 'Электроника и интерфейс')
-    dw, dh, dt = P['display']
-    xd, zd = P['display_x'], P['display_z']
-    yf = P['frame_cy'] - P['frame_l'] / 2
-    box(c, (xd - dw / 2, yf - 30 - dt, zd), (xd + dw / 2, yf - 30, zd + dh), 'Сенсорный дисплей 7″ (покупной)')
-    square_tube(c, 'z', (xd, yf + 20), 20, 2, L['z_plate_top'], zd + dh / 2, 'Стойка дисплея — алюминиевый профиль 20×20')
-    box(c, (xd - 10, yf - 30, zd + dh / 2 - 10), (xd + 10, yf + 30, zd + dh / 2 + 10), '[3D] Кронштейн дисплея с наклоном')
-    bx, by, bz = P['pi_box']
-    box(c, (xd - bx / 2, -100 - by / 2, L['z_plate_top'] - P['plate_t'] - bz), (xd + bx / 2, -100 + by / 2, L['z_plate_top'] - P['plate_t']),
-        '[3D] Корпус Raspberry Pi 5 с вентиляцией')
-    px, py, pz = P['psu_box']
-    box(c, (xd - 150 - px / 2, -100 - py / 2, L['z_plate_top'] - P['plate_t'] - pz), (xd - 150 + px / 2, -100 + py / 2, L['z_plate_top'] - P['plate_t']),
-        'Блок питания 24 В 5 А (покупной)')
-    cylinder(c, 'y', (xd + 150, L['z_plate_top'] + 60), 20, yf - 30, yf - 10, 'Кнопка аварийного стопа (покупная)')
-    box(c, (xd + 150 - 35, yf, L['z_plate_top']), (xd + 150 + 35, yf + 3, L['z_plate_top'] + 90), 'Панель кнопок — сталь 3', flat=True)
     return c

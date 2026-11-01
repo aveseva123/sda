@@ -5,3 +5,5 @@ node_modules/
 tests/e2e/screenshots/
 __pycache__/
 fusion/CountingStation/out/
+fusion/VisionStation/out/*.html
+fusion/VisionStation/out/*.stl

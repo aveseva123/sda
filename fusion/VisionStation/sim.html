@@ -86,7 +86,7 @@
 <div class="app">
   <header>
     <h1>Симуляция визуальной счётной станции</h1>
-    <span class="sub">лента 150×700 · камера Raspberry Pi считает на сбросе с ленты · заслонка на серве · весы</span>
+    <span class="sub">лента 150×700 · камера Raspberry Pi считает на сбросе с ленты · заслонка на серве · весы · 280 деталей, вся коммутация</span>
   </header>
 
   <div class="stage">
@@ -167,26 +167,32 @@
     w6:    { name: 'Шайба M6',  d: 12, L: 1.6, head: 12, m: 0.9, color: 0x9a9fa6 }
   };
   var COMPONENTS = [
-    ['Raspberry Pi 5, 8 ГБ + кулер, БП, карта', 'Корпус Raspberry Pi', '1', 20000, 43000, 'https://www.ozon.ru/product/raspberry-pi-5-8gb-moshchnyy-mikrokompyuter-4-yadra-cortex-a76-do-2-4-ggts-gigabit-ethernet-dual-1633954303/'],
+    ['Raspberry Pi 5, 8 ГБ + кулер, адаптер 27 Вт, карта', 'Raspberry Pi 5', '1', 20000, 43000, 'https://www.ozon.ru/product/raspberry-pi-5-8gb-moshchnyy-mikrokompyuter-4-yadra-cortex-a76-do-2-4-ggts-gigabit-ethernet-dual-1633954303/'],
     ['Камера Raspberry Pi Global Shutter IMX296', 'Камера Raspberry', '1', 7000, 10000, 'https://www.chipdip.ru/product0/8025973966'],
     ['Объектив 6 мм CS, F1.2', 'Объектив', '1', 3500, 5400, 'https://amperka.ru/product/raspberry-pi-high-quality-camera-lens-6mm-wide-angle'],
-    ['Дисплей 7″ 1024×600, ёмкостный', 'Дисплей', '1', 5000, 9500, 'https://www.chipdip.ru/product/7inch-hdmi-lcd-c'],
-    ['LED-планки 24 В CRI 90 + профиль с рассеивателем', 'LED-планка', '2', 2000, 3800, 'https://www.vseinstrumenti.ru/product/svetodiodnaya-lenta-arlight-cob-x400-5mm-24v-day4000-5m-039735-1-24734544/'],
+    ['Шлейф камеры CSI 500 мм', 'Шлейф камеры', '1', 200, 400, ''],
+    ['Дисплей 7″ 1024×600, ёмкостный, с HDMI и USB кабелями', 'Дисплей', '1', 5000, 9500, 'https://www.chipdip.ru/product/7inch-hdmi-lcd-c'],
+    ['LED-планки 24 В CRI 90 + профиль + диммер', 'LED', '2', 2200, 4300, 'https://www.vseinstrumenti.ru/product/svetodiodnaya-lenta-arlight-cob-x400-5mm-24v-day4000-5m-039735-1-24734544/'],
     ['Лента ПВХ 2 мм, 150 мм, кольцо 1 530 мм', 'Лента ПВХ', '1', 2500, 5000, 'https://zerteh.ru/lenta-konvejernaya-PVH'],
     ['Шаговый двигатель NEMA23 2,8 А', 'NEMA23', '1', 2500, 4000, 'https://3d-diy.ru/product/shagovyy-dvigatel-nema-23-ldo-57sth76-2804a'],
-    ['Драйвер TB6600', 'Блок питания', '1', 600, 1500, 'https://www.ozon.ru/product/drayver-shagovogo-dvigatelya-tb6600-4a-9-42v-933031975/'],
+    ['Драйвер TB6600 4 А', 'TB6600', '1', 600, 1500, 'https://www.ozon.ru/product/drayver-shagovogo-dvigatelya-tb6600-4a-9-42v-933031975/'],
     ['Шкив GT2 20T + ремень GT2', 'Шкив', '1', 500, 1000, 'https://www.ozon.ru/product/shkiv-zubchatyy-gt2-20-zubev-6-35mm-dlya-remnya-10mm-1046684271/'],
     ['Подшипники 608ZZ', 'Подшипник', '4', 200, 600, 'https://chipdip.ru/product/608zz'],
-    ['Ролики: труба Ø40×2, оси Ø8', 'Ролик', '2', 1000, 2000, ''],
-    ['Блок питания 24 В 5 А', 'Блок питания', '1', 2300, 6000, 'https://www.chipdip.ru/product/rps-120-24-c-blok-pitaniya-24v-5a-120vt-forced-mean-well-9000563450'],
-    ['Сервопривод DS3218 PRO', 'Сервопривод', '1', 1200, 2500, 'https://www.ozon.ru/product/dsservo-vodonepronitsaemyy-servoprivod-ds3218-pro-20-kg-180-gradusov-vysokoskorostnoy-1683741416/'],
-    ['Тензодатчик 3 кг + HX711', 'Тензодатчик', '1', 400, 1200, 'https://aliexpress.ru/popular/%D1%82%D0%B5%D0%BD%D0%B7%D0%BE%D0%B4%D0%B0%D1%82%D1%87%D0%B8%D0%BA-hx711.html'],
-    ['Кнопка аварийного стопа', 'аварийного стопа', '1', 300, 1500, 'https://www.chipdip.ru/product/b102e30-knopka-avariynaya-gribok-vozvrat-povorotom-emas-8023282114'],
-    ['Автоматы, реле, клеммы, провод', 'Панель кнопок', 'компл.', 3000, 5000, ''],
+    ['Ролики: труба Ø40×2, оси Ø8, стопорные кольца', 'Ролик', '2', 1000, 2000, ''],
+    ['Блок питания 24 В 5 А на DIN-рейку', 'Блок питания', '1', 2300, 6000, 'https://www.chipdip.ru/product/rps-120-24-c-blok-pitaniya-24v-5a-120vt-forced-mean-well-9000563450'],
+    ['Сервопривод DS3218 PRO с качалкой', 'Сервопривод', '1', 1200, 2500, 'https://www.ozon.ru/product/dsservo-vodonepronitsaemyy-servoprivod-ds3218-pro-20-kg-180-gradusov-vysokoskorostnoy-1683741416/'],
+    ['Тензодатчик 3 кг + модуль HX711', 'HX711', '1', 400, 1200, 'https://aliexpress.ru/popular/%D1%82%D0%B5%D0%BD%D0%B7%D0%BE%D0%B4%D0%B0%D1%82%D1%87%D0%B8%D0%BA-hx711.html'],
+    ['Кнопка аварийного стопа с контактным блоком', 'аварийного стопа', '1', 300, 1500, 'https://www.chipdip.ru/product/b102e30-knopka-avariynaya-gribok-vozvrat-povorotom-emas-8023282114'],
+    ['Кнопки Пуск/Стоп, лампа 24 В, контактные блоки', 'Кнопка', '1 компл.', 800, 1800, ''],
+    ['Шкаф 400×300×150 с монтажной панелью', 'Шкаф', '1', 1500, 3500, ''],
+    ['Автомат 10 А, дифавтомат 16 А 30 мА', 'автомат', '1 + 1', 1200, 2500, ''],
+    ['DIN-рейки, клеммы, фиксаторы, реле, розетка, вводы', 'Клемма', '1 компл.', 1500, 3000, ''],
+    ['Кабели и провода по трассам, кабель-канал', 'Кабель', '1 компл.', 2000, 4000, ''],
     ['Стенки капота: ПВХ или композит 3 мм', 'капота', '0,5 м²', 1500, 3000, ''],
     ['Алюминий 5 мм, сталь 2/3/5 мм, профтруба 40×40, профиль 20×20', 'Боковина', '—', 12000, 18000, ''],
-    ['PETG для 31 печатной детали', '[3D]', '2 кг', 3000, 4400, 'https://www.ozon.ru/product/plastik-petg-dlya-3d-pechati-bestfilament-siniy-1-75mm-1-kg-167770514/'],
-    ['AI HAT+ 13 TOPS, опция', 'Корпус Raspberry Pi', '0–1', 0, 15000, 'https://aliexpress.ru/popular/raspberry-pi-ai-kit']
+    ['Крепёж: болты M3–M8, стойки M2.5, вставки', 'Болт', '1 компл.', 800, 1500, ''],
+    ['PETG для 38 печатных деталей', '[3D]', '2 кг', 3000, 4400, 'https://www.ozon.ru/product/plastik-petg-dlya-3d-pechati-bestfilament-siniy-1-75mm-1-kg-167770514/'],
+    ['AI HAT+ 13 TOPS, опция', 'Raspberry Pi 5', '0–1', 0, 15000, 'https://aliexpress.ru/popular/raspberry-pi-ai-kit']
   ];
 
   // ---------- сцена ----------
@@ -444,7 +450,7 @@
     btn.setAttribute('aria-pressed', 'true');
     var key = COMPONENTS[i][1], box = new THREE.Box3(), any = false;
     meshes.forEach(function (m) {
-      var hit = partName(m).indexOf(key) >= 0;
+      var hit = partName(m).toLowerCase().indexOf(key.toLowerCase()) >= 0;
       m.material.emissive.setHex(hit ? 0x2f7a4c : 0x000000);
       if (hit) { box.expandByObject(m); any = true; }
     });

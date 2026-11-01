@@ -14,7 +14,9 @@ import cq_helpers                      # noqa: E402
 sys.modules['helpers'] = cq_helpers    # station.py импортирует helpers — подставляем CadQuery-версию
 import params                          # noqa: E402
 import station                         # noqa: E402
+import detail                          # noqa: E402
 importlib.reload(station)
+importlib.reload(detail)
 import cadquery as cq                  # noqa: E402
 
 
@@ -22,6 +24,35 @@ def color_for(name):
     n = name.lower()
     if name.startswith('[3D]'):
         return (0.20, 0.72, 0.35)          # печать — зелёный
+    if 'кабель-канал' in n or 'втулка прохода' in n:
+        return (0.88, 0.88, 0.86)          # лотки — светлый ПВХ
+    if 'кабель' in n or 'провод' in n or 'шлейф' in n:
+        for word, rgb in (('жёлто-зелёный', (0.75, 0.8, 0.1)), ('красно-чёрный', (0.75, 0.15, 0.1)), ('красный', (0.8, 0.1, 0.1)),
+                          ('синий', (0.15, 0.3, 0.8)), ('коричневый', (0.45, 0.25, 0.1)), ('оранжевый', (0.95, 0.5, 0.1)),
+                          ('жёлтый', (0.9, 0.75, 0.2)), ('белый', (0.92, 0.92, 0.9)), ('серый', (0.55, 0.55, 0.58)), ('чёрный', (0.08, 0.08, 0.09))):
+            if word in n:
+                return rgb
+        return (0.2, 0.2, 0.2)
+    if 'плата' in n or 'hx711' in n:
+        return (0.12, 0.45, 0.22)          # текстолит
+    if 'порт' in n or 'разъём' in n or 'гребёнка' in n or 'клемм' in n or 'фиксатор' in n:
+        return (0.75, 0.76, 0.78)
+    if 'автомат' in n or 'розетка' in n or 'реле' in n or 'адаптер' in n:
+        return (0.9, 0.9, 0.88)
+    if 'аварийного стопа' in n or 'стоп красная' in n:
+        return (0.8, 0.1, 0.1)
+    if 'кольцо жёлтое' in n:
+        return (0.95, 0.8, 0.1)
+    if 'пуск' in n or 'лампа' in n:
+        return (0.15, 0.7, 0.3)
+    if 'болт' in n or 'винт' in n or 'стойка m2' in n or 'гайка' in n or 'стопорное' in n or 'фланец' in n:
+        return (0.6, 0.6, 0.62)
+    if 'шкаф' in n or 'din' in n or 'кабель-канал' in n or 'кабельный ввод' in n:
+        return (0.82, 0.83, 0.8)
+    if 'ремень' in n or 'tb6600' in n and 'радиатор' not in n:
+        return (0.15, 0.15, 0.18)
+    if 'кулер' in n or 'радиатор' in n:
+        return (0.3, 0.32, 0.36)
     if 'покупн' in n or 'подшипник' in n or 'nema' in n:
         return (0.36, 0.47, 0.70)          # покупное — синий
     if 'лента пвх' in n:
@@ -44,8 +75,13 @@ def build():
     P, L = params.P, params.layout(params.P)
     root = cq_helpers.new_component(None, 'Визуальная счётная станция')
     for fn in (station.build_frame, station.build_conveyor, station.build_loading,
-               station.build_hood, station.build_outlet, station.build_electronics):
+               station.build_hood, station.build_outlet,
+               detail.build_belt_loop, detail.build_drive_detail, detail.build_servo_and_scale,
+               detail.build_front_panel, detail.build_display, detail.build_hood_detail, detail.build_ducts):
         fn(None, root, P, L)
+    cam = detail.build_camera(None, root, P, L)
+    cab = detail.build_cabinet(None, root, P, L)
+    detail.build_cables(None, root, P, L, cam['pi'], cab)
     subs = {}
     for i, part in enumerate(cq_helpers.PARTS):
         comp = part['comp']
@@ -63,7 +99,7 @@ def main(out_dir):
     os.makedirs(out_dir, exist_ok=True)
     asm, L = build()
     asm.export(os.path.join(out_dir, 'VisionStation.step'))
-    asm.export(os.path.join(out_dir, 'VisionStation.glb'))
+    asm.export(os.path.join(out_dir, 'VisionStation.glb'), tolerance=0.6, angularTolerance=0.35)   # грубее сетка — страница просмотра до 16 МБ
     comp = cq.Compound.makeCompound([p['shape'] for p in cq_helpers.PARTS])
     cq.exporters.export(comp, os.path.join(out_dir, 'VisionStation.stl'), tolerance=0.5, angularTolerance=0.3)
     bb = comp.BoundingBox()

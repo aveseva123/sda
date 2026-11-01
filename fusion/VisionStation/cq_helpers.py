@@ -134,3 +134,71 @@ def helix_track(comp, cx, cy, r_out, width, t, z0, turns, pitch, name):
     prof = cq.Workplane('XZ', origin=(0, cy, 0)).center(cx + r_out - width / 2.0, z0 + t / 2.0).rect(width, t)
     s = prof.sweep(path, isFrenet=True).val()
     return _add(comp, name, s)
+
+
+# ---------- расширение для детализации: призмы, кабели, объединение ----------
+import math as _m
+
+
+def _add_op(comp, name, shape, op=NEW, participants=None):
+    if op == JOIN and participants:
+        b = participants[0]
+        PARTS[b.idx]['shape'] = PARTS[b.idx]['shape'].fuse(shape)
+        return _Feat(b.idx)
+    return _add(comp, name, shape, op, participants)
+
+
+def poly_prism(comp, axis, pts, a1, a2, name=None, op=NEW, participants=None):
+    """Призма с произвольным многоугольником (u, v) в плоскости, перпендикулярной axis, от a1 до a2."""
+    lo, hi = min(a1, a2), max(a1, a2)
+    verts = [cq.Vector(*compose(axis, u, v, lo)) for u, v in pts]
+    wire = cq.Wire.makePolygon(verts + [verts[0]])
+    solid = cq.Solid.extrudeLinear(wire, [], cq.Vector(*_AXIS[axis]) * (hi - lo))
+    return _add_op(comp, name, solid, op, participants)
+
+
+def prism(comp, axis, uv, n, r, a1, a2, name=None, rot=0.0, op=NEW, participants=None):
+    """Правильная n-угольная призма (шестигранник болта и т. п.), r — радиус описанной окружности."""
+    pts = [(uv[0] + r * _m.cos(rot + 2 * _m.pi * i / n), uv[1] + r * _m.sin(rot + 2 * _m.pi * i / n)) for i in range(n)]
+    return poly_prism(comp, axis, pts, a1, a2, name, op, participants)
+
+
+def tube_path(comp, pts, r, name=None):
+    """Кабель/трубка: круг радиуса r протянут по сплайну через точки (мм)."""
+    p0, p1 = cq.Vector(*pts[0]), cq.Vector(*pts[1])
+    path = cq.Workplane('XY').spline([tuple(p) for p in pts], includeCurrent=False)
+    plane = cq.Plane(origin=p0, normal=(p1 - p0).normalized())
+    solid = cq.Workplane(plane).circle(r).sweep(path, isFrenet=True).val()
+    return _add(comp, name, solid)
+
+
+def cylinder_join(comp, axis, uv, r, a1, a2, body):
+    lo, hi = min(a1, a2), max(a1, a2)
+    s = cq.Solid.makeCylinder(r, hi - lo, cq.Vector(*compose(axis, uv[0], uv[1], lo)), cq.Vector(*_AXIS[axis]))
+    return _add_op(comp, None, s, JOIN, [body])
+
+
+def cable_poly(comp, pts, r, name=None):
+    """Провод по ломаной с круглыми изгибами (одно тело). Повторы точек и слишком короткие
+    отрезки убираются; если протяжка не строится, провод собирается из цилиндров и шариков."""
+    verts = []
+    for p in pts:
+        v = cq.Vector(*p)
+        if not verts or (v - verts[-1]).Length > max(1.0, 1.2 * r):
+            verts.append(v)
+    if len(verts) < 2:
+        raise ValueError('кабель %s: меньше двух точек' % name)
+    try:
+        wire = cq.Wire.makePolygon(verts)
+        plane = cq.Plane(origin=verts[0], normal=(verts[1] - verts[0]).normalized())
+        solid = cq.Workplane(plane).circle(r).sweep(cq.Workplane('XY').add(wire), transition='round').val()
+        if not solid.isValid():
+            raise ValueError('invalid sweep')
+    except Exception:
+        parts = []
+        for a, b in zip(verts[:-1], verts[1:]):
+            parts.append(cq.Solid.makeCylinder(r, (b - a).Length, a, (b - a).normalized()))
+        for v in verts[1:-1]:
+            parts.append(cq.Solid.makeSphere(r, v))
+        solid = cq.Compound.makeCompound(parts)
+    return _add(comp, name, solid)
