@@ -97,7 +97,7 @@ def modernize(P, L):
     zb_h, zt_h = L['z_belt_top'] - 60, L['z_hood_top']
     hood = 'Капот камеры и подсветка'
     drop('[3D] Угловой соединитель капота')
-    for (x, y) in ((x0h + 10, -hy - 10), (x1h - 10, -hy - 10), (x0h + 10, hy + 10), (x1h - 10, hy + 10)):
+    for (x, y) in ((x0h + 10, -hy - 10.5), (x1h - 10, -hy - 10.5), (x0h + 10, hy + 10.5), (x1h - 10, hy + 10.5)):
         add(hood, 'Профиль алюминиевый 20×20 станочный — стойка капота', box(x - 10, y - 10, zb_h, x + 10, y + 10, zt_h).cut(box(x - 3, y - 3, zb_h - 1, x + 3, y + 3, zt_h + 1)))
     for z in (zb_h, zt_h - 20):
         add(hood, 'Профиль 20×20 — поперечина капота', box(x0h + 20, -hy - 20, z, x1h - 20, -hy, z + 20))

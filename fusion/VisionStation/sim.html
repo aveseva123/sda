@@ -196,11 +196,11 @@
 
   // ---------- сцена ----------
   var canvas = document.getElementById('c'), stage = canvas.parentElement;
-  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, logarithmicDepthBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputEncoding = THREE.sRGBEncoding;
   var scene = new THREE.Scene();
-  var camera = new THREE.PerspectiveCamera(32, 1, 5, 20000);
+  var camera = new THREE.PerspectiveCamera(32, 1, 10, 20000);
   camera.up.set(0, 0, 1);
   var controls = new THREE.OrbitControls(camera, canvas);
   controls.enableDamping = true; controls.dampingFactor = 0.1;
@@ -256,6 +256,7 @@
       if (o.isMesh) {
         o.material = o.material.clone(); o.material.side = THREE.DoubleSide;
         o.material.metalness = 0.1; o.material.roughness = 0.75;
+        o.material.polygonOffset = true; o.material.polygonOffsetFactor = 0; o.material.polygonOffsetUnits = (meshes.length % 12) * 1.5;
         o.userData.base = o.material.color.clone();
         meshes.push(o);
       }
@@ -281,8 +282,8 @@
     g.fillStyle = '#2a8f5d'; for (var i = 0; i < 256; i += 32) g.fillRect(i, 0, 16, 32);
     var tex = new THREE.CanvasTexture(cv); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(14, 1);
     var geo = new THREE.PlaneGeometry(G.beltX1 - G.beltX0 + 2 * G.rollerR, G.beltW);
-    beltStripe = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }));
-    beltStripe.position.set((G.beltX0 + G.beltX1) / 2, 0, G.beltTop + 0.6);
+    beltStripe = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -40 }));
+    beltStripe.position.set((G.beltX0 + G.beltX1) / 2, 0, G.beltTop + 1.2);
     scene.add(beltStripe);
     beltStripe.userData.tex = tex;
   }
@@ -467,15 +468,42 @@
 
   // подсказка по наведению
   var ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), tip = document.getElementById('tip');
-  canvas.addEventListener('pointermove', function (e) {
-    if (!root) return;
+  var pinnedMesh = null, downAt = null;
+  function pickAt(e) {
+    if (!root) return null;
     var r = canvas.getBoundingClientRect();
     ptr.x = ((e.clientX - r.left) / r.width) * 2 - 1; ptr.y = -((e.clientY - r.top) / r.height) * 2 + 1;
     ray.setFromCamera(ptr, camera);
-    var hits = ray.intersectObjects(meshes, false);
-    if (hits.length) { tip.textContent = partName(hits[0].object); tip.hidden = false; } else tip.hidden = true;
+    var hits = ray.intersectObjects(meshes.filter(function (m) { var p = m, v = true; while (p) { if (p.visible === false) v = false; p = p.parent; } return v; }), false);
+    return hits.length ? hits[0].object : null;
+  }
+  function showSel(o) {
+    var el = document.getElementById('sel');
+    if (!o) { el.querySelector('.name').textContent = 'Наведите на деталь, щёлкните, чтобы закрепить. Двойной щелчок приближает.'; el.querySelector('.dims').textContent = ''; return; }
+    var b = new THREE.Box3().setFromObject(o), sz = b.getSize(new THREE.Vector3());
+    el.querySelector('.name').textContent = partName(o);
+    el.querySelector('.dims').textContent = 'габарит ' + Math.round(sz.x) + ' × ' + Math.round(sz.y) + ' × ' + Math.round(sz.z) + ' мм';
+  }
+  function hl(o) { meshes.forEach(function (m) { m.material.emissive.setHex(0x000000); }); if (o) o.material.emissive.setHex(0x8a6a00); }
+  canvas.addEventListener('pointermove', function (e) {
+    var o = pickAt(e);
+    if (o) { tip.textContent = partName(o); tip.hidden = false; } else tip.hidden = true;
+    if (!pinnedMesh) { hl(o); showSel(o); }
   });
-  canvas.addEventListener('pointerleave', function () { tip.hidden = true; });
+  canvas.addEventListener('pointerleave', function () { tip.hidden = true; if (!pinnedMesh) { hl(null); showSel(null); } });
+  canvas.addEventListener('pointerdown', function (e) { downAt = [e.clientX, e.clientY]; });
+  canvas.addEventListener('click', function (e) {
+    if (downAt && (Math.abs(e.clientX - downAt[0]) > 4 || Math.abs(e.clientY - downAt[1]) > 4)) return;
+    var o = pickAt(e);
+    pinnedMesh = (o && o !== pinnedMesh) ? o : null;
+    hl(pinnedMesh); showSel(pinnedMesh);
+  });
+  canvas.addEventListener('dblclick', function (e) {
+    var o = pickAt(e); if (!o) return;
+    var b = new THREE.Box3().setFromObject(o), ctr = b.getCenter(new THREE.Vector3()), size = b.getSize(new THREE.Vector3()).length();
+    var dir = new THREE.Vector3(1, -1.1, 0.8).normalize().multiplyScalar(Math.max(size * 1.8, 260));
+    controls.target.copy(ctr); camera.position.copy(ctr).add(dir); controls.update();
+  });
 
   var last = performance.now(), acc = 0;
   function tick(now) {

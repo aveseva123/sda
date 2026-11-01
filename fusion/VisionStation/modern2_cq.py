@@ -25,7 +25,7 @@ def industrialize(P, L):
         drop(pat)
     body = 'Корпус станции'
     W, D, R = 1320, 540, 15
-    outer = prism(cx, 0, 60, zt - 8, W, D, R)
+    outer = prism(cx, 0, 60, zt - 4, W, D, R)
     outer = cq.Workplane('XY').add(outer).edges('>Z').fillet(6).val()
     inner = prism(cx, 0, 55, zt + 10, W - 3, D - 3, R - 1.5)
     skin = outer.cut(inner)
@@ -54,14 +54,14 @@ def industrialize(P, L):
     skirt_o = prism(cx, 0, 22, 62, W - 60, D - 60, R)
     skirt_i = prism(cx, 0, 20, 64, W - 64, D - 64, R - 2)
     add(body, 'Юбка корпуса — антрацит RAL 7016, закрывает колёса', skirt_o.cut(skirt_i))
-    deck = prism(cx, 0, zt, zt + 3, W + 12, D + 12, 22)
-    deck = deck.cut(box(478, 218, zt - 1, 542, 248, zt + 4))
+    # столешница занимает верхние 3 мм плиты: всё, что стоит на отметке zt, стоит на нержавейке без наложений
+    deck = prism(cx, 0, zt - 3, zt, W + 12, D + 12, 22)
+    deck = deck.cut(box(478, 218, zt - 4, 542, 248, zt + 1))
     add(body, 'Столешница — нержавейка 3 мм шлифованная, радиус 22, лючок кабелей', deck)
-    add(body, 'Лючок кабелей — рамка нержавейка', box(474, 214, zt + 3, 546, 252, zt + 6).cut(box(478, 218, zt + 2, 542, 248, zt + 7)))
     for part in H.PARTS:
-        if part['name'].startswith('Плита стенда') and 'лючок' not in part['name']:
-            part['shape'] = part['shape'].cut(box(478, 218, zt - 10, 542, 248, zt + 3))
-            part['name'] += ', лючок кабелей'
+        if part['name'].startswith('Плита стенда'):
+            part['shape'] = part['shape'].cut(box(-1000, -1000, zt - 3, 2000, 1000, zt + 1)).cut(box(478, 218, zt - 10, 542, 248, zt + 3))
+            part['name'] = part['name'].replace('сталь 5', 'сталь 5 (верхние 3 мм — столешница)') + ', лючок кабелей'
     # крышки кабель-каналов на столешнице лежат рядом (сняты для показа)
     # ---------- стойка HMI с кронштейном ----------
     disp = 'Дисплей оператора'

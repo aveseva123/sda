@@ -153,13 +153,13 @@
 (function () {
   // ======================= сцена =======================
   var canvas = document.getElementById('c'), stage = canvas.parentElement;
-  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, logarithmicDepthBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   var scene = new THREE.Scene();
-  var camera = new THREE.PerspectiveCamera(30, 1, 5, 30000);
+  var camera = new THREE.PerspectiveCamera(30, 1, 10, 30000);
   camera.up.set(0, 0, 1);
   var controls = new THREE.OrbitControls(camera, canvas);
   controls.enableDamping = true; controls.dampingFactor = 0.1;
@@ -233,6 +233,7 @@
       o.material = new THREE.MeshStandardMaterial({ color: base, metalness: k.metalness, roughness: k.roughness, side: THREE.DoubleSide,
         transparent: !!k.transparent, opacity: k.opacity == null ? 1 : k.opacity, emissive: k.emissive ? base.clone().multiplyScalar(k.emissive) : new THREE.Color(0) });
       o.castShadow = true; o.receiveShadow = true;
+      o.material.polygonOffset = true; o.material.polygonOffsetFactor = 0; o.material.polygonOffsetUnits = (meshes.length % 12) * 1.5;   // совпадающие грани разных деталей не дрожат
       o.userData.base = base; o.userData.name = n; o.userData.cat = category(n); o.userData.opacity = o.material.opacity; o.userData.emis = o.material.emissive.clone();
       if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
       meshes.push(o);
